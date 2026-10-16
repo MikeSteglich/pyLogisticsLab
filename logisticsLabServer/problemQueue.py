@@ -42,8 +42,14 @@ HANDLERS = {
 }
 
 
+# status of finished problems - their results are waiting to be fetched by the client
+FINISHED = ('solution', 'noSolution', 'error')
+# status of problems that occupy the queue or a solver thread
+OPEN = ('waiting', 'running')
+
+
 class Problem:
-    def __init__(self, type, data):
+    def __init__(self, type, data, owner=None):
         self.__type = None
         self.setType(type)
         self.__httpStatus = 200
@@ -51,6 +57,9 @@ class Problem:
         self.__results = None
         self.__message = ''
         self.__data = data
+        self.owner = owner                 # name of the api key that has submitted the problem
+        self.createdTime = time.time()
+        self.finishedTime = None
 
 
     def setHttpStatus(self,status):
@@ -70,6 +79,8 @@ class Problem:
             self.__status = 'idle'
         else:
             self.__status = status
+        if self.__status in FINISHED:
+            self.finishedTime = time.time()
 
     def getStatus(self):
         return self.__status
@@ -126,16 +137,40 @@ class ProblemQueue:
 
         self.__problemQueue = queue.Queue()
 
+        # protects self.__problems - it is used by the api, the solver threads and the cleanup thread
+        self.__lock = threading.Lock()
+
         for _ in range(maxProblems):
             threading.Thread(target=self.__optimisationWorker, daemon=True).start()
 
+        threading.Thread(target=self.__cleanupWorker, daemon=True).start()
+
         self.__logger.debug('queue','solver threads have been started')
+
+
+    def __cleanupWorker(self):
+        """ deletes finished problems whose results have not been fetched within maxInactivityTime """
+        while True:
+            time.sleep(self.__conf['serviceIntervall'])
+            self.__cleanup()
+
+    def __cleanup(self):
+        limit = time.time() - self.__conf['maxInactivityTime']
+        with self.__lock:
+            expired = [ id for id, p in self.__problems.items() if p.status in FINISHED and p.finishedTime < limit ]
+            for id in expired:
+                del self.__problems[id]
+        for id in expired:
+            self.__logger.info('queue', f'problem {id} - results have not been fetched - deleted')
 
 
     def __optimisationWorker(self):
         while True:
             id = self.__problemQueue.get()
-            problem = self.__problems[id]
+            problem = self.getProblem(id)
+            if problem is None:
+                self.__problemQueue.task_done()
+                continue
             type = problem.type
             handler = None
 
@@ -179,19 +214,35 @@ class ProblemQueue:
                 self.__problemQueue.task_done()
 
 
-    def addProblem(self, type, data):
-        id = sessionId(self.__problems)
-        self.__problems[id] = Problem(type,data)
-        self.__problems[id].status='waiting'
-        self.__problems[id].message='Problem is waiting in queue'
+    def addProblem(self, type, data, owner=None, maxOpenProblems=None):
+        """ adds a problem to the queue - raises LogLabLimitException if the queue or the owner has too many open problems """
+        with self.__lock:
+            openProblems = [ p for p in self.__problems.values() if p.status in OPEN ]
+
+            if len(openProblems) >= self.__conf['maxQueueSize']:
+                raise LogLabLimitException(f'server is busy - too many problems in queue, please try again later', 503)
+
+            if maxOpenProblems is not None and sum(1 for p in openProblems if p.owner == owner) >= maxOpenProblems:
+                raise LogLabLimitException(f'too many open problems - maximum is {maxOpenProblems}, please fetch the results first', 429)
+
+            id = sessionId(self.__problems)
+            problem = Problem(type, data, owner)
+            problem.status='waiting'
+            problem.message='Problem is waiting in queue'
+            self.__problems[id] = problem
+
         self.__problemQueue.put(id)
-        #self.__logger.debug('queue', f'problem {id} - {type} added to queue')
         return id
-    
+
+    def getProblem(self, id):
+        """ returns the problem or None """
+        with self.__lock:
+            return self.__problems.get(id)
+
     def delProblem(self, id):
-        if id in self.__problems:
-            del self.__problems[id]
- 
+        with self.__lock:
+            self.__problems.pop(id, None)
+
 
     def getProblems(self):
         return self.__problems

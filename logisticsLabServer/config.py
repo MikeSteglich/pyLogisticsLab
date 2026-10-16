@@ -65,6 +65,24 @@ class Config:
             if not 'serviceIntervall' in self.__conf:
                 self.__conf['serviceIntervall']=30
 
+            # limits of the queue: all open (waiting or running) problems and open problems per api key
+            if not 'maxQueueSize' in self.__conf:
+                self.__conf['maxQueueSize']=50
+
+            if not 'maxOpenProblemsPerKey' in self.__conf:
+                self.__conf['maxOpenProblemsPerKey']=3
+
+            # access via api keys (header X-API-Key), keys are managed with manageKeys.py
+            if not 'authentication' in self.__conf:
+                self.__conf['authentication']=True
+
+            if not self.__conf.get('apiKeyFile'):
+                self.__conf['apiKeyFile']=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'apiKeys.yml')
+
+            # /docs, /redoc and /openapi.json
+            if not 'docs' in self.__conf:
+                self.__conf['docs']=False
+
             if not 'logging' in self.__conf:
                 self.__conf['logging']=True
 

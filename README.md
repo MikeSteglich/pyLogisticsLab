@@ -1,0 +1,243 @@
+# pyLogisticsLab
+
+Python-Bibliothek und REST-Server für logistische Optimierungsprobleme (TSP, Transportproblem, Standortprobleme, Tourenplanung …) mit Anbindung an OpenStreetMap-Dienste für Distanzmatrizen, Routing und Geocoding.
+
+Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
+
+## Inhalt
+
+| Verzeichnis | Inhalt |
+|---|---|
+| `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, `Scp`, `Mcp`, `Cpp`, `Vrp` |
+| `logisticsLabServer/` | REST-Server (FastAPI), der Probleme über eine Queue löst und OSM-Dienste weitergibt |
+| `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
+| `pyCmpl/` | Python-Schnittstelle zu CMPL – die CMPL-Binärdateien sind **nicht** im Repository |
+| `confs/` | Konfigurationen für die OSM-Server |
+| `tests/` | Beispiel- und Testskripte für Bibliothek (`tests/pyCmpl`) und Server (`tests/serverTests`) |
+| `old/` | ältere Versionen, nicht mehr in Gebrauch |
+
+## Installation
+
+```bash
+conda create -n pyLogisticsLab python=3.14
+conda activate pyLogisticsLab
+pip install -r requirements.txt
+export PYTHONPATH=$PYTHONPATH:/pfad/zu/pyLogisticsLab
+```
+
+**CMPL-Binärdateien:** `pyCmpl` sucht CMPL je nach Betriebssystem unter `pyCmpl/binLinux/`, `pyCmpl/binMac/` oder `pyCmpl/binWin/` – oder unter `$CMPLHOME/bin/`, wenn `CMPLHOME` gesetzt ist. Die Verzeichnisse aus einer CMPL-Distribution dorthin kopieren. Ohne CMPL laufen nur TSP und VRP, die OR-Tools nutzen.
+
+**Konfiguration mit Zugangsdaten:** Dateien mit Zugangsdaten sind nicht versioniert. Für sie gibt es Vorlagen:
+
+| Vorlage | kopieren nach | Inhalt |
+|---|---|---|
+| `confs/logisticsLab.example.yml` | `confs/logisticsLab.yml` | OSM-Server, ORS-API-Key |
+| `tests/osmTests/logisticsLab.example.yml` | `tests/osmTests/logisticsLab.yml` | dasselbe für die OSM-Tests |
+| `checkserver/checkServer.example.opt` | `checkserver/checkServer.opt` | Mailzugang der Serverüberwachung |
+| `logisticsLabServer/apiKeys.example.yml` | – | nur zur Ansicht, die echte Datei erzeugt `manageKeys.py` |
+
+## Bibliothek
+
+Die Modelle bekommen ihre Daten direkt als Listen bzw. Matrizen:
+
+```python
+import pyLogisticsLab as ll
+
+m = ll.Tpp(varCosts=[[3, 2, 7], [7, 5, 2]], supplies=[50, 60], demands=[40, 30, 40],
+           objSense='min', maxSolvingTime=60)
+m.solve()
+print(m.getObjValue(), m.getFlows())
+```
+
+Weitere Beispiele stehen in `tests/pyCmpl/`. Fehler werden als `ll.LogLabException` gemeldet.
+
+## Server
+
+Der Server liegt in `logisticsLabServer/` und muss **aus diesem Verzeichnis** gestartet werden, weil er `logisticsLabServer.yml` und `logisticsLab.yml` dort liest.
+
+```bash
+cd logisticsLabServer
+python manageKeys.py add mein-test          # Key einmalig anlegen und notieren
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Zum Entwickeln geht auch `fastapi dev main.py` (lädt bei Änderungen neu). `fastapi dev` ist nicht für den Betrieb gedacht.
+
+### Ablauf einer Anfrage
+
+Optimierungsprobleme laufen asynchron. Der Client reicht das Problem ein, bekommt eine `id` und fragt das Ergebnis ab, bis der Status `solution`, `noSolution` oder `error` ist.
+
+```bash
+KEY=...   # aus manageKeys.py
+curl -s -X POST http://127.0.0.1:8000/v1/tpp -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+     -d '{"varCosts": [[3,2],[1,4]], "supplies": [10,10], "demands": [8,8]}'
+# {"id": "6f1c…", "status": "waiting", "message": "Problem is waiting in queue"}
+
+curl -s -X POST http://127.0.0.1:8000/v1/results -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+     -d '{"id": "6f1c…"}'
+# {"id": "6f1c…", "status": "solution", "message": "...", "results": {"objVal": 24.0, "solvingTime": 0.04, ...}}
+```
+
+Ein abgeholtes Endergebnis wird gelöscht. Ergebnisse, die nicht abgeholt werden, löscht der Server nach `maxInactivityTime`.
+
+### Endpoints
+
+Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 abgelehnt.
+
+| Endpoint | Zweck | Dienst für Key-Rechte |
+|---|---|---|
+| `/v1/tsp` | Traveling Salesman: `distances` oder `coordinates` | `tsp` |
+| `/v1/tpp` | Transportproblem: `varCosts` oder `sourceCoordinates` + `destinationCoordinates`, dazu `supplies`, `demands`; optional Fixkosten, Kapazitäten, Bereiche, `objSense` (`min`/`max`/`minimax`), Single Source, Blocking | `tpp` |
+| `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`) | je nach `type` |
+| `/v1/results` | Status bzw. Ergebnis zu einer `id` | – |
+| `/v1/matrix` | Distanz- und/oder Zeitmatrix aus Koordinaten | `matrix` |
+| `/v1/routing` | Route über mehrere Koordinaten | `routing` |
+| `/v1/coordinates`, `/v1/search`, `/v1/reverse` | Geocoding | `geocoding` |
+
+Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach folgen die problemspezifischen Felder (TSP: `route`; TPP: `flows`, `totalCosts`, `sourceFlows` …). Koordinaten werden als `[lat, lon]` übergeben.
+
+Wenn `docs: True` gesetzt ist, steht die vollständige Beschreibung aller Felder unter `/docs`.
+
+### Zugang mit API-Keys
+
+Jede Anfrage braucht den Header `X-API-Key`. Die Keys verwaltet `manageKeys.py` im Serververzeichnis:
+
+```bash
+python manageKeys.py add DSS-WS2026 --expires 2027-03-31 --allowed tsp,tpp --maxOpenProblems 3
+python manageKeys.py list
+python manageKeys.py disable DSS-WS2026     # sperren
+python manageKeys.py enable DSS-WS2026
+python manageKeys.py remove DSS-WS2026
+```
+
+- `add` zeigt den Key **nur einmal** an. In `apiKeys.yml` steht nur sein SHA-256-Hash. Die Datei wird mit den Rechten `600` angelegt und ist nicht versioniert.
+- Der Server lädt `apiKeys.yml` automatisch neu, wenn sie sich ändert. Sperren und neue Keys wirken also ohne Neustart.
+- Ein Key gehört zu einem Namen, z. B. Kurs oder Person. Der Name steht im Log, und nur der Key, der ein Problem eingereicht hat, kann dessen Ergebnis abholen.
+- Ohne `--allowed` darf ein Key alle Dienste nutzen (`tsp`, `tpp`, `matrix`, `routing`, `geocoding`).
+- Mit `authentication: False` ist der Server ohne Key offen. Das ist nur für die lokale Entwicklung gedacht.
+
+### Antworten bei Ablehnung
+
+| Status | Bedeutung |
+|---|---|
+| 401 | Key fehlt, ist falsch, abgelaufen oder gesperrt |
+| 403 | Key darf diesen Dienst nicht nutzen |
+| 422 | Anfrage passt nicht zum Schema (Feld fehlt, falscher Typ, unbekanntes Feld) |
+| 429 | Key hat schon `maxOpenProblems` wartende oder laufende Probleme – erst Ergebnisse abholen |
+| 503 | Queue ist voll (`maxQueueSize`) – später erneut versuchen |
+| 400 | Daten passen nicht (z. B. falsche Matrixgröße) oder `id` unbekannt |
+| 404 | Problem wurde gelöst, hat aber keine zulässige Lösung (`noSolution`) |
+
+### Konfiguration (`logisticsLabServer.yml`)
+
+| Option | Standard | Bedeutung |
+|---|---|---|
+| `maxProblems` | 4 | Solver-Threads, d. h. gleichzeitig gelöste Probleme |
+| `maxQueueSize` | 50 | wartende und laufende Probleme aller Keys zusammen |
+| `maxOpenProblemsPerKey` | 3 | Standard für Keys ohne eigenes `maxOpenProblems` |
+| `maxInactivityTime` | 43200 | Sekunden, nach denen nicht abgeholte Ergebnisse gelöscht werden |
+| `serviceIntervall` | 30 | Sekunden zwischen zwei Aufräumläufen |
+| `authentication` | True | API-Keys erforderlich |
+| `apiKeyFile` | `apiKeys.yml` im Serververzeichnis | Pfad zur Key-Datei |
+| `docs` | False | `/docs`, `/redoc` und `/openapi.json` anbieten |
+| `logging`, `debugging` | True, True | Log-Stufen INFO/WARNING/ERROR bzw. zusätzlich DEBUG |
+| `logPath` | Serververzeichnis | Verzeichnis für alle Logdateien |
+| `logMaxBytes`, `logBackupCount` | 5 MB, 5 | Rotation von `logisticsLabServer.log` |
+| `tsp.maxNodes`, `tpp.maxNodes` | 100, 200 | maximale Problemgröße |
+| `tpp.maxSolvingTime` | 300 | Obergrenze in Sekunden für die vom Client gewünschte Lösungszeit |
+
+`port` wird derzeit nicht ausgewertet. Den Port legt der Startbefehl von uvicorn fest.
+
+### Logdateien
+
+Alle Logdateien landen in `logPath`:
+
+- `logisticsLabServer.log`: Anfragen, Ergebnisse (eine Zeile pro Problem mit Größe, Status, Zielwert und Laufzeit), Ablehnungen und Fehler, jeweils mit Key-Namen
+- `logisticsLab.log`: Zugriffe auf die OSM-Server (CSV)
+- `HiGHS.log`: Ausgabe des Solvers
+
+Für den Betrieb `debugging: False` setzen, sonst wird auch jede Statusabfrage während des Wartens geloggt.
+
+## Betrieb unter Linux mit nginx
+
+nginx übernimmt TLS, Rate-Limit und die Größenbegrenzung. uvicorn ist nur lokal erreichbar. Die Pfade unten sind Beispiele.
+
+**Wichtig:** uvicorn mit **genau einem** Worker-Prozess starten. Queue und Ergebnisse liegen im Speicher des Prozesses. Bei mehreren Workern würde `/results` die `id` oft nicht finden. Für Parallelität sorgt `maxProblems`.
+
+### systemd (`/etc/systemd/system/logisticslab.service`)
+
+```ini
+[Unit]
+Description=LogisticsLab Server
+After=network.target
+
+[Service]
+User=loglab
+Group=loglab
+WorkingDirectory=/opt/pyLogisticsLab/logisticsLabServer
+Environment=PYTHONPATH=/opt/pyLogisticsLab
+ExecStart=/opt/conda/envs/pyLogisticsLab/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now logisticslab
+journalctl -u logisticslab -f
+```
+
+### nginx (`/etc/nginx/conf.d/logisticslab.conf`)
+
+```nginx
+# 10 Anfragen/s pro IP – reicht für die Abfrage des Ergebnisses alle 0,2 s
+limit_req_zone $binary_remote_addr zone=loglab:10m rate=10r/s;
+
+server {
+    listen 80;
+    server_name logisticslab.example.org;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name logisticslab.example.org;
+
+    ssl_certificate     /etc/letsencrypt/live/logisticslab.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/logisticslab.example.org/privkey.pem;
+
+    client_max_body_size 2m;       # große Matrizen begrenzen
+
+    location /v1/ {
+        limit_req zone=loglab burst=20 nodelay;
+        limit_req_status 429;
+
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;   # Matrix- und Routing-Anfragen laufen synchron
+    }
+
+    location / {
+        return 404;
+    }
+}
+```
+
+Das Zertifikat bekommt man z. B. mit `certbot --nginx -d logisticslab.example.org`. Von außen müssen nur die Ports 80/443 (und 22) offen sein. Port 8000 bleibt zu.
+
+## Tests
+
+- `tests/pyCmpl/find*.py`: rufen die Bibliothek direkt auf
+- `tests/serverTests/*.py`: Clients für einen laufenden Server. Der Key wird aus `LOGLAB_API_KEY` gelesen:
+
+```bash
+export LOGLAB_API_KEY=...
+python tests/serverTests/findTppServer.py
+```
+
+Die Server-Adresse steht oben im jeweiligen Skript (`url = ...`).

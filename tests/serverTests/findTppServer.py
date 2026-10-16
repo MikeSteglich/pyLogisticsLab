@@ -1,4 +1,5 @@
 import requests
+import os
 import time
 
 
@@ -21,6 +22,7 @@ payload = {
 }
 
 headers = {
+    'X-API-Key': os.environ.get('LOGLAB_API_KEY', ''),   # export LOGLAB_API_KEY=...
     'Content-Type': 'application/json'
 }
 

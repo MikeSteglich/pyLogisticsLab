@@ -2,10 +2,13 @@
 confs/logisticsLab.yml
 tests/osmTests/logisticsLab.yml
 checkserver/checkServer.opt
+logisticsLabServer/apiKeys.yml
+logisticsLabServer/apiKeys.yml.tmp
 
 # --- CMPL binaries (installed separately) ---
 pyCmpl/binWin/
 pyCmpl/binMac/
+pyCmpl/binLinux/
 
 # --- logs ---
 *.log

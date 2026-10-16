@@ -30,6 +30,15 @@ class LogLabServerException(Exception):
 #*************** end LLException *******************************
 
 
+#*************** LogLabLimitException **************************
+class LogLabLimitException(LogLabServerException):
+	""" a request is rejected because of a limit or missing rights - httpStatus is sent to the client """
+	def __init__(self, message, httpStatus):
+		super().__init__(message)
+		self.httpStatus = httpStatus
+#*************** end LogLabLimitException **********************
+
+
 		
 		
 		

@@ -1,7 +1,14 @@
 port: 5000
-maxProblems:  4
-maxInactivityTime:  43200
-serviceIntervall: 30 
+maxProblems:  4                 # solver threads
+maxInactivityTime:  43200       # seconds - finished problems are deleted if their results are not fetched
+serviceIntervall: 30            # seconds - interval of the cleanup
+maxQueueSize: 50                # open (waiting or running) problems of all keys
+maxOpenProblemsPerKey: 3        # default for keys without maxOpenProblems
+
+authentication: True            # api keys via header X-API-Key - see manageKeys.py
+#apiKeyFile: /etc/logisticsLab/apiKeys.yml   # default: apiKeys.yml in the server directory
+docs: False                     # /docs, /redoc and /openapi.json
+
 logging:  True
 debugging: True
 #logPath: /var/log/logisticsLab   # default: directory of the server
