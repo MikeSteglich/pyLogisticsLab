@@ -1,0 +1,56 @@
+
+#server main configuraion file 
+main_configuration: http://logisticsLab.org/logisticsLabMain.yml
+
+#if not main_configuration or url not availabe then:
+servers:
+ 
+  matrix :
+    - url: http://194.95.44.12:8082/ors/v2/matrix     
+      type: ors
+      #apiKey: 
+
+    - url: http://osm1.th-wildau.de:5000/table/v1
+      type: osrm
+
+    - url:  https://routing.openstreetmap.de/routed-car/table/v1
+      type: osrm
+
+    - url:  https://router.project-osrm.org/table/v1
+      type: osrm
+
+  routing :
+    - url: http://194.95.44.12:8082/ors/v2/directions     
+      type: ors
+
+    - url: http://osm1.th-wildau.de:5000/route/v1
+      type: osrm
+
+    - url:  https://routing.openstreetmap.de/routed-car/route/v1
+      type: osrm
+
+    - url:  https://router.project-osrm.org/route/v1
+      type: osrm
+
+  geocoding:
+    - url: http://osm2.th-wildau.de:2322
+      type: photon
+    - url: https://photon.komoot.io
+      type: photon
+    - url: https://nominatim.openstreetmap.org
+      type: nominatim
+        
+  maxTableSize: 2500
+  maxNodesInRoute: 50
+
+proxies: 
+  http: http://proxy.th-wildau.de:8080
+  https: http://proxy.th-wildau.de:8080 
+  
+
+logging: on
+serverCheckTime: 3600 
+maxUrlTries: 5
+    
+
+

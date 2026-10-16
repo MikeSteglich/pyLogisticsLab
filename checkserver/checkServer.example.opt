@@ -1,0 +1,15 @@
+{
+
+"serviceIntervall" : 3600,
+"reportTime" : "09:00:00",
+
+"mailUser" : "",
+"mailPwd" : "",
+"mailFromAdr" : "wetterfrosch@stegger.net",
+
+"reportMailToAdr" : ["mike.steglich@icloud.com"], 
+"errorMailToAdr" : ["mike.steglich@icloud.com"],
+
+"smtpServer" : "wp11040835.mailout.server-he.de",
+"smtpPort" : 587
+}

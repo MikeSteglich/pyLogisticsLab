@@ -1,0 +1,15 @@
+%data
+
+%display ignoreCons
+%display nonZeros
+
+var:
+    x[Sources] : binary;
+       
+obj:
+    sum{ i in Sources: f[i]*x[i]} ->min;
+
+con:
+    {j in Destinations: 
+        sum{i in Sources: a[i,j]*x[i]} >= 1;
+	}

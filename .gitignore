@@ -1,0 +1,24 @@
+# --- secrets: only the *.example.* templates are versioned ---
+confs/logisticsLab.yml
+tests/osmTests/logisticsLab.yml
+checkserver/checkServer.opt
+
+# --- CMPL binaries (installed separately) ---
+pyCmpl/binWin/
+pyCmpl/binMac/
+
+# --- logs ---
+*.log
+*.log.[0-9]*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+
+# --- temporary data ---
+tmp/
+*.dump
+
+# --- editor / OS ---
+.vscode/
+.DS_Store

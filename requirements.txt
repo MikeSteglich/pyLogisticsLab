@@ -1,0 +1,10 @@
+fastapi
+pydantic
+requests
+PyYAML
+ortools
+xlwings
+simplification
+
+# Gurobi requires a separate license; install via pip or conda per Gurobi's instructions
+# gurobipy

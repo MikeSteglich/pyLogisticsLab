@@ -1,0 +1,17 @@
+%data
+
+%display nonZeros
+
+var:
+    x[Sources] : binary;
+    y[Destinations] : binary;
+       
+obj:
+    sum{ j in Destinations: d[j]*y[j]} ->max;
+
+con:
+    {j in Destinations: 
+        sum{i in Sources: a[i,j]*x[i]} >= y[j];
+    }
+    
+    sum{i in Sources: f[i] * x[i]} <= p; 

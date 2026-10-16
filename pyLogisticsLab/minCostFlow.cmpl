@@ -1,0 +1,12 @@
+%xlsdata 
+
+var:
+	{ [i,j] in A: x[i,j] : real[minKap[i, j]..maxKap[i, j]]; } 
+
+obj:
+	sum { [i,j] in A: c[i,j] * x[i,j] } ->min;
+
+con:
+	{ i in N : 
+ 		sum{[i,j] in A  : x[i,j] } -  sum{[j,i] in A  : x[j,i] } = a[i] - b[i];
+	}

@@ -1,0 +1,21 @@
+port: 5000
+maxProblems:  4
+maxInactivityTime:  43200
+serviceIntervall: 30 
+logging:  True
+debugging: True
+#logPath: /var/log/logisticsLab   # default: directory of the server
+#logMaxBytes: 5000000             # log rotation
+#logBackupCount: 5
+
+tsp:
+  maxNodes: 100
+
+tpp:
+  maxNodes: 200
+  maxSolvingTime: 300
+  
+
+    
+
+

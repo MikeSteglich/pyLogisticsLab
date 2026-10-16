@@ -1,0 +1,162 @@
+%data   
+
+var:
+	# Bottleneck min
+	{ objSense = 2:
+		B : real; 
+  		{ relaxedMode=0:
+					y[edges]: binary; |
+		 		relaxedMode=1 : 
+		 			y[edges]: real[0..1];
+			}
+
+			{ [i,j] in edges:
+					x[i,j] : real[0..caps[i,j]];
+			} 
+		|
+		objSense <2: 
+			{ singleSourceMode = 1 || fixedCostMode = 1 : 
+				{ relaxedMode=0:
+						y[edges]: binary; |
+		  		relaxedMode=1 : 
+		  			y[edges]: real[0..1];
+				}
+			}
+	
+			{ singleSourceMode = 0: 
+				{ [i,j] in edges:
+					x[i,j] : real[0..caps[i,j]];
+				}
+			}
+	}
+
+
+obj:
+
+		#tpp min
+		{ objSense = 0: 
+			{ 	singleSourceMode = 1:
+					{ 	fixedCostMode = 1:
+							costs: sum{ [i,j] in edges : ( c[i,j] + fc[i,j]) *  maxD[j] * y[i,j] } ->min; |
+						fixedCostMode = 0 :
+							costs: sum{ [i,j] in edges : c[i,j] *  maxD[j] * y[i,j] } ->min;
+					} |
+				default :
+					{ fixedCostMode = 1:
+							costs: sum{[i,j] in edges: c[i,j] * x[i,j] + fc[i,j] * y[i,j] } ->min; |
+						fixedCostMode = 0 :
+							costs: sum{[i,j] in edges: c[i,j] * x[i,j]  } ->min; 
+					}
+			} 
+		#tpp max
+		| objSense = 1:
+			{ singleSourceMode = 1:
+				{ 	fixedCostMode = 1:
+							costs: sum{ [i,j] in edges : (  c[i,j] - fc[i,j]) *  maxD[j] * y[i,j] } ->max; |
+					fixedCostMode = 0 :
+							costs: sum{ [i,j] in edges : c[i,j] * y[i,j] } ->max;
+				} |
+				
+			  default :
+					{ fixedCostMode = 1:
+							costs: sum{[i,j] in edges: c[i,j] * x[i,j] - fc[i,j] * y[i,j] } ->max; |
+						fixedCostMode = 0 :
+							costs: sum{[i,j] in edges: c[i,j] * x[i,j]  } ->max; 
+					}
+			} 
+		# bottleneck min
+		| objense = 2 :
+			B -> min;
+		}
+		
+
+con:
+#fix relations after relaxed problem
+{ (singleSourceMode = 1 || fixedCostMode = 1) && (relaxedMode=0) : 
+	{ [i,j] in fixedEdges, i<>-1, j<>-1: 
+		y[i,j] = 0;
+	}
+}
+
+#blocking relations with cost rates
+{ costBlockMode = 1:
+		{ [i,j] in edges: 
+			{ (c[i,j] < minBlock || c[i,j] > maxBlock) :
+				{ 	(singleSourceMode = 1 || fixedCostMode = 1) :
+						y[i,j] = 0; |
+					default :
+						x[i,j] = 0;
+				}
+			}
+		}
+}
+
+# bottleneck min
+{ objSense = 2:
+	
+		{ [i,j] in edges: 
+				cy_b[i,j]: c[i,j] * y[i,j] <= B;
+				xy_b[i,j]: x[i,j] <= maxD[j] * y[i,j];
+		}
+	
+}
+	
+
+{singleSourceMode = 0:
+	{ supplyConMode = 1 && demandConMode = 0 :
+
+			{	valueMode = 0 :
+					supplies {i in sources  : 	minS[i] <= sum{[i,j] in edges: x[i,j]} 	<= maxS[i];}
+					demands  {j in destinations : 	minD[j] <= sum{[i,j] in edges : x[i,j]} 	=  maxD[j];}  |
+				valueMode = 1 :
+					supplies {i in sources  : 	minS[i] <= sum{[i,j] in edges: x[i,j]} 	<= maxS[i]; }
+					demands  {j in destinations : 	minD[j] <= sum{[i,j] in edges : x[i,j]} 	<= maxD[j];}  |
+				valueMode = 2:
+					supplies {i in sources  : 	minS[i] <= sum{[i,j] in edges: x[i,j]} 	<= maxS[i];}
+					demands  {j in destinations : 	minD[j] <= sum{[i,j] in edges : x[i,j]} 	= maxD[j];}  
+			} |
+		
+	 supplyConMode = 0 && demandConMode = 1 :	
+			
+			{	valueMode = 0 :
+					supplies {i in sources  : 	minS[i] <= sum{[i,j] in edges: x[i,j]} 	<= maxS[i];}
+					demands  {j in destinations : 	minD[j] <= sum{[i,j] in edges : x[i,j]} 	<=  maxD[j];}  |
+				valueMode = 1 :
+					supplies {i in sources  : 	minS[i] <= sum{[i,j] in edges: x[i,j]} 	= maxS[i]; }
+					demands  {j in destinations : 	minD[j] <= sum{[i,j] in edges : x[i,j]} 	<= maxD[j];}  |
+				valueMode = 2:
+					supplies {i in sources  : 	minS[i] <= sum{[i,j] in edges: x[i,j]} 	= maxS[i];}
+					demands  {j in destinations : 	minD[j] <= sum{[i,j] in edges : x[i,j]} 	<= maxD[j];}  
+			} |
+			
+	 supplyConMode = 1 && demandConMode = 1 :	
+					supplies {i in sources  : 	minS[i] <= sum{[i,j] in edges: x[i,j]} 	<= maxS[i];}
+					demands  {j in destinations : 	minD[j] <= sum{[i,j] in edges: x[i,j]} 	<=  maxD[j];}  
+		
+	 | supplyConMode = 0 && demandConMode = 0 :	
+			{	valueMode = 0 :
+					supplies {i in sources  : 	 sum{[i,j] in edges: x[i,j]} <= maxS[i];}
+					demands  {j in destinations :  sum{[i,j] in edges : x[i,j]} =  maxD[j];}  |
+				valueMode = 1 :
+					supplies {i in sources  :  sum{[i,j] in edges: x[i,j]} 	= maxS[i]; }
+					demands  {j in destinations : 	 sum{[i,j] in edges : x[i,j]} 	<= maxD[j];}  |
+				valueMode = 2:
+					supplies {i in sources  : 	 sum{[i,j] in edges: x[i,j]} 	= maxS[i];}
+					demands  {j in destinations : 	 sum{[i,j] in edges : x[i,j]} 	= maxD[j];}  
+			}	 
+	}
+
+	{ fixedCostMode = 1 : 
+ 		{ [i,j] in edges: y[i,j] <= x[i,j] <= y[i,j] * maxD[j];}
+ 	}
+
+| default:
+		supplies { i in sources  : 	sum{[i,j] in edges: y[i,j] * maxD[j]} 	<= maxS[i];}
+		demands  { j in destinations: sum { [i,j] in edges: y[i,j]} = 1; }
+}
+
+
+	
+	
+	
+	

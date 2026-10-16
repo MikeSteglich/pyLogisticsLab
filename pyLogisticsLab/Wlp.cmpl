@@ -1,0 +1,31 @@
+%data
+%display ignoreCons
+
+par:
+	nrOfWarehouses := len(sources);
+	
+var:
+	{ isCap=0 || isRelaxed=1 : x[edges] : real[0..1]; |
+	  default : x[edges] : binary;
+	}
+	y[sources]   : binary;
+	
+obj:
+	costs:	sum { [i,j] in edges: c[i,j] * d[j] *  x[i,j] } +
+           	sum {i in sources: F[i] * y[i] }->min;
+  
+con:
+	{ isRelaxed=0 : 
+		{ [i,j] in fixedEdges, i<>-1, j<>-1: 
+			x[i,j] = 0;
+		}
+	}
+
+	{j in destinations: sum{[i,j] in edges: x[i,j] } = 1; }
+	{ isCap=0 : 
+				{[i,j] in edges: x[i,j]  <= y[i]; }
+		| default : 
+	  			{i in sources: sum {[i,j] in edges: d[j] * x[i,j] } <= s[i] * y[i]; }
+	}
+	
+ 

@@ -1,0 +1,25 @@
+%data: Nodes set, Arcs set[2], c[Arcs], f[Arcs]
+#%display nonZeros
+%display ignoreCons
+#%arg -solutionAscii \Users\Mike\model.sol
+   
+
+variables:
+    { [i,j] in Arcs: 
+        { f[i,j]=1 :    x[i,j] : integer[0..];  |
+          default:    x[i,j] : integer[1..]; }
+    }
+    
+objectives:
+    sum{ [i,j] in Arcs: c[i,j] * x[i,j] }->min;
+    
+constraints:
+    { i in Nodes :
+            sum{ [i,j] in Arcs : x[i,j] } - 
+            sum{ [j,i] in Arcs : x[j,i] } = 0; 
+    }
+    
+    { [i,j] in Arcs, f[i,j]=1:
+             x[i,j]+x[j,i]>=f[i,j];   
+    }
+

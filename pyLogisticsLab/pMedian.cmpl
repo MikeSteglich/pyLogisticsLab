@@ -1,0 +1,39 @@
+%data
+%display ignoreCons
+
+par:
+	M := len(destinations);
+	
+var:
+	{ isRelaxed=1 : 
+			x[edges] : real[0..1]; |
+	  default : 
+	  		x[edges] : binary;
+	}
+	y[sources]   : binary;
+	
+obj:
+	{ isDemandWeighted = 0 :
+		sum{ [i,j] in edges: c[i,j] *  x[i,j] } -> min;  
+	  | isDemandWeighted = 1: 	
+	  	sum{ [i,j] in edges: c[i,j] * d[j] * x[i,j] } -> min ; 
+	}
+  
+con:
+	{ isRelaxed=0 : 
+		{ [i,j] in fixedEdges,  i<>-1, j<>-1: 
+			x[i,j] = 0;
+		}
+	}
+
+	sum{ i  in sources: y[i] } = p;
+
+	{j in destinations: sum{[i,j] in edges: x[i,j] } = 1; }
+	
+	{ 	isCap=0 : 
+			{i in sources: sum {[i,j] in edges: x[i,j] } <= M * y[i]; } 
+		| default : 
+	  		{i in sources: sum {[i,j] in edges: d[j] * x[i,j] } <= s[i] * y[i]; }
+	}
+	
+ 
