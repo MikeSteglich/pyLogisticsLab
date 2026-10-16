@@ -24,24 +24,7 @@
  #**********************************************************************
 
 
-#*************** LLException ***********************************
-class LogLabServerException(Exception):
-	pass
-#*************** end LLException *******************************
+# the server uses the exceptions of the core - LogLabServerException is kept as name for the server modules
+from logisticsLabCore.exception import *
 
-
-#*************** LogLabLimitException **************************
-class LogLabLimitException(LogLabServerException):
-	""" a request is rejected because of a limit or missing rights - httpStatus is sent to the client """
-	def __init__(self, message, httpStatus):
-		super().__init__(message)
-		self.httpStatus = httpStatus
-#*************** end LogLabLimitException **********************
-
-
-		
-		
-		
-		
-
-		
+LogLabServerException = LogLabCoreException

@@ -25,12 +25,8 @@
 from exception import *
 from config import *
 from logger import *
-from items import *
-from problemQueue import *
-from matrixHandler import *
-from routeHandler import *
-from geoCodingHandler import *
 from apiKeys import *
+from logisticsLabCore import *
 
 from fastapi import FastAPI, Request, Security
 from fastapi.exceptions import RequestValidationError
@@ -53,7 +49,7 @@ if conf['docs']:
 else:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
-problemQueue=ProblemQueue(conf['maxProblems'],logger, conf)
+core = LogisticsLabCore(conf, logger, osmConfigFile=conf['osmConfigFile'], osmLogFile=conf['osmLogFile'])
 
 if conf['authentication']:
     keyStore = ApiKeyStore(conf['apiKeyFile'], logger, conf['maxOpenProblemsPerKey'])
@@ -115,117 +111,104 @@ async def validationErrorHandler(request: Request, exc: RequestValidationError):
 
 #*************** optimisation problems *************************
 
-def submitProblem(type, item, apiKey):
+def submitProblem(item, apiKey):
     """ adds a problem to the queue - the results are requested via /results """
-    id = problemQueue.addProblem(type, item, owner=apiKey.name, maxOpenProblems=apiKey.maxOpenProblems)
-    problem = problemQueue.getProblem(id)
-    logger.info('main', f'problem {id} - {type} - received by server - key {apiKey.name}')
-    return JSONResponse(content={'id': id,  'status': problem.status, 'message': problem.message}, status_code=problem.httpStatus)
+    id = core.submit(item, owner=apiKey.name, maxOpenProblems=apiKey.maxOpenProblems)
+    job = core.jobs.get(id)
+    logger.info('main', f'problem {id} - {item.type} - received by server - key {apiKey.name}')
+    return JSONResponse(content=job.toDict(), status_code=job.httpStatus)
 
 
 @app.post(f'/{version}/solve')
 async def solveApi(problemItem: ProblemItem, apiKey: ApiKey = Security(requireService())):
     checkAllowed(apiKey, problemItem.type)
-    return submitProblem(problemItem.type, problemItem, apiKey)
+    return submitProblem(problemItem, apiKey)
 
 
 @app.post(f'/{version}/tsp')
 async def tspApi(tspItem: TspItem, apiKey: ApiKey = Security(requireService('tsp'))):
-    return submitProblem('tsp', tspItem, apiKey)
+    return submitProblem(tspItem, apiKey)
 
 
 @app.post(f'/{version}/tpp')
 async def tppApi(tppItem: TppItem, apiKey: ApiKey = Security(requireService('tpp'))):
-    return submitProblem('tpp', tppItem, apiKey)
+    return submitProblem(tppItem, apiKey)
 
 
 @app.post(f'/{version}/results')
 async def resultsApi(resultItem: ResultItem, apiKey: ApiKey = Security(requireService())):
+    """ status of a problem and its results if it is finished - finished problems are deleted afterwards """
     id = resultItem.id
-    problem = problemQueue.getProblem(id)
-
-    # results can only be fetched with the key that has submitted the problem
-    if problem is None or problem.owner != apiKey.name:
-        httpStatus=400
-        message=f'problem id: {id} not found'
-        ret = JSONResponse(content={'id': id, 'status': 'error', 'message': message}, status_code=httpStatus)
-        if problem is None:
+    try:
+        # results can only be fetched with the key that has submitted the problem
+        content, httpStatus, job = core.fetch(id, owner=apiKey.name)
+    except LogLabCoreException as e:
+        job = core.jobs.get(id)
+        if job is None:
             logger.warning('main', f'problem {id} does not exist - key {apiKey.name}')
         else:
-            logger.warning('main', f'problem {id} belongs to key {problem.owner} - requested by key {apiKey.name}')
+            logger.warning('main', f'problem {id} belongs to key {job.owner} - requested by key {apiKey.name}')
+        return JSONResponse(content={'id': id, 'status': 'error', 'message': str(e)}, status_code=e.httpStatus)
+
+    # polling while waiting or running is only logged in debug mode
+    if job.status in OPEN:
+        logger.debug('main', f'problem {id} - {job.type} - {job.status} - status sent to client')
     else:
-        httpStatus=problem.httpStatus
-        message=problem.message
-        status = problem.status
-        type = problem.type
-        if httpStatus==200:
-            if status=='solution':
-                ret = JSONResponse(content={'id': id, 'status': status, 'message': message, 'results': problem.results}, status_code=httpStatus)
-                problemQueue.delProblem(id)
-            else:
-                ret = JSONResponse(content={'id': id, 'status': status, 'message': message}, status_code=httpStatus)
+        logger.info('main', f'problem {id} - {job.type} - {job.status} - results sent to client')
+    return JSONResponse(content=content, status_code=httpStatus)
 
-        else:
-            ret = JSONResponse(content={'id': id, 'status': status, 'message': message}, status_code=httpStatus)
-            problemQueue.delProblem(id)
 
-        # polling while waiting or running is only logged in debug mode
-        if status in ('waiting', 'running'):
-            logger.debug('main', f'problem {id} - {type} - {status} - status sent to client')
-        else:
-            logger.info('main', f'problem {id} - {type} - {status} - results sent to client')
-    return ret
+@app.post(f'/{version}/cancel')
+async def cancelApi(resultItem: ResultItem, apiKey: ApiKey = Security(requireService())):
+    """ cancels a waiting or running problem - the status changes to cancelled """
+    id = resultItem.id
+    try:
+        content = core.cancel(id, owner=apiKey.name)
+    except LogLabCoreException as e:
+        logger.warning('main', f'cancel - problem {id} not found - key {apiKey.name}')
+        return JSONResponse(content={'id': id, 'status': 'error', 'message': str(e)}, status_code=e.httpStatus)
+    logger.info('main', f'problem {id} - cancel requested - key {apiKey.name}')
+    return JSONResponse(content=content, status_code=200)
 
 
 #*************** geo services **********************************
 
-def geoErrorResponse(name, httpStatus, message):
-    logger.error('main', f'{name} request - {httpStatus} - {message}')
-    return JSONResponse(content={'status': 'error', 'message': message}, status_code=httpStatus)
-
-def geoRequest(name, createHandler, content, apiKey):
-    """ creates the handler and sends its results via content(handler) or an error to the client """
+def geoRequest(name, service, item, apiKey):
+    """ geo service of the core - sends its results or an error to the client """
     logger.info('main', f'{name} request - key {apiKey.name}')
     try:
-        h=createHandler()
-    except LogLabServerException as e:
-        return geoErrorResponse(name, 400, str(e))
+        content = core.geo(service, item)
+    except LogLabCoreException as e:
+        logger.error('main', f'{name} request - {e.httpStatus} - {e}')
+        return JSONResponse(content={'status': 'error', 'message': str(e)}, status_code=e.httpStatus)
     except:
         logger.error('main', f'{name} request - internal error - {traceback.format_exc()}')
         return JSONResponse(content={'status': 'error', 'message': str(sys.exc_info()[1])}, status_code=500)
 
-    if h.status=='ok':
-        logger.info('main', f'{name} request - {h.status} - {h.message} - results sent to client')
-        return JSONResponse(content={'status': h.status, 'message': h.message, **content(h)}, status_code=h.httpStatus)
-    return geoErrorResponse(name, h.httpStatus, h.message)
+    logger.info('main', f"{name} request - ok - {content['message']} - results sent to client")
+    return JSONResponse(content={'status': 'ok', **content}, status_code=200)
 
 
 @app.post(f'/{version}/matrix')
 async def matrixApi(matrixItem: MatrixItem, apiKey: ApiKey = Security(requireService('matrix'))):
-    def content(m):
-        if matrixItem.matrixMode=='distances':
-            return {'distances': m.distances}
-        elif matrixItem.matrixMode=='durations':
-            return {'durations': m.durations}
-        return {'distances': m.distances, 'durations': m.durations}
-    return geoRequest('Matrix', lambda: MatrixHandler(matrixItem,logger), content, apiKey)
+    return geoRequest('Matrix', 'matrix', matrixItem, apiKey)
 
 
 @app.post(f'/{version}/routing')
 async def routingApi(routeItem: RouteItem, apiKey: ApiKey = Security(requireService('routing'))):
-    return geoRequest('Routing', lambda: RouteHandler(routeItem,logger), lambda r: {'route': r.route}, apiKey)
+    return geoRequest('Routing', 'routing', routeItem, apiKey)
 
 
 @app.post(f'/{version}/coordinates')
 async def coordinatesApi(coordinatesItem: SearchCoordinatesItem, apiKey: ApiKey = Security(requireService('geocoding'))):
-    return geoRequest('Coordinates', lambda: GeoCodingHandler(coordinatesItem,logger,'coordinates'), lambda g: {'coordinates': g.results}, apiKey)
+    return geoRequest('Coordinates', 'coordinates', coordinatesItem, apiKey)
 
 
 @app.post(f'/{version}/search')
 async def searchApi(searchItem: SearchItem, apiKey: ApiKey = Security(requireService('geocoding'))):
-    return geoRequest('Search', lambda: GeoCodingHandler(searchItem,logger,'search'), lambda g: {'results': g.results}, apiKey)
+    return geoRequest('Search', 'search', searchItem, apiKey)
 
 
 @app.post(f'/{version}/reverse')
 async def reverseApi(reverseItem: ReverseItem, apiKey: ApiKey = Security(requireService('geocoding'))):
-    return geoRequest('Reverse', lambda: GeoCodingHandler(reverseItem,logger,'reverse'), lambda g: {'results': g.results}, apiKey)
+    return geoRequest('Reverse', 'reverse', reverseItem, apiKey)

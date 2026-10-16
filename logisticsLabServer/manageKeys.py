@@ -10,12 +10,16 @@
     The server reloads the key file automatically - a restart is not necessary.
 """
 
+import os
+import sys
+
+# the project directory - the server modules use logisticsLabCore
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from apiKeys import *
 
 import argparse
 import datetime
-import os
-import sys
 import yaml
 
 

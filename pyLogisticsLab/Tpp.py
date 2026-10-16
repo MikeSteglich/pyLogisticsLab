@@ -8,6 +8,9 @@ import tempfile
 import pathlib
 import random
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TppException(LogLabException):
@@ -535,7 +538,7 @@ class Tpp(object):
 
         if (self.__isFixedCosts or self.__isSingleSourceCon or self.__objSense == 2 ) and self.__nrOfNodes > self.__NodeHeuristics:
 
-            print ('    ... solving relaxtion ')
+            logger.info('    ... solving relaxtion ')
 
             self.__costTolAdder = 0
             self.__setCostTol()
@@ -545,7 +548,7 @@ class Tpp(object):
                 self.__model.debug(self.__debug)
                 self.__model.setOutput(False)
 
-                print (f'        ... with cost tolerance adder of {self.__costTolAdder} ')
+                logger.info(f'        ... with cost tolerance adder of {self.__costTolAdder} ')
 
                 self.__setEdges()
 
@@ -564,11 +567,11 @@ class Tpp(object):
                 self.__model.setOption(f'-opt highs log_file={self.__solverLogFile}')
 
                 if not self.__solveModel():
-                    print('        ... No solution has been found')
+                    logger.info('        ... No solution has been found')
                     if not self.__checkCostTol():
                         raise TppException(' No solution has been found with relaxation')
                 else:
-                    print(f'        ... Solution has been found with obj value {self.__model.solution.value} ')
+                    logger.info(f'        ... Solution has been found with obj value {self.__model.solution.value} ')
                     break
 
                 self.__costTolAdder += 0.1
@@ -576,7 +579,7 @@ class Tpp(object):
                 if (time.time()-sTime) > timeLimit:
                     raise TppException(' No solution has been found  with relaxation')
 
-            print ('    ... solving fixed model ')
+            logger.info('    ... solving fixed model ')
 
             self.__fixVarProb = 0.6
             self.__fixVariables()
@@ -588,7 +591,7 @@ class Tpp(object):
                 raise TppException('No solution has been found with relaxation')
 
         else:
-            print ('    ... solving model ')
+            logger.info('    ... solving model ')
 
             self.__costTolAdder = 1
             self.__setCostTol()
@@ -627,7 +630,7 @@ class Tpp(object):
         if not isSolved:
             raise TppException('No solution has been found')
 
-        print(f'    ... Solution has been found with obj value {self.__model.solution.value} ')
+        logger.info(f'    ... Solution has been found with obj value {self.__model.solution.value} ')
         self.__readSolution()
 
     #*********** end solve **************

@@ -1,6 +1,6 @@
 import pyLogisticsLab as ll
-from exception import *
-from problemHandler import *
+from .exception import *
+from .problemHandler import *
 import sys
 
 
@@ -12,7 +12,7 @@ class TppHandler(ProblemHandler):
 
         if not problemData.varCosts:
             if not problemData.sourceCoordinates or not problemData.destinationCoordinates:
-                raise LogLabServerException('no cost rates and coordinates are available')
+                raise LogLabCoreException('no cost rates and coordinates are available')
             self._logger.debug('tpp','load distances')
             coordinates = problemData.sourceCoordinates + problemData.destinationCoordinates
             nrOfSources = len(problemData.sourceCoordinates)
@@ -39,7 +39,7 @@ class TppHandler(ProblemHandler):
                                   solverLogFile=self._conf.get('solverLogFile'))
 
         except ll.LogLabException as e:
-            raise LogLabServerException(e)
+            raise LogLabCoreException(e)
 
         self._logger.debug('tpp','init done')
 
@@ -51,9 +51,9 @@ class TppHandler(ProblemHandler):
             if 'No solution' in str(e):
                 self._isSolution=False
                 return
-            raise LogLabServerException(e)
+            raise LogLabCoreException(e)
         except:
-            raise LogLabServerException(str(sys.exc_info()))
+            raise LogLabCoreException(str(sys.exc_info()))
 
         self._isSolution = self.__problem.isSolution()
         if self._isSolution:

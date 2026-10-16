@@ -6,6 +6,9 @@ import os
 import tempfile
 import shutil
 import pathlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -158,8 +161,8 @@ class Cpp(object):
         #*********** solve ************
         def solve(self):
 
-            print('Optimisation of CPP has been started')
-            print(' ... finding optimal number of edges to create an Euler network')
+            logger.info('Optimisation of CPP has been started')
+            logger.info(' ... finding optimal number of edges to create an Euler network')
                     
             nodes = CmplSet("Nodes")
             nodes.setValues(self.__Nodes)
@@ -199,13 +202,13 @@ class Cpp(object):
                 
             self.__solutionStatus = ''
 
-            print(' ... done')
+            logger.info(' ... done')
                 
             if self.__model.solverStatus == SOLVER_OK:
 
                 self.__objVal = self.__model.solution.value
 
-                print(' ... finding Euler tour')
+                logger.info(' ... finding Euler tour')
                     
                 sTuple = None
                 
@@ -229,7 +232,7 @@ class Cpp(object):
                 self.__find_eulerian_tour(self.__edgesUsed, sTuple )
 
 
-                print(' ... done')
+                logger.info(' ... done')
 
                 try:    
                     os.remove( modelName)
@@ -238,7 +241,7 @@ class Cpp(object):
 
             else:
                 self.__solutionStatus = False
-                print(' ... No solution has been found')
+                logger.info(' ... No solution has been found')
                            
         #*********** end solve **************
                 

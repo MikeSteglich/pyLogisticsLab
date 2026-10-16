@@ -1,6 +1,6 @@
 import pyLogisticsLab as ll
-from exception import *
-from problemHandler import *
+from .exception import *
+from .problemHandler import *
 import sys
 
 
@@ -20,7 +20,7 @@ class TspHandler(ProblemHandler):
 
         if not problemData.distances:
             if not problemData.coordinates:
-                raise LogLabServerException('no distances and coordinates are available')
+                raise LogLabCoreException('no distances and coordinates are available')
             self._logger.debug('tsp','load distances')
             self.__distances=self._loadMatrix(problemData.coordinates, problemData.travelmode, problemData.matrixMode)
         else:
@@ -32,7 +32,7 @@ class TspHandler(ProblemHandler):
         try:
             self.__problem=ll.TspMaster(self.__distances, edges=edges, startNode=startNode, endNode=endNode, openRoute=openRoute)
         except ll.LogLabException as e:
-            raise LogLabServerException(e)
+            raise LogLabCoreException(e)
 
         self._logger.debug('tsp','init done')
 
@@ -45,6 +45,6 @@ class TspHandler(ProblemHandler):
                 self._objVal, route = self.__problem.solution()
                 self._results['route'] = route
         except ll.LogLabException as e:
-            raise LogLabServerException(e)
+            raise LogLabCoreException(e)
         except:
-            raise LogLabServerException(str(sys.exc_info()))
+            raise LogLabCoreException(str(sys.exc_info()))

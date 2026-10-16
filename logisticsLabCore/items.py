@@ -82,3 +82,8 @@ class SearchItem(LogLabItem):
 class ReverseItem(LogLabItem):
     coordinate: list
 
+
+# problem type -> item, geo service -> item
+PROBLEM_ITEMS = {'tsp': TspItem, 'tpp': TppItem}
+GEO_ITEMS = {'matrix': MatrixItem, 'routing': RouteItem, 'coordinates': SearchCoordinatesItem,
+             'search': SearchItem, 'reverse': ReverseItem}

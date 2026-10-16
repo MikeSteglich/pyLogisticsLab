@@ -1,5 +1,5 @@
 import osm_data as osm
-from exception import *
+from .exception import *
 import sys
 
 
@@ -27,7 +27,7 @@ class RouteHandler:
     def __getRoute(self):
 
         if not self.__coordinates:
-            raise LogLabServerException('no coordinates available')
+            raise LogLabCoreException('no coordinates available')
             
         try:
             osmData = osm.Routing(self.__coordinates)

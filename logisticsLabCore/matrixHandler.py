@@ -1,5 +1,5 @@
 import osm_data as osm
-from exception import *
+from .exception import *
 import sys
 
 
@@ -28,7 +28,7 @@ class MatrixHandler:
 
     def __getMatrix(self):
         if not self.__coordinates:
-            raise LogLabServerException('no coordinates available')
+            raise LogLabCoreException('no coordinates available')
             
         try:
             osmData = osm.Matrix(self.__coordinates, sources=self.__sources, destinations=self.__destinations)

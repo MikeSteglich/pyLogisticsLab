@@ -1,5 +1,5 @@
 import osm_data as osm
-from exception import *
+from .exception import *
 import sys
 
 
@@ -34,10 +34,10 @@ class GeoCodingHandler:
     def __getData(self):
 
         if self.__modus=='coordinates' and not self.__data.adresses:
-            raise LogLabServerException('no adresses available')
+            raise LogLabCoreException('no adresses available')
         
         if self.__modus=='search' and not self.__data.adress:
-            raise LogLabServerException('no adress available')
+            raise LogLabCoreException('no adress available')
             
         try:
             self.__message='ok'

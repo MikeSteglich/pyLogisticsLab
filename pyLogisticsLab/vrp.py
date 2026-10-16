@@ -5,6 +5,9 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 import sys
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 #*************** CmplCPP  ************************************************
@@ -158,7 +161,7 @@ class Vrp(object):
 
 
     def solve(self):
-        print('VRP has been started ')
+        logger.info('VRP has been started ')
         try:
             self.__manager = pywrapcp.RoutingIndexManager(len(self.__distance_matrix),
                                            self.__num_vehicles, self.__depot)
@@ -237,19 +240,19 @@ class Vrp(object):
             if self.__solution:
                 self.__solutionStatus = True
                 self.getSolutionData()
-                print(' ... solution has been found ')
-                print(' ... Writing results ')
+                logger.info(' ... solution has been found ')
+                logger.info(' ... Writing results ')
                
             else:
                 self.__solutionStatus = False
-                print(' ... no solution has been found ')
+                logger.info(' ... no solution has been found ')
    
-            print('VRP has been finished ')
+            logger.info('VRP has been finished ')
       
             #self.lf.close()
         except:
             traceback.print_exc()
-            print('Error :'+str(sys.exc_info()) )
+            logger.info('Error :'+str(sys.exc_info()))
             #self.lf.close()
             raise LogLabException('LogisticsLab: Something went wrong while solving VRP: '+ str(sys.exc_info()) )
     

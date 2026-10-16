@@ -1,6 +1,18 @@
 # pyLogisticsLab
 
-Python-Bibliothek und REST-Server für logistische Optimierungsprobleme (TSP, Transportproblem, Standortprobleme, Tourenplanung …) mit Anbindung an OpenStreetMap-Dienste für Distanzmatrizen, Routing und Geocoding.
+Python-Bibliothek und REST-Server für logistische Optimierungsprobleme (TSP, Transportproblem, Standortprobleme, Tourenplanung …) mit Anbindung an OpenStreetMap-Dienste für Distanzmatrizen, Routing und Geocoding. Neben dem REST-Server gibt es eine lokale Schnittstelle für Desktop-Apps.
+
+```
+        Flutter-App (Desktop, Web, Mobil)
+           │                       │
+   REST + API-Key            JSON-RPC über stdin/stdout
+           │                   (nur Desktop)
+  logisticsLabServer        logisticsLabCore.stdio
+           └──────────┬────────────┘
+               logisticsLabCore         Prüfung der Daten, Jobs, Solver-Prozesse, Abbruch
+                      │
+          pyLogisticsLab · osm_data     Modelle (CMPL, OR-Tools) · OSM-Server der TH Wildau
+```
 
 Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 
@@ -9,7 +21,8 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 | Verzeichnis | Inhalt |
 |---|---|
 | `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, `Scp`, `Mcp`, `Cpp`, `Vrp` |
-| `logisticsLabServer/` | REST-Server (FastAPI), der Probleme über eine Queue löst und OSM-Dienste weitergibt |
+| `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle |
+| `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
 | `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
 | `pyCmpl/` | Python-Schnittstelle zu CMPL – die CMPL-Binärdateien sind **nicht** im Repository |
 | `confs/` | Konfigurationen für die OSM-Server |
@@ -49,7 +62,7 @@ m.solve()
 print(m.getObjValue(), m.getFlows())
 ```
 
-Weitere Beispiele stehen in `tests/pyCmpl/`. Fehler werden als `ll.LogLabException` gemeldet.
+Weitere Beispiele stehen in `tests/pyCmpl/`. Fehler werden als `ll.LogLabException` gemeldet. Fortschrittsmeldungen gehen über das `logging`-Modul (Logger `pyLogisticsLab.*`) und nicht über `print`. Wer sie sehen will, ruft `logging.basicConfig(level=logging.INFO)` auf.
 
 ## Server
 
@@ -65,7 +78,7 @@ Zum Entwickeln geht auch `fastapi dev main.py` (lädt bei Änderungen neu). `fas
 
 ### Ablauf einer Anfrage
 
-Optimierungsprobleme laufen asynchron. Der Client reicht das Problem ein, bekommt eine `id` und fragt das Ergebnis ab, bis der Status `solution`, `noSolution` oder `error` ist.
+Optimierungsprobleme laufen asynchron. Der Client reicht das Problem ein, bekommt eine `id` und fragt das Ergebnis ab, bis der Status `solution`, `noSolution`, `error` oder `cancelled` ist. Jedes Problem wird in einem eigenen Solver-Prozess gelöst, deshalb kann es über `/v1/cancel` abgebrochen werden, auch während es läuft.
 
 ```bash
 KEY=...   # aus manageKeys.py
@@ -90,6 +103,7 @@ Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 a
 | `/v1/tpp` | Transportproblem: `varCosts` oder `sourceCoordinates` + `destinationCoordinates`, dazu `supplies`, `demands`; optional Fixkosten, Kapazitäten, Bereiche, `objSense` (`min`/`max`/`minimax`), Single Source, Blocking | `tpp` |
 | `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`) | je nach `type` |
 | `/v1/results` | Status bzw. Ergebnis zu einer `id` | – |
+| `/v1/cancel` | wartendes oder laufendes Problem abbrechen (`{"id": ...}`); der Status wechselt kurz danach zu `cancelled` | – |
 | `/v1/matrix` | Distanz- und/oder Zeitmatrix aus Koordinaten | `matrix` |
 | `/v1/routing` | Route über mehrere Koordinaten | `routing` |
 | `/v1/coordinates`, `/v1/search`, `/v1/reverse` | Geocoding | `geocoding` |
@@ -132,7 +146,7 @@ python manageKeys.py remove DSS-WS2026
 
 | Option | Standard | Bedeutung |
 |---|---|---|
-| `maxProblems` | 4 | Solver-Threads, d. h. gleichzeitig gelöste Probleme |
+| `maxProblems` | 4 | Solver-Prozesse, d. h. gleichzeitig gelöste Probleme |
 | `maxQueueSize` | 50 | wartende und laufende Probleme aller Keys zusammen |
 | `maxOpenProblemsPerKey` | 3 | Standard für Keys ohne eigenes `maxOpenProblems` |
 | `maxInactivityTime` | 43200 | Sekunden, nach denen nicht abgeholte Ergebnisse gelöscht werden |
@@ -157,6 +171,63 @@ Alle Logdateien landen in `logPath`:
 - `HiGHS.log`: Ausgabe des Solvers
 
 Für den Betrieb `debugging: False` setzen, sonst wird auch jede Statusabfrage während des Wartens geloggt.
+
+## Lokale Schnittstelle für Desktop-Apps
+
+Eine Desktop-App (z. B. Flutter unter Windows, macOS oder Linux) kann ohne Server lokal rechnen. Sie startet dafür die lokale Schnittstelle als Kindprozess und spricht über stdin/stdout mit ihr ([JSON-RPC 2.0](https://www.jsonrpc.org/specification), eine Nachricht pro Zeile, UTF-8). Es gibt keinen Port, keine Firewall-Abfrage und keine API-Keys. Der Prozess lebt so lange wie die App.
+
+```bash
+python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProblems N] [--debug]
+```
+
+- **`--logPath`:** Verzeichnis für Logdateien und `HiGHS.log`. Standard ist `logisticsLab` im Temp-Verzeichnis. Die App sollte ihr Support-Verzeichnis übergeben.
+- **`--osmConfig`:** OSM-Server. Standard sind die Server der TH Wildau (`logisticsLabCore/logisticsLab.yml`).
+- **Ende:** Der Prozess endet, wenn stdin geschlossen wird oder nach `shutdown`. Laufende Solver werden dabei mit beendet.
+- **stdout gehört nur dem Protokoll.** Alle anderen Ausgaben, auch die von CMPL und HiGHS, gehen auf stderr.
+
+Datenformate und Ergebnisse sind dieselben wie beim REST-Server. Die Methoden entsprechen den Endpoints:
+
+| Methode | Parameter | Ergebnis |
+|---|---|---|
+| `solve` | Problem mit `type` (`"tsp"`, `"tpp"`), wie bei `/v1/solve` | `{id, status, message}` |
+| `status` | `{id}` | `{id, status, message}` |
+| `result` | `{id}` | wie `/v1/results`; ein fertiges Problem wird danach gelöscht |
+| `cancel` | `{id}` | `{id, status, message}` |
+| `matrix`, `routing`, `coordinates`, `search`, `reverse` | wie die REST-Endpoints | `{message, ...}` |
+| `version` | `{}` | `{version, protocol}` |
+| `shutdown` | `{}` | `{}` |
+
+Der Prozess schickt außerdem von sich aus Nachrichten. Ein Abfragen in Schleife wie beim REST-Server ist nicht nötig.
+
+| Benachrichtigung | Parameter | wann |
+|---|---|---|
+| `ready` | `{version, protocol}` | nach dem Start, ab dann werden Anfragen angenommen |
+| `jobStatus` | `{id, status, message}` | bei jedem Statuswechsel: `waiting` → `running` → `solution` / `noSolution` / `error` / `cancelled` |
+
+```json
+→ {"jsonrpc":"2.0","id":1,"method":"solve","params":{"type":"tpp","varCosts":[[3,2],[1,4]],"supplies":[10,10],"demands":[8,8]}}
+← {"jsonrpc":"2.0","id":1,"result":{"id":"6f1c…","status":"waiting","message":"Problem is waiting in queue"}}
+← {"jsonrpc":"2.0","method":"jobStatus","params":{"id":"6f1c…","status":"running","message":"Problem is running"}}
+← {"jsonrpc":"2.0","method":"jobStatus","params":{"id":"6f1c…","status":"solution","message":"Solution has been found"}}
+→ {"jsonrpc":"2.0","id":2,"method":"result","params":{"id":"6f1c…"}}
+← {"jsonrpc":"2.0","id":2,"result":{"id":"6f1c…","status":"solution","message":"…","results":{"objVal":24.0,…}}}
+```
+
+Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den der REST-Server liefern würde. Die App kann beide Wege also gleich behandeln:
+
+| Code | Bedeutung | `data` |
+|---|---|---|
+| -32700 / -32600 | keine gültige JSON- bzw. JSON-RPC-Nachricht | – |
+| -32601 | unbekannte Methode | – |
+| -32602 | Parameter passen nicht zum Schema | `{httpStatus: 422, errors: [...]}` |
+| -32000 | Fehler bei Problem oder Geo-Dienst, z. B. unbekannte `id` | `{httpStatus: 400, ...}` |
+| -32603 | interner Fehler | – |
+
+### Hinweise für die Flutter-App
+
+- **Gemeinsame Schnittstelle:** In Dart eine abstrakte Klasse (z. B. `LogisticsLabBackend` mit `submit`, `status`, `result`, `cancel`) mit zwei Implementierungen anlegen. `LocalBackend` startet den Prozess mit `Process.start` aus `dart:io` und liest stdout zeilenweise (`utf8.decoder` + `LineSplitter`). `RemoteBackend` spricht per HTTP mit dem Server und schickt den API-Key mit. Web und Mobil nutzen nur `RemoteBackend`, denn dort lassen sich keine Prozesse starten.
+- **Datenmodelle:** `python -m logisticsLabCore.schema > logisticsLab.schema.json` erzeugt das JSON Schema aller Items. Daraus lassen sich die Dart-Modelle generieren, z. B. mit `quicktype --lang dart`. Server und lokale Schnittstelle verwenden dieselben Items.
+- **Paketierung:** Die lokale Schnittstelle lässt sich mit PyInstaller im Modus `--onedir` zu einem Programm bündeln (`onefile` entpackt bei jedem Start). Die CMPL-Binärdateien der Zielplattform müssen mit hinein. Unter macOS muss jede mitgelieferte ausführbare Datei signiert sein, auch `cmpl` und HiGHS. Für eine App in der Sandbox braucht der Kindprozess außerdem die Entitlements `com.apple.security.inherit` und `com.apple.security.network.client`.
 
 ## Betrieb unter Linux mit nginx
 

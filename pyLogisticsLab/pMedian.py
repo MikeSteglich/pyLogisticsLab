@@ -7,6 +7,9 @@ import shutil
 import tempfile
 import pathlib
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 #*************** PMedian  ************************************************
@@ -224,7 +227,7 @@ class PMedian(object):
                     #self.__model.setOption('-solver scip')   
                     #self.__model.setOption(f'-opt scip limits/time={self.__maxSolvingTime}')   
 
-                    print ('    ... solving relaxtion ')
+                    logger.info('    ... solving relaxtion ')
                
                     self.__model.solve()
                               
@@ -246,10 +249,10 @@ class PMedian(object):
                                         pass
                             except:
                                 pass
-                        print(f'        ... Solution has been found with obj value {self.__model.solution.value} ') 
+                        logger.info(f'        ... Solution has been found with obj value {self.__model.solution.value} ')
                         break
                     else:
-                        print('        ... No solution has been found') 
+                        logger.info('        ... No solution has been found')
                         if not self.__checkCostTol():
                             raise LogLabException(' No solution has been found with relaxation - checkTol')
                   
@@ -261,7 +264,7 @@ class PMedian(object):
 
                         #raise LogLabException(' No solution has been found with relaxation')
 
-                print ('    ... solving fixed model ')
+                logger.info('    ... solving fixed model ')
 
                 self.__fixVariables()
             
@@ -317,14 +320,14 @@ class PMedian(object):
                         pass
                 break
             else:
-                print('    ... No solution has been found after '+ str(tries) + ' tries')
+                logger.info('    ... No solution has been found after '+ str(tries) + ' tries')
                 self.__costTolAdder += 0.05
                 self.__setCostTol()
                 self.__fixVarProb -= 0.1
                 if self.__fixVarProb < 0:
                     self.__fixVarProb=0
                 tries += 1
-                print('    ... new try with fixVarProb: ',self.__fixVarProb ) 
+                logger.info(f'    ... new try with fixVarProb: {self.__fixVarProb}')
                 if tries > maxTries or  (time.time()-sTime) > self.__maxSolvingTime:
                     raise LogLabException(' No solution has been found after '+ str(tries) + ' tries')
                 

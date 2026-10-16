@@ -1,5 +1,5 @@
 import osm_data as osm
-from exception import *
+from .exception import *
 
 
 class ProblemHandler:
@@ -27,7 +27,7 @@ class ProblemHandler:
     def _checkNrOfNodes(self, nrOfNodes):
         if self._conf.get('maxNodes'):
             if nrOfNodes>self._conf['maxNodes']:
-                raise LogLabServerException(f"number of nodes {nrOfNodes} size exceeds maximum of {self._conf['maxNodes']}")
+                raise LogLabCoreException(f"number of nodes {nrOfNodes} size exceeds maximum of {self._conf['maxNodes']}")
 
     def _maxSolvingTime(self, maxSolvingTime):
         if self._conf.get('maxSolvingTime') and maxSolvingTime>self._conf['maxSolvingTime']:
@@ -37,7 +37,7 @@ class ProblemHandler:
     def _loadMatrix(self, coordinates, travelmode, matrixMode, sources=None, destinations=None):
         """ loads a rounded distance or time matrix via OSM """
         if not coordinates:
-            raise LogLabServerException('no coordinates are available')
+            raise LogLabCoreException('no coordinates are available')
 
         try:
             osmData = osm.Matrix(coordinates, sources=sources, destinations=destinations)
@@ -45,7 +45,7 @@ class ProblemHandler:
             status, msg= osmData.loadMatrix(travelmode=travelmode)
 
             if status!=200:
-                raise LogLabServerException(msg)
+                raise LogLabCoreException(msg)
 
             if matrixMode=="times":
                 matrix = osmData.timeMatrix
@@ -53,7 +53,7 @@ class ProblemHandler:
                 matrix = osmData.distanceMatrix
 
         except osm.OsmException as e:
-            raise LogLabServerException(e)
+            raise LogLabCoreException(e)
 
         return [[round(value) for value in row] for row in matrix]
 

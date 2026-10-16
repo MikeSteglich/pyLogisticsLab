@@ -23,7 +23,6 @@
  #**********************************************************************
 
 from exception import *
-import osm_data as osm
 
 import yaml
 import sys
@@ -39,9 +38,6 @@ class Config:
             self.__optFile='logisticsLabServer.yml'
             
         self.__readOptFile()
-
-        #service thread mit check aller xxx minuten
-        osm.Config(optFile='logisticsLab.yml', logFile=self.__conf['osmLogFile'])
 
   
     def getConf(self):
@@ -103,6 +99,10 @@ class Config:
             self.__conf['logFile']=os.path.join(self.__conf['logPath'], 'logisticsLabServer.log')
             self.__conf['osmLogFile']=os.path.join(self.__conf['logPath'], 'logisticsLab.log')
             self.__conf['solverLogFile']=os.path.join(self.__conf['logPath'], 'HiGHS.log')
+
+            # OSM servers - read by the core
+            if not self.__conf.get('osmConfigFile'):
+                self.__conf['osmConfigFile']='logisticsLab.yml'
 
             for problemType in ['tsp', 'tpp']:
                 if not self.__conf.get(problemType):
