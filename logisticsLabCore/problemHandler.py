@@ -57,6 +57,43 @@ class ProblemHandler:
 
         return [[round(value) for value in row] for row in matrix]
 
+    def _bipartiteMatrix(self, problemData, field):
+        """ matrix [sources x destinations] from problemData.<field> or from sourceCoordinates and destinationCoordinates
+
+            returns (matrix, isCalculated)
+        """
+        matrix = getattr(problemData, field)
+        if matrix:
+            if not isinstance(matrix, list) or not all(isinstance(row, list) and row for row in matrix):
+                raise LogLabCoreException(f'{field} must be a matrix [sources x destinations]')
+            return matrix, False
+
+        if not problemData.sourceCoordinates or not problemData.destinationCoordinates:
+            raise LogLabCoreException(f'neither {field} nor sourceCoordinates and destinationCoordinates are available')
+
+        self._logger.debug(problemData.type, 'load distances')
+        coordinates = problemData.sourceCoordinates + problemData.destinationCoordinates
+        nrOfSources = len(problemData.sourceCoordinates)
+        matrix = self._loadMatrix(coordinates, problemData.travelmode, problemData.matrixMode,
+                                  sources=list(range(nrOfSources)),
+                                  destinations=list(range(nrOfSources, len(coordinates))))
+        return matrix, True
+
+    def _checkLength(self, vector, length, name, default=None):
+        """ checks the length of an optional vector - returns default (a vector of the given length) if it is None """
+        if vector is None:
+            if default is None:
+                raise LogLabCoreException(f'{name} is missing')
+            return [default] * length
+        if not isinstance(vector, list) or len(vector) != length:
+            raise LogLabCoreException(f'wrong length of {name} - {length} values expected')
+        return vector
+
+    @staticmethod
+    def _zeroBased(index):
+        """ 1-based source number of the library -> 0-based index, -1 if no source """
+        return index - 1 if isinstance(index, int) and index > 0 else -1
+
     def getIsSolution(self):
         return self._isSolution
     isSolution = property(getIsSolution)

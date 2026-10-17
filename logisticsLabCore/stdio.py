@@ -6,7 +6,8 @@
     The process stops when stdin is closed or after the method shutdown.
 
     requests (app -> process)        result
-      solve      {type, ...problem}    {id, status, message}
+      solve      {type, ...problem}    {id, status, message}   type: tsp, tpp, wlp, pmedian, pcentre, scp, mcp, cpp, vrp,
+                                                                  mincostflow, maxflow, multicommodity, multimodal
       status     {id}                  {id, status, message}
       result     {id}                  {id, status, message, results?}   finished problems are deleted afterwards
       cancel     {id}                  {id, status, message}
@@ -177,7 +178,7 @@ def main():
     os.makedirs(args.logPath, exist_ok=True)
     solverLogFile = os.path.join(args.logPath, 'HiGHS.log')
     conf = {'maxProblems': args.maxProblems,
-            'tsp': {'solverLogFile': solverLogFile},
+            'workDir': args.logPath,
             'tpp': {'solverLogFile': solverLogFile}}
     logger = CoreLogger(os.path.join(args.logPath, 'logisticsLabLocal.log'), isDebugging=args.debug)
 

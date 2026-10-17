@@ -1,4 +1,4 @@
-%xlsdata 
+%data 
 
 var:
 	{ [i,j] in A: x[i,j] : real[minKap[i, j]..maxKap[i, j]]; } 

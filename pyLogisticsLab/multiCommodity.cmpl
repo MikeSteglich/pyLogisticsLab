@@ -1,0 +1,22 @@
+%data
+%display nonZeros
+
+# multi-commodity flow problem
+#   N nodes, A arcs, K commodities
+#   a[i,k], b[i,k]  supply and demand of commodity k at node i
+#   c[i,j,k]        cost rate of commodity k on arc (i,j)
+#   cf[i,j,k]       capacity used by one unit of commodity k on arc (i,j)
+#   minKap, maxKap  joint capacity of arc (i,j)
+
+var:
+    { [i,j] in A, k in K: x[i,j,k] : real[0..];  }
+
+obj:
+    sum { [i,j] in A, k in K: c[i,j,k] * x[i,j,k] } ->min;
+
+con:
+    { i in N, k in K :
+           sum{ [i,j] in A : x[i,j,k] } -  sum{ [j,i] in A : x[j,i,k] } = a[i,k] - b[i,k];
+    }
+
+    { [i,j] in A: minKap[i,j] <= sum{k in K: cf[i,j,k] * x[i,j,k]} <= maxKap[i,j];}

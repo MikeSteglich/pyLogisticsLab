@@ -31,13 +31,16 @@ class TspItem(GeoInput):
     edges: Optional[list] =  None
     coordinates: Optional[list] =  None
 
-class TppItem(GeoInput, SolverOptions):
+class BipartiteGeoInput(GeoInput):
+    """ cost or distance matrix [sources x destinations] from the coordinates of the sources and destinations """
+    sourceCoordinates: Optional[list] = None
+    destinationCoordinates: Optional[list] = None
+
+class TppItem(BipartiteGeoInput, SolverOptions):
     type: Literal["tpp"] = "tpp"
     supplies: list
     demands: list
     varCosts: Optional[list] = None
-    sourceCoordinates: Optional[list] = None
-    destinationCoordinates: Optional[list] = None
     fixedCosts: Optional[list] = None
     capacities: Optional[list] = None
     minSupplies: Optional[list] = None
@@ -51,8 +54,115 @@ class TppItem(GeoInput, SolverOptions):
     sourceNames: Optional[list] = None
     destinationNames: Optional[list] = None
 
+class WlpItem(BipartiteGeoInput, SolverOptions):
+    """ warehouse location problem """
+    type: Literal["wlp"] = "wlp"
+    varCosts: Optional[list] = None             # cost rates per unit of demand [sources x destinations]
+    fixedCosts: list                            # fixed costs of the sources
+    demands: list
+    supplies: Optional[list] = None             # capacities of the sources - needed if isCapacitated
+    isCapacitated: Optional[bool] = False
+
+class PLocationFields(BipartiteGeoInput, SolverOptions):
+    """ fields of the p-median and the p-centre problem """
+    p: int                                      # number of sources to open
+    varCosts: Optional[list] = None             # costs or distances [sources x destinations]
+    demands: Optional[list] = None              # default 1 - needed if isDemandWeighted or isCapacitated
+    supplies: Optional[list] = None             # capacities of the sources - needed if isCapacitated
+    isCapacitated: Optional[bool] = False
+    isDemandWeighted: Optional[bool] = False
+
+class PMedianItem(PLocationFields):
+    type: Literal["pmedian"] = "pmedian"
+
+class PCentreItem(PLocationFields):
+    type: Literal["pcentre"] = "pcentre"
+
+class ScpItem(BipartiteGeoInput, SolverOptions):
+    """ set covering problem - every destination within radius of an open source """
+    type: Literal["scp"] = "scp"
+    distances: Optional[list] = None            # [sources x destinations]
+    radius: Union[int, float]
+    fixedCosts: Optional[list] = None           # default 1 - minimal number of sources
+
+class McpItem(BipartiteGeoInput, SolverOptions):
+    """ maximal covering problem - maximal demand within radius of the open sources """
+    type: Literal["mcp"] = "mcp"
+    distances: Optional[list] = None            # [sources x destinations]
+    radius: Union[int, float]
+    demands: list
+    maxSrcCost: Union[int, float]               # budget for the fixed costs of the open sources (fixedCosts 1: number of sources)
+    fixedCosts: Optional[list] = None           # default 1
+
+class CppItem(SolverOptions):
+    """ chinese postman problem """
+    type: Literal["cpp"] = "cpp"
+    edges: list                                 # [[i, j], ...]
+    edgeWeights: list
+    edgeTypes: Optional[list] = None            # 0 directed, 1 undirected - default: all undirected
+    startNode: int
+
+class VrpItem(LogLabItem):
+    """ vehicle routing problem - integer values, numbers are rounded """
+    type: Literal["vrp"] = "vrp"
+    distances: Optional[list] = None            # square matrix of all nodes incl. the depot
+    times: Optional[list] = None                # travel times - needed for timeWindows and maxTime
+    coordinates: Optional[list] = None          # instead of distances (and times)
+    travelmode:  Optional[Literal["car", "foot", "wheelchair"] ] = "car"
+    demands: list
+    capacities: list                            # one capacity per vehicle
+    depot: Optional[int] = 0
+    timeWindows: Optional[list] = None          # [[earliest, latest], ...] for every node
+    serviceTimes: Optional[list] = None         # default 0
+    maxTime: Optional[int] = None               # maximal duration of a route
+    maxDist: Optional[int] = None               # maximal distance of a route
+    maxWaitingTime: Optional[int] = None
+    maxSolvingTime: Optional[int] = 10          # search time of OR-Tools in seconds
+
+class FlowOptions(LogLabItem):
+    """ network flow problems - nodes are 0-based indices, capacities null or "M" mean unlimited """
+    edges: list                                 # [[i, j], ...]
+    maxSolvingTime: Optional[int] = 60
+
+class MinCostFlowItem(FlowOptions):
+    type: Literal["mincostflow"] = "mincostflow"
+    costs: list                                 # cost rate of every edge
+    supplies: list                              # supply of every node
+    demands: Optional[list] = None              # demand of every node - default 0, totals must be equal
+    minCaps: Optional[list] = None              # minimal flow of every edge - default 0
+    maxCaps: Optional[list] = None              # maximal flow of every edge - default unlimited
+
+class MaxFlowItem(FlowOptions):
+    type: Literal["maxflow"] = "maxflow"
+    source: int
+    sink: int
+    maxCaps: list                               # maximal flow of every edge
+    minCaps: Optional[list] = None
+    nrOfNodes: Optional[int] = None             # default: largest node index of the edges + 1
+
+class MultiCommodityItem(FlowOptions):
+    type: Literal["multicommodity"] = "multicommodity"
+    costs: list                                 # [edges x commodities]
+    supplies: list                              # [nodes x commodities]
+    demands: Optional[list] = None              # [nodes x commodities] - default 0
+    minCaps: Optional[list] = None              # joint minimal capacity of every edge
+    maxCaps: Optional[list] = None              # joint maximal capacity of every edge
+    capacityFactors: Optional[list] = None      # [edges x commodities] capacity used by one unit - default 1
+
+class MultiModalItem(FlowOptions):
+    type: Literal["multimodal"] = "multimodal"
+    costs: list                                 # [edges x modes] - null: mode not available on the edge
+    supplies: list                              # supply of every node
+    demands: Optional[list] = None
+    fixedCosts: Optional[list] = None           # [edges x modes] - default 0
+    minCaps: Optional[list] = None              # [edges x modes] minimal flow if the mode is used
+    maxCaps: Optional[list] = None              # [edges x modes]
+    mipGap: Optional[float] = 0.001
+
 # all problems for the generic endpoint - the field type selects the item
-ProblemItem = Annotated[Union[TspItem, TppItem], Field(discriminator='type')]
+ProblemItem = Annotated[Union[TspItem, TppItem, WlpItem, PMedianItem, PCentreItem, ScpItem, McpItem, CppItem, VrpItem,
+                              MinCostFlowItem, MaxFlowItem, MultiCommodityItem, MultiModalItem],
+                        Field(discriminator='type')]
 
 
 #*************** other items **********************************
@@ -84,6 +194,9 @@ class ReverseItem(LogLabItem):
 
 
 # problem type -> item, geo service -> item
-PROBLEM_ITEMS = {'tsp': TspItem, 'tpp': TppItem}
+PROBLEM_ITEMS = {'tsp': TspItem, 'tpp': TppItem, 'wlp': WlpItem, 'pmedian': PMedianItem, 'pcentre': PCentreItem,
+                 'scp': ScpItem, 'mcp': McpItem, 'cpp': CppItem, 'vrp': VrpItem,
+                 'mincostflow': MinCostFlowItem, 'maxflow': MaxFlowItem, 'multicommodity': MultiCommodityItem,
+                 'multimodal': MultiModalItem}
 GEO_ITEMS = {'matrix': MatrixItem, 'routing': RouteItem, 'coordinates': SearchCoordinatesItem,
              'search': SearchItem, 'reverse': ReverseItem}

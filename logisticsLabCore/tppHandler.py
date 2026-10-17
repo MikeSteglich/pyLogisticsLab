@@ -10,19 +10,7 @@ class TppHandler(ProblemHandler):
 
         self._logger.debug('tpp','init tpp')
 
-        if not problemData.varCosts:
-            if not problemData.sourceCoordinates or not problemData.destinationCoordinates:
-                raise LogLabCoreException('no cost rates and coordinates are available')
-            self._logger.debug('tpp','load distances')
-            coordinates = problemData.sourceCoordinates + problemData.destinationCoordinates
-            nrOfSources = len(problemData.sourceCoordinates)
-            self.__varCosts=self._loadMatrix(coordinates, problemData.travelmode, problemData.matrixMode,
-                                             sources=list(range(nrOfSources)),
-                                             destinations=list(range(nrOfSources, len(coordinates))))
-            self.__isCostMatrixCalculated=True
-        else:
-            self.__varCosts=problemData.varCosts
-            self.__isCostMatrixCalculated=False
+        self.__varCosts, self.__isCostMatrixCalculated = self._bipartiteMatrix(problemData, 'varCosts')
 
         self._checkNrOfNodes(len(problemData.supplies) + len(problemData.demands))
         self._size=f'{len(problemData.supplies)}x{len(problemData.demands)}'

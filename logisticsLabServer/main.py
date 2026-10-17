@@ -135,6 +135,61 @@ async def tppApi(tppItem: TppItem, apiKey: ApiKey = Security(requireService('tpp
     return submitProblem(tppItem, apiKey)
 
 
+@app.post(f'/{version}/wlp')
+async def wlpApi(wlpItem: WlpItem, apiKey: ApiKey = Security(requireService('wlp'))):
+    return submitProblem(wlpItem, apiKey)
+
+
+@app.post(f'/{version}/pmedian')
+async def pMedianApi(pMedianItem: PMedianItem, apiKey: ApiKey = Security(requireService('pmedian'))):
+    return submitProblem(pMedianItem, apiKey)
+
+
+@app.post(f'/{version}/pcentre')
+async def pCentreApi(pCentreItem: PCentreItem, apiKey: ApiKey = Security(requireService('pcentre'))):
+    return submitProblem(pCentreItem, apiKey)
+
+
+@app.post(f'/{version}/scp')
+async def scpApi(scpItem: ScpItem, apiKey: ApiKey = Security(requireService('scp'))):
+    return submitProblem(scpItem, apiKey)
+
+
+@app.post(f'/{version}/mcp')
+async def mcpApi(mcpItem: McpItem, apiKey: ApiKey = Security(requireService('mcp'))):
+    return submitProblem(mcpItem, apiKey)
+
+
+@app.post(f'/{version}/cpp')
+async def cppApi(cppItem: CppItem, apiKey: ApiKey = Security(requireService('cpp'))):
+    return submitProblem(cppItem, apiKey)
+
+
+@app.post(f'/{version}/vrp')
+async def vrpApi(vrpItem: VrpItem, apiKey: ApiKey = Security(requireService('vrp'))):
+    return submitProblem(vrpItem, apiKey)
+
+
+@app.post(f'/{version}/mincostflow')
+async def minCostFlowApi(minCostFlowItem: MinCostFlowItem, apiKey: ApiKey = Security(requireService('mincostflow'))):
+    return submitProblem(minCostFlowItem, apiKey)
+
+
+@app.post(f'/{version}/maxflow')
+async def maxFlowApi(maxFlowItem: MaxFlowItem, apiKey: ApiKey = Security(requireService('maxflow'))):
+    return submitProblem(maxFlowItem, apiKey)
+
+
+@app.post(f'/{version}/multicommodity')
+async def multiCommodityApi(multiCommodityItem: MultiCommodityItem, apiKey: ApiKey = Security(requireService('multicommodity'))):
+    return submitProblem(multiCommodityItem, apiKey)
+
+
+@app.post(f'/{version}/multimodal')
+async def multiModalApi(multiModalItem: MultiModalItem, apiKey: ApiKey = Security(requireService('multimodal'))):
+    return submitProblem(multiModalItem, apiKey)
+
+
 @app.post(f'/{version}/results')
 async def resultsApi(resultItem: ResultItem, apiKey: ApiKey = Security(requireService())):
     """ status of a problem and its results if it is finished - finished problems are deleted afterwards """

@@ -19,6 +19,7 @@ DEFAULT_CONF = {
     'maxPollingPause': 0,           # seconds - open problems are cancelled if their status is not requested (0: off)
     'runTimeGrace': 60,             # seconds added to maxSolvingTime for the watchdog
     'defaultMaxRunTime': 600,       # seconds - watchdog limit for problems without maxSolvingTime
+    'workDir': None,                # working directory of the solver processes (files of CMPL and the solvers)
     'tsp': {},
     'tpp': {},
 }

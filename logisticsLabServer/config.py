@@ -115,7 +115,11 @@ class Config:
             if not self.__conf.get('osmConfigFile'):
                 self.__conf['osmConfigFile']='logisticsLab.yml'
 
-            for problemType in ['tsp', 'tpp']:
+            # working directory of the solver processes - files of CMPL and the solvers (e.g. HiGHS.log)
+            self.__conf['workDir']=self.__conf['logPath']
+
+            for problemType in ['tsp', 'tpp', 'wlp', 'pmedian', 'pcentre', 'scp', 'mcp', 'cpp', 'vrp',
+                                'mincostflow', 'maxflow', 'multicommodity', 'multimodal']:
                 if not self.__conf.get(problemType):
                     self.__conf[problemType]={}
                 self.__conf[problemType]['solverLogFile']=self.__conf['solverLogFile']

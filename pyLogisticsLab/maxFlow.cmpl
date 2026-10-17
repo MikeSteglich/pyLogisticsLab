@@ -1,4 +1,4 @@
-%xlsdata
+%data
     
 par:
 	{ i in N :

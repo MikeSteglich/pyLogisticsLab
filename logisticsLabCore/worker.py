@@ -11,6 +11,9 @@ from .exception import *
 from .items import *
 from .tspHandler import *
 from .tppHandler import *
+from .locationHandlers import *
+from .routingHandlers import *
+from .flowHandlers import *
 
 import logging
 import os
@@ -23,6 +26,17 @@ import traceback
 HANDLERS = {
     'tsp': TspHandler,
     'tpp': TppHandler,
+    'wlp': WlpHandler,
+    'pmedian': PMedianHandler,
+    'pcentre': PCentreHandler,
+    'scp': ScpHandler,
+    'mcp': McpHandler,
+    'cpp': CppHandler,
+    'vrp': VrpHandler,
+    'mincostflow': MinCostFlowHandler,
+    'maxflow': MaxFlowHandler,
+    'multicommodity': MultiCommodityHandler,
+    'multimodal': MultiModalHandler,
 }
 
 
@@ -64,6 +78,11 @@ def workerMain(conn, conf):
     # own process group - the parent can kill the process together with CMPL and the solvers it has started
     if os.name == 'posix':
         os.setsid()
+
+    # files written by CMPL and the solvers (e.g. HiGHS.log) go to workDir, not to the directory of the app
+    if conf.get('workDir'):
+        os.makedirs(conf['workDir'], exist_ok=True)
+        os.chdir(conf['workDir'])
 
     logger = PipeLogger(conn)
     libLogger = logging.getLogger('pyLogisticsLab')

@@ -1,0 +1,23 @@
+%data
+%display nonZeros
+
+# multi-modal flow problem
+#   N nodes, A arcs, V modes (e.g. truck, train, ship)
+#   a[i], b[i]      supply and demand at node i
+#   c[i,j,v]        cost rate of mode v on arc (i,j)
+#   F[i,j,v]        fixed costs if mode v is used on arc (i,j)
+#   minKap, maxKap  capacity of mode v on arc (i,j) - minKap only if the mode is used
+
+var:
+    { [i,j] in A, v in V: x[i,j,v] : real[0..];  }
+    { [i,j] in A, v in V: y[i,j,v] : binary;  }
+
+obj:
+    sum { [i,j] in A, v in V: c[i,j,v] * x[i,j,v] + F[i,j,v] * y[i,j,v]  } ->min;
+
+con:
+    { i in N :
+        sum{ [i,j] in A , v in V : x[i,j,v] } - sum{ [j,i] in A , v in V : x[j,i,v] } = a[i] - b[i];
+    }
+
+    { [i,j] in A, v in V: minKap[i,j,v] * y[i,j,v] <= x[i,j,v] <= maxKap[i,j,v] * y[i,j,v];}

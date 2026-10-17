@@ -113,7 +113,7 @@ class Mcp(object):
             self.__totalSupply = self.__model.solution.value
 
             if self.__model.solution.value == 0:
-                  raise McpException('No solution has been found')
+                  raise LogLabException('No solution has been found')
 
             self.solutionStatus = True
 
@@ -137,6 +137,6 @@ class Mcp(object):
                         minIdx=i
                 self.__destSourceMappingSingleSource[j-1]=minIdx
         else:
-            raise McpException('No solution has been found')
+            raise LogLabException('No solution has been found')
     #*********** end solve **************
     

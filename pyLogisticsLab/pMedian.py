@@ -102,7 +102,7 @@ class PMedian(object):
             if self.__avgCostSrc[i] > self.__minCostSrc[i]:
                 self.__costTolSrc.append( self.__avgCostSrc[i]/self.__maxCostSrc[i] * factor)
             else: 
-                self.__costTolSrc.append( self.__minCost[i]/self.__maxCostSrc[i] * factor )
+                self.__costTolSrc.append( self.__minCostSrc[i]/self.__maxCostSrc[i] * factor )
 
 
     

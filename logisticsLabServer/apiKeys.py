@@ -9,7 +9,8 @@ import yaml
 
 
 # services that can be granted to a key: all problem types and the geo services
-SERVICES = ['tsp', 'tpp', 'matrix', 'routing', 'geocoding']
+SERVICES = ['tsp', 'tpp', 'wlp', 'pmedian', 'pcentre', 'scp', 'mcp', 'cpp', 'vrp',
+            'mincostflow', 'maxflow', 'multicommodity', 'multimodal', 'matrix', 'routing', 'geocoding']
 
 
 def hashKey(key):

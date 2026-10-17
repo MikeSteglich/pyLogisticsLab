@@ -198,7 +198,6 @@ class Cpp(object):
 
             self.__model.solve()
 
-            self.__model.saveSolutionAscii()
                 
             self.__solutionStatus = ''
 

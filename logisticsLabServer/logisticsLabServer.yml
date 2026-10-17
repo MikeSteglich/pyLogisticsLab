@@ -25,6 +25,50 @@ tsp:
 tpp:
   maxNodes: 200
   maxSolvingTime: 300
+
+wlp:
+  maxNodes: 200
+  maxSolvingTime: 300
+
+pmedian:
+  maxNodes: 200
+  maxSolvingTime: 300
+
+pcentre:
+  maxNodes: 200
+  maxSolvingTime: 300
+
+scp:
+  maxNodes: 300
+  maxSolvingTime: 300
+
+mcp:
+  maxNodes: 300
+  maxSolvingTime: 300
+
+cpp:
+  maxNodes: 300                 # nodes of the graph
+  maxSolvingTime: 300
+
+vrp:
+  maxNodes: 100                 # nodes incl. the depot
+  maxSolvingTime: 60            # search time of OR-Tools
+
+mincostflow:
+  maxNodes: 2000
+  maxSolvingTime: 120
+
+maxflow:
+  maxNodes: 2000
+  maxSolvingTime: 120
+
+multicommodity:
+  maxNodes: 500
+  maxSolvingTime: 300
+
+multimodal:
+  maxNodes: 300
+  maxSolvingTime: 300
   
 
     

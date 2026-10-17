@@ -14,4 +14,5 @@ from .pMedian import *
 from .pCentre import *
 from .wlp import *
 from .Tpp import *
+from .nwf import *
 from .exception import *
