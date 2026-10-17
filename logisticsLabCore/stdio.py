@@ -6,7 +6,8 @@
     The process stops when stdin is closed or after the method shutdown.
 
     requests (app -> process)        result
-      solve      {type, ...problem}    {id, status, message}   type: tsp, tpp, wlp, pmedian, pcentre, scp, mcp, cpp, vrp,
+      solve      {type, ...problem}    {id, status, message}   type: tsp, tpp, wlp, pmedian, pcentre, contpmedian,
+                                                                  contpcentre, scp, mcp, cpp, vrp,
                                                                   mincostflow, maxflow, multicommodity, multimodal
       status     {id}                  {id, status, message}
       result     {id}                  {id, status, message, results?}   finished problems are deleted afterwards

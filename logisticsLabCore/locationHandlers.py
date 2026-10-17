@@ -1,4 +1,4 @@
-""" handlers of the location and covering problems: wlp, pmedian, pcentre, scp, mcp
+""" handlers of the location and covering problems: wlp, pmedian, pcentre, contpmedian, contpcentre, scp, mcp
 
     All results use 0-based indices:
         activeSources   0/1 for every source
@@ -137,3 +137,55 @@ class McpHandler(LocationHandler):
 
     def _setResults(self, p):
         self._coveringResults(p)
+
+
+class ContLocationHandler(ProblemHandler):
+    """ continuous p-median and p-centre - results: locations [lat, lon] of the facilities, assignments (facility with
+        the largest flow), customerDistances (km), flows [facilities x customers] if the demands can be split
+    """
+
+    model = ll.ContPMedian
+
+    def __init__(self, problemData, logger, conf):
+        super().__init__(problemData, logger, conf)
+        self._type = problemData.type
+        self._logger.debug(self._type, f'init {self._type}')
+
+        d = problemData
+        if not isinstance(d.coordinates, list) or not d.coordinates:
+            raise LogLabCoreException('no coordinates are available')
+        self._checkNrOfNodes(len(d.coordinates))
+        self._size = f'p={d.p}, {len(d.coordinates)} customers'
+        self._isSplit = d.capacities is not None and not d.isSingleSource
+
+        try:
+            self._problem = self.model(d.p, d.coordinates, d.demands, d.capacities, isSingleSource=d.isSingleSource,
+                                       nrOfStarts=d.nrOfStarts, mipGap=d.mipGap,
+                                       maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+        except ll.LogLabException as e:
+            raise LogLabCoreException(e)
+
+    def solve(self):
+        try:
+            self._logger.debug(self._type, 'solve')
+            self._problem.solve()
+        except ll.LogLabException as e:
+            raise LogLabCoreException(e)
+        except Exception:
+            raise LogLabCoreException(str(sys.exc_info()))
+
+        self._isSolution = self._problem.isSolution()
+        if self._isSolution:
+            p = self._problem
+            self._objVal = p.getObjValue()
+            self._results['locations'] = p.getLocations()
+            self._results['assignments'] = p.getAssignments()
+            self._results['customerDistances'] = p.getCustomerDistances()
+            if self._isSplit:
+                self._results['flows'] = p.getFlows()
+        else:
+            self._logger.info(self._type, f'no solution - {self._problem.getMessage()}')
+
+
+class ContPCentreHandler(ContLocationHandler):
+    model = ll.ContPCentre

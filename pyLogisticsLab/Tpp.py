@@ -667,7 +667,7 @@ class Tpp(object):
             except Exception as err:
                 raise TppException("Can't read the solution <" +str( err)+">" )
 
-            if round(flow) > 0:
+            if flow > 1e-9:
                 cost = self.__costs[i-1][j-1]
                 if cost>self.__maxCostRate:
                     self.__maxCostRate=cost

@@ -150,6 +150,16 @@ async def pCentreApi(pCentreItem: PCentreItem, apiKey: ApiKey = Security(require
     return submitProblem(pCentreItem, apiKey)
 
 
+@app.post(f'/{version}/contpmedian')
+async def contPMedianApi(contPMedianItem: ContPMedianItem, apiKey: ApiKey = Security(requireService('contpmedian'))):
+    return submitProblem(contPMedianItem, apiKey)
+
+
+@app.post(f'/{version}/contpcentre')
+async def contPCentreApi(contPCentreItem: ContPCentreItem, apiKey: ApiKey = Security(requireService('contpcentre'))):
+    return submitProblem(contPCentreItem, apiKey)
+
+
 @app.post(f'/{version}/scp')
 async def scpApi(scpItem: ScpItem, apiKey: ApiKey = Security(requireService('scp'))):
     return submitProblem(scpItem, apiKey)

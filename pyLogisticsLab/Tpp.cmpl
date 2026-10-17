@@ -65,7 +65,7 @@ obj:
 					}
 			} 
 		# bottleneck min
-		| objense = 2 :
+		| objSense = 2 :
 			B -> min;
 		}
 		

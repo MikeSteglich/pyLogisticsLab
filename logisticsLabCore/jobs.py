@@ -6,8 +6,10 @@ import atexit
 import multiprocessing
 import os
 import queue
+import shutil
 import signal
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -73,6 +75,31 @@ def killProcessTree(process):
     process.join(5)
 
 
+TMP_PREFIX = 'logisticsLab_'
+
+def removeOrphanedTmpDirs():
+    """ temp directories of solver processes of a server or app that has crashed - logisticsLab_<pid of the parent>_* """
+    base = tempfile.gettempdir()
+    for name in os.listdir(base):
+        parts = name.split('_')
+        if len(parts) < 3 or parts[0] + '_' != TMP_PREFIX or not parts[1].isdigit() or int(parts[1]) == os.getpid():
+            continue
+        if not isProcessAlive(int(parts[1])):
+            shutil.rmtree(os.path.join(base, name), ignore_errors=True)
+
+def isProcessAlive(pid):
+    if os.name == 'posix':
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except OSError:
+            pass                # process of another user
+        return True
+    r = subprocess.run(['tasklist', '/FI', f'PID eq {pid}', '/NH'], capture_output=True, text=True)
+    return str(pid) in r.stdout
+
+
 class WorkerSlot:
     """ a solver process and the thread in the parent that feeds it with jobs """
 
@@ -81,22 +108,28 @@ class WorkerSlot:
         self.__index = index
         self.__process = None
         self.__conn = None
+        self.__tmpDir = None
         self.__start()
         threading.Thread(target=self.__run, daemon=True).start()
 
     def __start(self):
         ctx = multiprocessing.get_context('spawn')
         self.__conn, childConn = ctx.Pipe()
-        self.__process = ctx.Process(target=workerMain, args=(childConn, self.__manager.conf), daemon=True)
+        self.__tmpDir = tempfile.mkdtemp(prefix=f'{TMP_PREFIX}{os.getpid()}_')
+        self.__process = ctx.Process(target=workerMain, args=(childConn, self.__manager.conf, self.__tmpDir), daemon=True)
         self.__process.start()
         childConn.close()
 
-    def __restart(self):
+    def __kill(self):
         killProcessTree(self.__process)
+        shutil.rmtree(self.__tmpDir, ignore_errors=True)
+
+    def __restart(self):
+        self.__kill()
         self.__start()
 
     def stop(self):
-        killProcessTree(self.__process)
+        self.__kill()
 
     def __run(self):
         m = self.__manager
@@ -181,6 +214,7 @@ class JobManager:
         self.__lock = threading.Lock()
         self.__queue = queue.Queue()
 
+        removeOrphanedTmpDirs()
         self.__slots = [ WorkerSlot(self, i) for i in range(conf['maxProblems']) ]
         threading.Thread(target=self.__cleanupWorker, daemon=True).start()
         atexit.register(self.shutdown)

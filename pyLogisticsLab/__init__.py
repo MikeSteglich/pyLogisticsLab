@@ -15,4 +15,5 @@ from .pCentre import *
 from .wlp import *
 from .Tpp import *
 from .nwf import *
+from .contLocation import *
 from .exception import *

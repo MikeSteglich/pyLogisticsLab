@@ -78,6 +78,21 @@ class PMedianItem(PLocationFields):
 class PCentreItem(PLocationFields):
     type: Literal["pcentre"] = "pcentre"
 
+class ContLocationFields(SolverOptions):
+    """ fields of the continuous p-median and p-centre problem - facilities anywhere, great-circle distances in km """
+    p: int                                      # number of facilities
+    coordinates: list                           # [[lat, lon], ...] of the customers
+    demands: Optional[list] = None              # default 1 - needed with capacities
+    capacities: Optional[Union[int, float, list]] = None   # null: uncapacitated, a number or p numbers: capacitated
+    isSingleSource: Optional[bool] = True       # False: the demand of a customer can be split
+    nrOfStarts: Optional[int] = 20              # start solutions of the heuristic
+
+class ContPMedianItem(ContLocationFields):
+    type: Literal["contpmedian"] = "contpmedian"
+
+class ContPCentreItem(ContLocationFields):
+    type: Literal["contpcentre"] = "contpcentre"
+
 class ScpItem(BipartiteGeoInput, SolverOptions):
     """ set covering problem - every destination within radius of an open source """
     type: Literal["scp"] = "scp"
@@ -160,7 +175,8 @@ class MultiModalItem(FlowOptions):
     mipGap: Optional[float] = 0.001
 
 # all problems for the generic endpoint - the field type selects the item
-ProblemItem = Annotated[Union[TspItem, TppItem, WlpItem, PMedianItem, PCentreItem, ScpItem, McpItem, CppItem, VrpItem,
+ProblemItem = Annotated[Union[TspItem, TppItem, WlpItem, PMedianItem, PCentreItem, ContPMedianItem, ContPCentreItem,
+                              ScpItem, McpItem, CppItem, VrpItem,
                               MinCostFlowItem, MaxFlowItem, MultiCommodityItem, MultiModalItem],
                         Field(discriminator='type')]
 
@@ -195,6 +211,7 @@ class ReverseItem(LogLabItem):
 
 # problem type -> item, geo service -> item
 PROBLEM_ITEMS = {'tsp': TspItem, 'tpp': TppItem, 'wlp': WlpItem, 'pmedian': PMedianItem, 'pcentre': PCentreItem,
+                 'contpmedian': ContPMedianItem, 'contpcentre': ContPCentreItem,
                  'scp': ScpItem, 'mcp': McpItem, 'cpp': CppItem, 'vrp': VrpItem,
                  'mincostflow': MinCostFlowItem, 'maxflow': MaxFlowItem, 'multicommodity': MultiCommodityItem,
                  'multimodal': MultiModalItem}

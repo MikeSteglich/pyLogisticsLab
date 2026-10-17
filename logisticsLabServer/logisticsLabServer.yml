@@ -38,6 +38,14 @@ pcentre:
   maxNodes: 200
   maxSolvingTime: 300
 
+contpmedian:
+  maxNodes: 200                 # customers
+  maxSolvingTime: 300
+
+contpcentre:
+  maxNodes: 200                 # customers
+  maxSolvingTime: 300
+
 scp:
   maxNodes: 300
   maxSolvingTime: 300

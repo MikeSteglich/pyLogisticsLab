@@ -20,7 +20,7 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 
 | Verzeichnis | Inhalt |
 |---|---|
-| `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, `Scp`, `Mcp`, `Cpp`, `Vrp` und den Netzwerkflüssen `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` (`nwf.py`) |
+| `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, die kontinuierlichen `ContPMedian`, `ContPCentre` (`contLocation.py`), `Scp`, `Mcp`, `Cpp`, `Vrp` und den Netzwerkflüssen `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` (`nwf.py`) |
 | `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle |
 | `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
 | `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
@@ -122,6 +122,8 @@ Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 a
 | `/v1/wlp` | Warehouse Location: `varCosts` (Kostensatz je Nachfrageeinheit) oder Koordinaten, `fixedCosts`, `demands`; mit `isCapacitated` auch `supplies` | `wlp` |
 | `/v1/pmedian` | p-Median: `p`, `varCosts` oder Koordinaten; optional `demands`, `supplies`, `isDemandWeighted`, `isCapacitated` | `pmedian` |
 | `/v1/pcentre` | p-Center (minimiert die größte Entfernung): Felder wie p-Median | `pcentre` |
+| `/v1/contpmedian` | kontinuierlicher p-Median (Standorte frei wählbar, Großkreisdistanz in km): `p`, `coordinates` der Kunden, optional `demands`, `capacities` (Zahl oder p Zahlen; ohne: unkapazitiert), `isSingleSource` (Standard `true`), `nrOfStarts` (Standard 20) | `contpmedian` |
+| `/v1/contpcentre` | kontinuierliches p-Center: Felder wie `contpmedian` | `contpcentre` |
 | `/v1/scp` | Set Covering: `distances` oder Koordinaten, `radius`; optional `fixedCosts` (Standard 1, also möglichst wenige Standorte) | `scp` |
 | `/v1/mcp` | Maximal Covering: `distances` oder Koordinaten, `radius`, `demands`, `maxSrcCost` (Budget für die Fixkosten der Standorte; mit `fixedCosts` 1 die Anzahl) | `mcp` |
 | `/v1/cpp` | Chinese Postman: `edges` (`[[i, j], ...]`), `edgeWeights`, `startNode`; optional `edgeTypes` (0 gerichtet, 1 ungerichtet, Standard 1) | `cpp` |
@@ -130,7 +132,7 @@ Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 a
 | `/v1/maxflow` | maximaler Fluss: `edges`, `source`, `sink`, `maxCaps`, optional `minCaps`, `nrOfNodes` | `maxflow` |
 | `/v1/multicommodity` | Multi-Commodity-Flow: `edges`, `costs` [Kanten × Güter], `supplies`/`demands` [Knoten × Güter], optional gemeinsame `minCaps`/`maxCaps` je Kante, `capacityFactors` [Kanten × Güter] | `multicommodity` |
 | `/v1/multimodal` | multimodaler Fluss: `edges`, `costs` [Kanten × Verkehrsträger] (`null`: Verkehrsträger auf dieser Kante nicht verfügbar), `supplies`, optional `demands`, `fixedCosts`, `minCaps` (Mindestmenge, wenn genutzt), `maxCaps` | `multimodal` |
-| `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`, `"wlp"`, `"pmedian"`, `"pcentre"`, `"scp"`, `"mcp"`, `"cpp"`, `"vrp"`, `"mincostflow"`, `"maxflow"`, `"multicommodity"`, `"multimodal"`) | je nach `type` |
+| `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`, `"wlp"`, `"pmedian"`, `"pcentre"`, `"contpmedian"`, `"contpcentre"`, `"scp"`, `"mcp"`, `"cpp"`, `"vrp"`, `"mincostflow"`, `"maxflow"`, `"multicommodity"`, `"multimodal"`) | je nach `type` |
 | `/v1/results` | Status bzw. Ergebnis zu einer `id` | – |
 | `/v1/cancel` | wartendes oder laufendes Problem abbrechen (`{"id": ...}`); der Status wechselt kurz danach zu `cancelled` | – |
 | `/v1/matrix` | Distanz- und/oder Zeitmatrix aus Koordinaten | `matrix` |
@@ -144,6 +146,7 @@ Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach fo
 | `tsp` | `route` (Knotenfolge) |
 | `tpp` | `flows` (Matrix), `totalCosts`, `totalVarCosts`, `totalFixedCosts`, `totalFlow`, `sourceFlows`, `destinationFlows`, `minCostRate`, `maxCostRate` |
 | `wlp`, `pmedian`, `pcentre` | `activeSources` (0/1 je Quelle), `assignments` (versorgende Quelle je Senke) |
+| `contpmedian`, `contpcentre` | `locations` (`[lat, lon]` je Standort), `assignments` (Standort mit dem größten Fluss je Kunde), `customerDistances` (km, bei Aufteilung zum entferntesten liefernden Standort), mit `isSingleSource: false` auch `flows` [Standorte × Kunden] |
 | `scp`, `mcp` | `activeSources`, `coveringSources` (alle geöffneten Quellen im Radius je Senke), `assignments` (nächste davon; bei `mcp` `-1` für nicht überdeckte Senken) |
 | `cpp` | `eulerTour` (Knotenfolge), `edgeUsages` (Nutzungen je übergebener Kante) |
 | `vrp` | `routes`, `routeLoads`, `routeDistances` je Fahrzeug, mit Zeitfenstern auch `routeTimes`; unbenutzte Fahrzeuge haben die Route `[depot, depot]` |
@@ -158,6 +161,12 @@ Für die Netzwerkflüsse gilt:
 - **Parallele Kanten:** Keines der Flussmodelle erlaubt parallele Kanten zwischen denselben Knoten. Mehrere Verkehrswege bildet man über `multimodal` mit Verkehrsträgern ab.
 - **Solver:** Alle vier laufen über CMPL und HiGHS (`minCostFlow.cmpl`, `maxFlow.cmpl`, `multiCommodity.cmpl`, `multimodal.cmpl` in `pyLogisticsLab/`).
 - **Unbeschränkter Max-Flow:** Gibt es einen Weg von `source` nach `sink` nur über unbegrenzte Kanten, kommt 400.
+
+Für die kontinuierlichen Standortprobleme gilt:
+- **Distanz:** Großkreisdistanz in km, nicht das Straßennetz. Die Kunden müssen auf einer Halbkugel liegen.
+- **Zielfunktion:** `contpmedian` minimiert die Summe Bedarf × Distanz, `contpcentre` die größte Distanz eines Kunden zu einem liefernden Standort. Beim unkapazitierten `contpcentre` zählen die Bedarfe nicht.
+- **Kapazitäten:** Mit `capacities` sind `demands` Pflicht. `isSingleSource: true` ordnet jeden Kunden genau einem Standort zu, `false` erlaubt die Aufteilung seines Bedarfs.
+- **Verfahren:** heuristisch, nicht beweisbar optimal. Start ist das diskrete `pmedian`/`pcentre` mit den Kunden als Kandidaten, danach abwechselnd Standortwahl (sphärischer Weiszfeld bzw. kleinste umschließende Kugelkappe) und Zuordnung (nächster Standort bzw. `Tpp.cmpl` mit Kapazitäten), dann weitere Zufallsstarts im Rahmen von `nrOfStarts` und `maxSolvingTime`.
 
 Wird die Matrix aus Koordinaten berechnet, steht sie zusätzlich im Ergebnis (`varCosts`, `distances` bzw. bei `vrp` `distances` und `times`). Bei `vrp` werden alle Zahlen gerundet, weil OR-Tools ganze Zahlen verlangt. Aus Koordinaten lädt `vrp` die Fahrzeiten nur, wenn `timeWindows` oder `maxTime` gesetzt sind.
 
@@ -178,7 +187,7 @@ python manageKeys.py remove DSS-WS2026
 - `add` zeigt den Key **nur einmal** an. In `apiKeys.yml` steht nur sein SHA-256-Hash. Die Datei wird mit den Rechten `600` angelegt und ist nicht versioniert.
 - Der Server lädt `apiKeys.yml` automatisch neu, wenn sie sich ändert. Sperren und neue Keys wirken also ohne Neustart.
 - Ein Key gehört zu einem Namen, z. B. Kurs oder Person. Der Name steht im Log, und nur der Key, der ein Problem eingereicht hat, kann dessen Ergebnis abholen.
-- Ohne `--allowed` darf ein Key alle Dienste nutzen: die Problemtypen (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `scp`, `mcp`, `cpp`, `vrp`) und `matrix`, `routing`, `geocoding`. Keys mit eigener `--allowed`-Liste bekommen neue Dienste nicht automatisch.
+- Ohne `--allowed` darf ein Key alle Dienste nutzen: die Problemtypen (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `contpmedian`, `contpcentre`, `scp`, `mcp`, `cpp`, `vrp`, `mincostflow`, `maxflow`, `multicommodity`, `multimodal`) und `matrix`, `routing`, `geocoding`. Keys mit eigener `--allowed`-Liste bekommen neue Dienste nicht automatisch.
 - Mit `authentication: False` ist der Server ohne Key offen. Das ist nur für die lokale Entwicklung gedacht.
 
 ### Antworten bei Ablehnung
@@ -212,7 +221,7 @@ python manageKeys.py remove DSS-WS2026
 | `logging`, `debugging` | True, True | Log-Stufen INFO/WARNING/ERROR bzw. zusätzlich DEBUG |
 | `logPath` | Serververzeichnis | Verzeichnis für alle Logdateien |
 | `logMaxBytes`, `logBackupCount` | 5 MB, 5 | Rotation von `logisticsLabServer.log` |
-| `<typ>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre 200, scp/mcp/cpp/multimodal 300, multicommodity 500, mincostflow/maxflow 2000 | maximale Problemgröße: Quellen + Senken, bei den übrigen Typen die Knoten |
+| `<typ>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre/contpmedian/contpcentre 200, scp/mcp/cpp/multimodal 300, multicommodity 500, mincostflow/maxflow 2000 | maximale Problemgröße: Quellen + Senken, bei den übrigen Typen die Knoten |
 | `<typ>.maxSolvingTime` | 300, vrp 60, mincostflow/maxflow 120 | Obergrenze in Sekunden für die vom Client gewünschte Lösungszeit (bei `vrp` die Suchzeit von OR-Tools) |
 | `<typ>.maxRunTime` | – | feste Zeitgrenze des Watchdogs für diesen Problemtyp (ersetzt die Berechnung oben) |
 

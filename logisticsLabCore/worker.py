@@ -18,6 +18,7 @@ from .flowHandlers import *
 import logging
 import os
 import sys
+import tempfile
 import time
 import traceback
 
@@ -29,6 +30,8 @@ HANDLERS = {
     'wlp': WlpHandler,
     'pmedian': PMedianHandler,
     'pcentre': PCentreHandler,
+    'contpmedian': ContLocationHandler,
+    'contpcentre': ContPCentreHandler,
     'scp': ScpHandler,
     'mcp': McpHandler,
     'cpp': CppHandler,
@@ -74,7 +77,7 @@ class PipeLogHandler(logging.Handler):
         self.__logger.debug(record.name, record.getMessage().strip())
 
 
-def workerMain(conn, conf):
+def workerMain(conn, conf, tmpDir=None):
     # own process group - the parent can kill the process together with CMPL and the solvers it has started
     if os.name == 'posix':
         os.setsid()
@@ -84,11 +87,20 @@ def workerMain(conn, conf):
         os.makedirs(conf['workDir'], exist_ok=True)
         os.chdir(conf['workDir'])
 
+    # own temp directory (created and removed by the parent) - the models copy their CMPL files under fixed names
+    # into the temp directory, parallel solver processes must not share it
+    if tmpDir:
+        tempfile.tempdir = tmpDir
+
     logger = PipeLogger(conn)
     libLogger = logging.getLogger('pyLogisticsLab')
     libLogger.setLevel(logging.INFO)
     libLogger.addHandler(PipeLogHandler(logger))
 
+    _serve(conn, conf, logger)
+
+
+def _serve(conn, conf, logger):
     while True:
         try:
             msg = conn.recv()
