@@ -94,7 +94,7 @@ class Mcp(object):
         self.__model.setParameters( a, f, d, p )
 
     
-        self.__model.debug()
+        #self.__model.debug()
         self.__model.setOutput(False)
 
         #self.__model.setOption('-solver scip')   

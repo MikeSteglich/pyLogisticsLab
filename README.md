@@ -40,6 +40,7 @@ export PYTHONPATH=$PYTHONPATH:/pfad/zu/pyLogisticsLab
 **pyCmpl** ist ein eigenes Repository ([MikeSteglich/pyCmpl](https://github.com/MikeSteglich/pyCmpl)) und wird über `requirements.txt` in einer festen Version installiert (Git-Tag, z. B. `v2.1.0`). Derselbe Stand wird auch von der CMPL-Distribution und der CMPL-IDE verwendet.
 - **Neue Version übernehmen:** In pyCmpl einen neuen Tag setzen, in `requirements.txt` eintragen und neu installieren.
 - **pyCmpl gleichzeitig weiterentwickeln:** pyCmpl neben pyLogisticsLab klonen und mit `pip install -e ../pyCmpl` einbinden. Änderungen wirken dann sofort.
+- **pyCmpl ändern:** nur in `../pyCmpl`, nicht in einer Kopie. Den ganzen Ablauf (Entwickeln, Version und Tag, Projekte aktualisieren, CMPL-IDE neu bauen) beschreibt der Abschnitt „Changing pyCmpl“ in der README von pyCmpl.
 - **Privates Repository:** Auf einem Server braucht pip Lesezugriff, z. B. über einen Deploy-Key (SSH) oder ein Token mit Leserecht.
 
 **CMPL-Binärdateien:** Sie sind nicht im Repository. pyCmpl sucht CMPL unter `$CMPLHOME/bin/cmpl` (unter Windows `cmpl.exe`). Ist `CMPLHOME` nicht gesetzt, setzt `pyLogisticsLab` die Variable auf `<Projekt>/cmpl`, sofern es dort ein `bin/` gibt. Das Verzeichnis hat das Layout einer CMPL-Installation:
