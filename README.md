@@ -93,6 +93,11 @@ curl -s -X POST http://127.0.0.1:8000/v1/results -H "X-API-Key: $KEY" -H "Conten
 
 Ein abgeholtes Endergebnis wird gelöscht. Ergebnisse, die nicht abgeholt werden, löscht der Server nach `maxInactivityTime`.
 
+Ein Service-Thread räumt außerdem regelmäßig auf (alle `serviceIntervall` Sekunden):
+
+- **Verlassene Probleme:** Fragt ein Client länger als `maxPollingPause` nicht nach dem Status eines wartenden oder laufenden Problems, wird es abgebrochen (`cancelled`). Clients müssen also mindestens alle `maxPollingPause` Sekunden `/v1/results` aufrufen.
+- **Hängende Solver:** Ein Watchdog beendet jedes Problem, das länger rechnet als `maxSolvingTime` + `runTimeGrace`. Ohne `maxSolvingTime` gilt `defaultMaxRunTime` + `runTimeGrace`, oder `maxRunTime` des Problemtyps, wenn gesetzt. Das Problem endet dann mit `error` und HTTP-Status 504.
+
 ### Endpoints
 
 Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 abgelehnt.
@@ -141,6 +146,7 @@ python manageKeys.py remove DSS-WS2026
 | 503 | Queue ist voll (`maxQueueSize`) – später erneut versuchen |
 | 400 | Daten passen nicht (z. B. falsche Matrixgröße) oder `id` unbekannt |
 | 404 | Problem wurde gelöst, hat aber keine zulässige Lösung (`noSolution`) |
+| 504 | Problem hat die Zeitgrenze des Watchdogs überschritten und wurde beendet |
 
 ### Konfiguration (`logisticsLabServer.yml`)
 
@@ -149,8 +155,11 @@ python manageKeys.py remove DSS-WS2026
 | `maxProblems` | 4 | Solver-Prozesse, d. h. gleichzeitig gelöste Probleme |
 | `maxQueueSize` | 50 | wartende und laufende Probleme aller Keys zusammen |
 | `maxOpenProblemsPerKey` | 3 | Standard für Keys ohne eigenes `maxOpenProblems` |
-| `maxInactivityTime` | 43200 | Sekunden, nach denen nicht abgeholte Ergebnisse gelöscht werden |
+| `maxInactivityTime` | 3600 | Sekunden, nach denen nicht abgeholte Ergebnisse gelöscht werden |
+| `maxPollingPause` | 600 | Sekunden ohne Statusabfrage, nach denen ein offenes Problem abgebrochen wird (0: aus) |
 | `serviceIntervall` | 30 | Sekunden zwischen zwei Aufräumläufen |
+| `runTimeGrace` | 60 | Puffer in Sekunden auf `maxSolvingTime` für den Watchdog |
+| `defaultMaxRunTime` | 600 | Zeitgrenze des Watchdogs in Sekunden für Probleme ohne `maxSolvingTime` (z. B. TSP), zuzüglich `runTimeGrace` |
 | `authentication` | True | API-Keys erforderlich |
 | `apiKeyFile` | `apiKeys.yml` im Serververzeichnis | Pfad zur Key-Datei |
 | `docs` | False | `/docs`, `/redoc` und `/openapi.json` anbieten |
@@ -159,6 +168,7 @@ python manageKeys.py remove DSS-WS2026
 | `logMaxBytes`, `logBackupCount` | 5 MB, 5 | Rotation von `logisticsLabServer.log` |
 | `tsp.maxNodes`, `tpp.maxNodes` | 100, 200 | maximale Problemgröße |
 | `tpp.maxSolvingTime` | 300 | Obergrenze in Sekunden für die vom Client gewünschte Lösungszeit |
+| `tsp.maxRunTime`, `tpp.maxRunTime` | – | feste Zeitgrenze des Watchdogs für diesen Problemtyp (ersetzt die Berechnung oben) |
 
 `port` wird derzeit nicht ausgewertet. Den Port legt der Startbefehl von uvicorn fest.
 
@@ -183,6 +193,7 @@ python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProble
 - **`--logPath`:** Verzeichnis für Logdateien und `HiGHS.log`. Standard ist `logisticsLab` im Temp-Verzeichnis. Die App sollte ihr Support-Verzeichnis übergeben.
 - **`--osmConfig`:** OSM-Server. Standard sind die Server der TH Wildau (`logisticsLabCore/logisticsLab.yml`).
 - **Ende:** Der Prozess endet, wenn stdin geschlossen wird oder nach `shutdown`. Laufende Solver werden dabei mit beendet.
+- **Aufräumen:** Der Watchdog für hängende Solver ist auch lokal aktiv. Nicht abgeholte Ergebnisse werden nach 12 Stunden gelöscht. Verlassene Probleme werden lokal nicht abgebrochen, denn wenn die App endet, endet auch der Prozess.
 - **stdout gehört nur dem Protokoll.** Alle anderen Ausgaben, auch die von CMPL und HiGHS, gehen auf stderr.
 
 Datenformate und Ergebnisse sind dieselben wie beim REST-Server. Die Methoden entsprechen den Endpoints:

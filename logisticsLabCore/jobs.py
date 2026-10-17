@@ -33,9 +33,13 @@ class Job:
         self.results = None
         self.size = ''
         self.createdTime = time.time()
+        self.startedTime = None             # sent to a solver process
         self.finishedTime = None
+        self.lastAccess = self.createdTime  # last request of the client for this job
+        self.maxRunTime = None              # seconds in a solver process, afterwards the watchdog stops the job
         self.dispatched = False             # has been sent to a solver process
         self.cancelRequested = False
+        self.cancelMessage = 'Problem has been cancelled'
 
     def finish(self, status, message, httpStatus, results=None):
         self.status = status
@@ -101,6 +105,7 @@ class WorkerSlot:
             if job is None:
                 continue
             try:
+                job.startedTime = time.time()
                 self.__conn.send((job.id, job.type, job.data))
                 self.__waitForJob(job)
             except (EOFError, BrokenPipeError, OSError):
@@ -113,8 +118,15 @@ class WorkerSlot:
         while True:
             if job.cancelRequested:
                 self.__restart()
-                m.finishJob(job, 'cancelled', 'Problem has been cancelled', 200)
-                m.logger.info('jobs', f'job {job.id} - {job.type} - {job.size} - cancelled')
+                m.finishJob(job, 'cancelled', job.cancelMessage, 200)
+                m.logger.info('jobs', f'job {job.id} - {job.type} - {job.size} - cancelled - {job.cancelMessage}')
+                return
+
+            # watchdog - stops solvers that do not finish within their time limit
+            if job.maxRunTime and time.time() - job.startedTime > job.maxRunTime:
+                self.__restart()
+                m.finishJob(job, 'error', f'time limit exceeded - the problem has been stopped after {job.maxRunTime}s', 504)
+                m.logger.error('jobs', f'job {job.id} - {job.type} - {job.size} - time limit of {job.maxRunTime}s exceeded - solver process {self.__index} restarted')
                 return
 
             if self.__conn.poll(0.2):
@@ -155,7 +167,8 @@ class WorkerSlot:
 class JobManager:
     """ queue of optimisation problems, solved by conf['maxProblems'] solver processes
 
-        conf:  maxProblems, maxQueueSize, maxInactivityTime, serviceIntervall and a section per problem type
+        conf:  maxProblems, maxQueueSize, maxInactivityTime, serviceIntervall, maxPollingPause,
+               runTimeGrace, defaultMaxRunTime and a section per problem type (maxSolvingTime, maxRunTime, ...)
         onStatusChange(job) is called after every change of the status of a job
     """
 
@@ -190,6 +203,7 @@ class JobManager:
 
             id = str(uuid.uuid4())
             job = Job(id, type, data, owner)
+            job.maxRunTime = self.maxRunTime(type, data)
             self.__jobs[id] = job
 
         self.__queue.put(id)
@@ -205,19 +219,31 @@ class JobManager:
         with self.__lock:
             self.__jobs.pop(id, None)
 
-    def cancel(self, id):
+    def cancel(self, id, message=None):
         """ cancels a waiting or running job - returns the job or None """
         with self.__lock:
             job = self.__jobs.get(id)
             if job is None or job.status not in OPEN:
                 return job
+            if message:
+                job.cancelMessage = message
             if job.dispatched:
                 job.cancelRequested = True      # the worker thread kills the solver process
                 return job
             job.status = 'cancelled'            # not yet sent to a solver process - nextJob skips it
-        self.finishJob(job, 'cancelled', 'Problem has been cancelled', 200)
-        self.logger.info('jobs', f'job {job.id} - {job.type} - cancelled while waiting')
+        self.finishJob(job, 'cancelled', job.cancelMessage, 200)
+        self.logger.info('jobs', f'job {job.id} - {job.type} - cancelled while waiting - {job.cancelMessage}')
         return job
+
+    def maxRunTime(self, type, data):
+        """ time limit of the watchdog: maxRunTime of the problem type or the effective maxSolvingTime + runTimeGrace """
+        c = self.conf.get(type, {})
+        if c.get('maxRunTime'):
+            return c['maxRunTime']
+        solvingTime = data.get('maxSolvingTime')
+        if c.get('maxSolvingTime'):
+            solvingTime = min(solvingTime, c['maxSolvingTime']) if solvingTime else c['maxSolvingTime']
+        return (solvingTime or self.conf['defaultMaxRunTime']) + self.conf['runTimeGrace']
 
     def shutdown(self):
         for slot in self.__slots:
@@ -254,16 +280,26 @@ class JobManager:
     #*********** cleanup ************
 
     def __cleanupWorker(self):
-        """ deletes finished jobs whose results have not been fetched within maxInactivityTime """
+        """ deletes unfetched results and cancels abandoned jobs """
         while True:
             time.sleep(self.conf['serviceIntervall'])
-            self.cleanup()
+            try:
+                self.cleanup()
+            except Exception as e:
+                self.logger.error('jobs', f'cleanup failed - {e}')
 
     def cleanup(self):
-        limit = time.time() - self.conf['maxInactivityTime']
+        now = time.time()
+        limit = now - self.conf['maxInactivityTime']
+        pause = self.conf.get('maxPollingPause')
         with self.__lock:
             expired = [ id for id, j in self.__jobs.items() if j.status in FINISHED and j.finishedTime < limit ]
             for id in expired:
                 del self.__jobs[id]
+            # the client has not asked for the job within maxPollingPause - it has probably gone
+            abandoned = [ id for id, j in self.__jobs.items() if pause and j.status in OPEN and now - j.lastAccess > pause ]
+
         for id in expired:
             self.logger.info('jobs', f'job {id} - results have not been fetched - deleted')
+        for id in abandoned:
+            self.cancel(id, f'Problem has been cancelled - the status has not been requested for more than {pause}s')

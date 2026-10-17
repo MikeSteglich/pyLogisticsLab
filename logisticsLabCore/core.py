@@ -7,6 +7,7 @@ from .routeHandler import *
 from .geoCodingHandler import *
 
 import osm_data as osm
+import time
 from pydantic import TypeAdapter
 
 
@@ -15,6 +16,9 @@ DEFAULT_CONF = {
     'maxQueueSize': 50,             # open (waiting or running) problems
     'maxInactivityTime': 43200,     # seconds - unfetched results are deleted afterwards
     'serviceIntervall': 30,         # seconds between two cleanups
+    'maxPollingPause': 0,           # seconds - open problems are cancelled if their status is not requested (0: off)
+    'runTimeGrace': 60,             # seconds added to maxSolvingTime for the watchdog
+    'defaultMaxRunTime': 600,       # seconds - watchdog limit for problems without maxSolvingTime
     'tsp': {},
     'tpp': {},
 }
@@ -63,6 +67,7 @@ class LogisticsLabCore:
         if job is None or job.owner != owner:
             raise LogLabCoreException(f'problem id: {id} not found', 400)
 
+        job.lastAccess = time.time()
         ret = job.toDict(withResults=True)
         if job.status in FINISHED:
             self.jobs.delete(id)

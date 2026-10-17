@@ -56,7 +56,18 @@ class Config:
                 self.__conf['maxProblems']=4
 
             if not 'maxInactivityTime' in self.__conf:
-                self.__conf['maxInactivityTime']=43200
+                self.__conf['maxInactivityTime']=3600
+
+            # open problems are cancelled if the client has not requested their status within maxPollingPause (0: off)
+            if not 'maxPollingPause' in self.__conf:
+                self.__conf['maxPollingPause']=600
+
+            # watchdog: a problem is stopped after maxRunTime of its type or maxSolvingTime + runTimeGrace
+            if not 'runTimeGrace' in self.__conf:
+                self.__conf['runTimeGrace']=60
+
+            if not 'defaultMaxRunTime' in self.__conf:
+                self.__conf['defaultMaxRunTime']=600
             
             if not 'serviceIntervall' in self.__conf:
                 self.__conf['serviceIntervall']=30

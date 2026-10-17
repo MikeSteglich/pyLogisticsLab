@@ -36,6 +36,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import traceback
 
 import pydantic
@@ -130,6 +131,7 @@ class StdioServer:
             job = self.core.jobs.get(self.__jobId(params))
             if job is None:
                 raise LogLabCoreException(f"problem id: {params['id']} not found", 400)
+            job.lastAccess = time.time()
             return job.toDict()
 
         if method == 'result':

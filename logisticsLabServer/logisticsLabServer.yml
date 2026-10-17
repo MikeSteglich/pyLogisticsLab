@@ -1,7 +1,10 @@
 port: 5000
-maxProblems:  4                 # solver threads
-maxInactivityTime:  43200       # seconds - finished problems are deleted if their results are not fetched
+maxProblems:  4                 # solver processes
+maxInactivityTime:  3600        # seconds - finished problems are deleted if their results are not fetched
+maxPollingPause: 600            # seconds - open problems are cancelled if their status is not requested (0: off)
 serviceIntervall: 30            # seconds - interval of the cleanup
+runTimeGrace: 60                # seconds - watchdog limit: maxSolvingTime + runTimeGrace
+defaultMaxRunTime: 600          # seconds - watchdog limit for problems without maxSolvingTime (e.g. tsp)
 maxQueueSize: 50                # open (waiting or running) problems of all keys
 maxOpenProblemsPerKey: 3        # default for keys without maxOpenProblems
 
@@ -17,6 +20,7 @@ debugging: True
 
 tsp:
   maxNodes: 100
+  #maxRunTime: 120               # optional - fixed watchdog limit for this problem type
 
 tpp:
   maxNodes: 200
