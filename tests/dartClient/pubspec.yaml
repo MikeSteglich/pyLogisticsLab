@@ -1,0 +1,7 @@
+name: logisticslab_client
+description: Example client of LogisticsLab for a Dart/Flutter desktop app - local (stdio) or remote (REST server).
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0

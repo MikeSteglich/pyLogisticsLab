@@ -292,7 +292,10 @@ Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den 
 ### Hinweise für die Flutter-App
 
 - **Gemeinsame Schnittstelle:** In Dart eine abstrakte Klasse (z. B. `LogisticsLabBackend` mit `submit`, `status`, `result`, `cancel`) mit zwei Implementierungen anlegen. `LocalBackend` startet den Prozess mit `Process.start` aus `dart:io` und liest stdout zeilenweise (`utf8.decoder` + `LineSplitter`). `RemoteBackend` spricht per HTTP mit dem Server und schickt den API-Key mit. Web und Mobil nutzen nur `RemoteBackend`, denn dort lassen sich keine Prozesse starten.
-- **Datenmodelle:** `python -m logisticsLabCore.schema > logisticsLab.schema.json` erzeugt das JSON Schema aller Items. Daraus lassen sich die Dart-Modelle generieren, z. B. mit `quicktype --lang dart`. Server und lokale Schnittstelle verwenden dieselben Items.
+- **Datenmodelle:** `python -m logisticsLabCore.schema > logisticsLab.schema.json` erzeugt das JSON Schema aller Anfragen und Antworten. Daraus lassen sich die Dart-Modelle generieren, z. B. mit `quicktype --lang dart`. Server und lokale Schnittstelle verwenden dieselben Items.
+  - **Anfragen:** die Problem-Items (`ContPCentreItem` …) und die Geo-Items.
+  - **Antworten:** `ProblemAnswer` (`{id, status, message, results}`) und je Problemtyp ein Ergebnismodell für `results`. Die Zuordnung steht in `RESULT_ITEMS` in `logisticsLabCore/results.py`, z. B. `contpmedian`/`contpcentre` → `ContLocationResults`, `mincostflow`/`maxflow` → `FlowResults`. `checkServer.py` prüft jede echte Antwort gegen diese Modelle, ein neues oder umbenanntes Ergebnisfeld fällt also auf.
+- **Beispiel-Client:** `tests/dartClient` ist ein lauffähiges Dart-Paket ohne externe Abhängigkeiten. Es enthält `LogisticsLabBackend` mit `LocalBackend` (Kindprozess, JSON-RPC) und `RemoteBackend` (REST, Abfrage von `/v1/results`), typisierte Ergebnisse in `lib/src/results.dart` und das Beispiel `bin/cont_pcentre.dart`. Fehler kommen in beiden Fällen als `LogisticsLabException` mit `httpStatus`. Für die Flutter-App lässt sich `lib/` direkt übernehmen.
 - **Paketierung:** Die lokale Schnittstelle lässt sich mit PyInstaller im Modus `--onedir` zu einem Programm bündeln (`onefile` entpackt bei jedem Start). Die CMPL-Installation der Zielplattform (`cmpl/` mit `bin/` und `Thirdparty/`) muss mit hinein, und das Programm setzt `CMPLHOME` auf ihren Ort im Paket, bevor es den Kern startet. Unter macOS muss jede mitgelieferte ausführbare Datei signiert sein, auch `cmpl` und HiGHS. Für eine App in der Sandbox braucht der Kindprozess außerdem die Entitlements `com.apple.security.inherit` und `com.apple.security.network.client`.
 
 ## Betrieb unter Linux mit nginx
@@ -370,12 +373,42 @@ Das Zertifikat bekommt man z. B. mit `certbot --nginx -d logisticslab.example.or
 
 ## Tests
 
-- `tests/pyCmpl/find*.py`: rufen die Bibliothek direkt auf
-- `tests/serverTests/*.py`: Clients für einen laufenden Server. Der Key wird aus `LOGLAB_API_KEY` gelesen:
+**Bibliothek** (`tests/pyCmpl/`, Projektverzeichnis im `PYTHONPATH`):
+- `find*.py`: Beispiele, die ein Modell direkt aufrufen und das Ergebnis ausgeben.
+- `checkLibrary.py`: Regressionstest aller Modelle. Er vergleicht die Zielfunktionswerte mit erwarteten Werten, prüft typische Fehlerfälle und endet mit Exit-Code 1, wenn etwas fehlschlägt.
 
 ```bash
-export LOGLAB_API_KEY=...
-python tests/serverTests/findTppServer.py
+PYTHONPATH=. python tests/pyCmpl/checkLibrary.py
 ```
 
-Die Server-Adresse steht oben im jeweiligen Skript (`url = ...`).
+**Server** (`tests/serverTests/`):
+- `find<Typ>Server.py`: Beispiel je Problemtyp. Die Daten stehen in `payloads`. Senden, Abholen und die Anzeige der Lösung (`showResults`) übernimmt `logLabClient.py`.
+- `checkServer.py`: Regressionstest über alle Beispiele. Er prüft die Zielfunktionswerte, das gleiche Ergebnis über `/v1/solve`, jede Antwort gegen das Ergebnis-Schema, Fehlerfälle mit ihrem HTTP-Status und einen Key ohne das Recht für `contpcentre`.
+- `runServerTests.sh`: erledigt alles in einem Schritt. Es erzeugt neue Test-Keys, startet einen lokalen Server auf Port 8000, falls keiner läuft, führt die Tests aus und stoppt den Server wieder. Das Server-Log steht in `tests/serverTests/server.log`.
+
+```bash
+PYTHON=/opt/anaconda3/envs/pyLogisticsLab/bin/python tests/serverTests/runServerTests.sh                       # checkServer.py
+PYTHON=/opt/anaconda3/envs/pyLogisticsLab/bin/python tests/serverTests/runServerTests.sh findContPCentreServer.py
+```
+
+**Test-Keys:** `createTestKeys.py` legt die Keys `serverTests` (alle Dienste) und `serverTestsRestricted` (nur `tsp`) an. Gleichnamige Keys werden bei jedem Lauf ersetzt.
+- **Speicherorte:** In `logisticsLabServer/apiKeys.yml` stehen nur die Hashes. Die Keys selbst stehen in `tests/serverTests/.env` (Rechte `600`). Beide Dateien sind nicht versioniert.
+- **Ohne Export:** `logLabClient.py` und der Dart-Client lesen die `.env` selbst. Variablen aus der Umgebung haben Vorrang. Ist die `.env` einmal angelegt, laufen die Skripte gegen einen laufenden Server also direkt, z. B. `python tests/serverTests/findWlpServer.py`.
+- **Entfernen:** `python tests/serverTests/createTestKeys.py --remove` löscht die Keys und die `.env`.
+- **Entfernter Server:** Das Skript dort mit dessen Key-Datei ausführen und die `.env` auf den Client kopieren:
+
+```bash
+python tests/serverTests/createTestKeys.py --keyFile /etc/logisticsLab/apiKeys.yml --url https://logisticslab.example.org/v1/
+```
+
+Bei den Heuristiken (`vrp`, `contpmedian`, `contpcentre`) gilt ein besserer Wert als erwartet ebenfalls als bestanden.
+
+**Dart-Client** (`tests/dartClient/`, Dart SDK ab 3.5):
+
+```bash
+cd tests/dartClient
+dart pub get
+LOGLAB_PYTHON=/pfad/zu/python dart run bin/cont_pcentre.dart local    # lokale Schnittstelle als Kindprozess
+dart run bin/cont_pcentre.dart remote                                 # Server, LOGLAB_URL und LOGLAB_API_KEY aus der .env
+```
+ Die älteren Skripte (`findTspServer.py`, `findTppServer.py`, `getMatrix.py` …) haben die Server-Adresse noch oben im Skript (`url = ...`).
