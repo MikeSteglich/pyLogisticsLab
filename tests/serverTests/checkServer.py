@@ -11,7 +11,7 @@
     python checkServer.py
 """
 
-from logLabClient import solve, solveWithStatus
+from logLabClient import solve, solveWithStatus, request
 
 import importlib
 import os
@@ -132,6 +132,61 @@ if restricted:
     checkError('key without the service', 'contpcentre', cont, 403, apiKey=restricted)
 else:
     print('skip   key without the service - LOGLAB_API_KEY_RESTRICTED is not set')
+
+
+#*************** geo services ************************************************
+# they need the OSM servers of logisticsLab.yml - if these are not available, the checks are skipped
+
+def checkGeo(name, endpoint, payload, test, status=200, apiKey=None):
+    """ synchronous geo request - test(answer) checks the content of a successful answer """
+    try:
+        code, ret = request(endpoint, payload, apiKey=apiKey)
+    except Exception as e:
+        check(name, False, f'- {e}')
+        return
+    isOk = code == status and (status != 200 or (ret.get('status') == 'ok' and test(ret)))
+    check(name, isOk, f'- {code}, expected {status}: {str(ret.get("message", ret))[:90]}')
+
+def isMatrix(m, rows, cols):
+    return isinstance(m, list) and len(m) == rows and all(isinstance(r, list) and len(r) == cols for r in m)
+
+def inGermany(c):
+    return 47 < c[0] < 56 and 5 < c[1] < 16
+
+print('== geo services')
+matrix = importlib.import_module('getMatrixServer').payloads
+route = importlib.import_module('getRouteServer').payloads
+n = len(matrix[0]['coordinates'])
+
+code, ret = request('matrix', matrix[0])
+if code >= 500:
+    print(f'skip   geo services - OSM servers not available: {code} {str(ret.get("message", ret))[:90]}')
+else:
+    checkGeo('matrix both', 'matrix', matrix[0],
+             lambda r: isMatrix(r['distances'], n, n) and isMatrix(r['durations'], n, n)
+                       and all(r['distances'][i][i] == 0 for i in range(n)))
+    checkGeo('matrix sources x destinations', 'matrix', matrix[1], lambda r: isMatrix(r['distances'], 2, 2))
+    for k, payload in enumerate(route):
+        checkGeo(f'routing[{k}]', 'routing', payload, lambda r: len(r['route']) >= 2 and all(inGermany(c) for c in r['route']))
+    checkGeo('coordinates', 'coordinates', importlib.import_module('getGeoCodingCoords').payloads[0],
+             lambda r: len(r['coordinates']) == 3 and all(inGermany(c) for c in r['coordinates']))
+    checkGeo('search', 'search', importlib.import_module('getGeoCodingSearch').payloads[0], lambda r: len(r['results']) > 0)
+    checkGeo('reverse', 'reverse', importlib.import_module('getGeoCodingReverse').payloads[0],
+             lambda r: r['results'] and 'name' in r['results'][0])
+
+    # a problem whose matrix is calculated from coordinates - the matrix is part of the results
+    tspCoords = matrix[0]['coordinates']
+    ret = solve('tsp', {"coordinates": tspCoords}, verbose=False)
+    check('tsp from coordinates', ret.get('status') == 'solution' and sorted(ret['results']['route'][:-1]) == list(range(n)),
+          f"- {ret.get('status')}: {ret.get('results', {}).get('route', ret.get('message'))}")
+    checkSchema('tsp from coordinates', 'tsp', ret)
+
+    checkGeo('matrix wrong coordinate', 'matrix', {"coordinates": [[95, 13.4], [52.5, 13.4]]}, None, status=400)
+    checkGeo('routing unknown travelmode', 'routing', {**route[0], "travelmode": "plane"}, None, status=422)
+
+checkGeo('matrix missing field', 'matrix', {"travelmode": "car"}, None, status=422)
+if restricted:
+    checkGeo('key without the service matrix', 'matrix', matrix[0], None, status=403, apiKey=restricted)
 
 
 print(f'== {nrOfErrors} errors')

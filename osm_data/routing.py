@@ -76,7 +76,7 @@ class Routing:
         self.__travelmode=travelmode
        
         if self.__travelmode not in ('car','bike','foot','wheelchair'):
-            raise OsmException(f"Wrong travelmode {self.__travelmode} - 'car', 'bike', 'foot' or 'wheelchair' expected.")
+            raise OsmException(f"Wrong travelmode {self.__travelmode} - 'car', 'bike', 'foot' or 'wheelchair' expected.", 400)
           
         if not self.__coordinates:
             raise OsmException("No coordinates available. Cannot generate distance or time matrix ")

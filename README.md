@@ -381,9 +381,27 @@ Das Zertifikat bekommt man z. B. mit `certbot --nginx -d logisticslab.example.or
 PYTHONPATH=. python tests/pyCmpl/checkLibrary.py
 ```
 
-**Server** (`tests/serverTests/`):
+**Server-Beispiele** (`tests/serverExamples/`): ein eigenständiges Skript je Problemtyp und Geo-Dienst, z. B. `wlpExample.py`, `contPCentreExample.py`, `matrixExample.py`. Adresse, Key, Daten, Einreichen, Abfrage der Ergebnisse und Ausgabe stehen direkt im Code, ohne Hilfsmodul. Die Skripte eignen sich als Vorlage für eigene Clients.
+- **Beispiel-Key:** Die Skripte nutzen den festen Key `loglab-local-example-key`. Im Header `X-API-Key` steht immer der Key selbst, der Server kennt nur dessen Hash.
+- **Registrieren:** `python tests/serverTests/createTestKeys.py` trägt den Hash unter dem Namen `localExample` in die lokale `apiKeys.yml` ein. Mit `--keyFile` für einen anderen Server lehnt das Skript den Beispiel-Key ab, denn er steht öffentlich im Repo.
+- **Starten:**
+
+```bash
+python tests/serverTests/createTestKeys.py         # einmal: Beispiel- und Test-Keys anlegen
+cd logisticsLabServer && ./run_server.sh           # lokaler Server auf Port 8000
+python tests/serverExamples/contPCentreExample.py  # in einem zweiten Terminal
+```
+
+**Server-Tests** (`tests/serverTests/`):
 - `find<Typ>Server.py`: Beispiel je Problemtyp. Die Daten stehen in `payloads`. Senden, Abholen und die Anzeige der Lösung (`showResults`) übernimmt `logLabClient.py`.
-- `checkServer.py`: Regressionstest über alle Beispiele. Er prüft die Zielfunktionswerte, das gleiche Ergebnis über `/v1/solve`, jede Antwort gegen das Ergebnis-Schema, Fehlerfälle mit ihrem HTTP-Status und einen Key ohne das Recht für `contpcentre`.
+- `getMatrixServer.py`, `getRouteServer.py`, `getGeoCodingCoords.py`, `getGeoCodingSearch.py`, `getGeoCodingReverse.py`: Beispiele für die Geo-Endpoints `/v1/matrix`, `/v1/routing`, `/v1/coordinates`, `/v1/search` und `/v1/reverse`, ebenfalls mit Key über `logLabClient.py`.
+- `checkServer.py`: Regressionstest über alle Beispiele. Er prüft:
+  - die Zielfunktionswerte und das gleiche Ergebnis über `/v1/solve`,
+  - jede Antwort gegen das Ergebnis-Schema,
+  - Fehlerfälle mit ihrem HTTP-Status,
+  - einen Key ohne die Rechte für `contpcentre` und `matrix`,
+  - die Geo-Endpoints und ein TSP mit Matrix aus Koordinaten. Diese Prüfungen brauchen die OSM-Server aus `logisticsLab.yml`. Sind die nicht erreichbar, werden sie übersprungen.
+- Die Server der TH Wildau bieten derzeit nur das Profil `car` an. `foot` und `wheelchair` liefern dort 400.
 - `runServerTests.sh`: erledigt alles in einem Schritt. Es erzeugt neue Test-Keys, startet einen lokalen Server auf Port 8000, falls keiner läuft, führt die Tests aus und stoppt den Server wieder. Das Server-Log steht in `tests/serverTests/server.log`.
 
 ```bash
@@ -411,4 +429,5 @@ dart pub get
 LOGLAB_PYTHON=/pfad/zu/python dart run bin/cont_pcentre.dart local    # lokale Schnittstelle als Kindprozess
 dart run bin/cont_pcentre.dart remote                                 # Server, LOGLAB_URL und LOGLAB_API_KEY aus der .env
 ```
- Die älteren Skripte (`findTspServer.py`, `findTppServer.py`, `getMatrix.py` …) haben die Server-Adresse noch oben im Skript (`url = ...`).
+
+**OSM-Server direkt** (`tests/osmTests/`): `get*.py` nutzen die Bibliothek `osm_data`, `ors*.py` fragen einen OpenRouteService-Server direkt per HTTP ab (Koordinaten `[lon, lat]`, kein LogisticsLab-Key). Diese Skripte testen die OSM-Server, nicht den LogisticsLab-Server.

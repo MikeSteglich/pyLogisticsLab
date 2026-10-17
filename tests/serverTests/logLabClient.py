@@ -32,6 +32,13 @@ headers = {
 }
 
 
+def request(endpoint, payload, apiKey=None, timeout=300):
+    """ synchronous endpoints (matrix, routing, coordinates, search, reverse) - returns (http status, answer) """
+    h = {**headers, 'X-API-Key': apiKey} if apiKey else headers
+    response = requests.post(url+endpoint, json=payload, headers=h, timeout=timeout)
+    return response.status_code, response.json()
+
+
 def solve(endpoint, payload, verbose=True, timeout=600):
     """ submits a problem and polls its results - returns the last answer of /results """
     return solveWithStatus(endpoint, payload, verbose, timeout)[1]
@@ -72,14 +79,17 @@ def _format(value):
 
 
 def showResults(ret, title=None):
-    """ prints the answer of /results - a matrix (e.g. flows, locations) row by row """
+    """ prints the answer of /results or of a geo service - a matrix (e.g. flows, locations) row by row """
     if title:
         print(f'== {title}')
-    results = ret.get('results', {})
+    # problems: the fields are in the dict results, geo services: in the answer itself (search, reverse: list results)
+    results = ret.get('results')
+    if not isinstance(results, dict):
+        results = { k: v for k, v in ret.items() if k not in ('id', 'status', 'message', 'detail') }
     width = max([len(name) for name in results] + [len('status')]) + 2
     print(f"{'status':{width}}{ret.get('status')} - {ret.get('message', ret)}")
     for name, value in results.items():
-        if isinstance(value, list) and value and all(isinstance(v, list) for v in value):
+        if isinstance(value, list) and value and all(isinstance(v, (list, dict)) for v in value):
             print(f'{name}:')
             for i, row in enumerate(value):
                 print(f'    {i:3}  {_format(row)}')

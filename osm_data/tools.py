@@ -69,35 +69,35 @@ def checkIntMatrix(matrix):
 def checkSingleCoordinates(coordinates):
 
     if not isinstance(coordinates,(tuple,list)) :
-        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.')
+        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.', 400)
     
     if len(coordinates) != 2:
-        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.')
+        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.', 400)
 
     lat=coordinates[0]    
     lon=coordinates[1]   
     if not ( isinstance(lat, (float,int) ) and isinstance(lon, (float,int)) ):
-        raise OsmException(f'Wrong coordinate: ({lat};{lon})')
+        raise OsmException(f'Wrong coordinate: ({lat};{lon})', 400)
     if not (abs(lat)<=90 and abs(lon)<= 180):
-        raise OsmException(f'Wrong coordinate: ({lat};{lon})')
+        raise OsmException(f'Wrong coordinate: ({lat};{lon})', 400)
 
 def checkCoordinates(coordinates):  
     if not isinstance(coordinates, (list,tuple)):
-        raise OsmException(f'OsmTools error: Wrong coordinates list. It is not an array.')
+        raise OsmException(f'OsmTools error: Wrong coordinates list. It is not an array.', 400)
     
     if not all( isinstance(e,(tuple,list)) for e in coordinates  ):
-        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.')
+        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.', 400)
     
     if not all( len(e)==2 for e in coordinates  ):
-        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.')
+        raise OsmException(f'OsmTools error: Wrong coordinates list. Contains more than just 2-tuples.', 400)
     
     for c in coordinates:
         lat=c[0]    
         lon=c[1]   
         if not ( isinstance(lat, (float,int) ) and isinstance(lon, (float,int)) ):
-            raise OsmException(f'Wrong coordinate: ({lat};{lon})')
+            raise OsmException(f'Wrong coordinate: ({lat};{lon})', 400)
         if not (abs(lat)<=90 and abs(lon)<= 180):
-            raise OsmException(f'Wrong coordinate: ({lat};{lon})')
+            raise OsmException(f'Wrong coordinate: ({lat};{lon})', 400)
         
 def transformCoords(coordinates):
     return [ (i,j) for (j,i) in coordinates]

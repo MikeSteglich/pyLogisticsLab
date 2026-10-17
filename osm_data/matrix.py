@@ -181,7 +181,7 @@ class Matrix:
         nrOfSteps = math.ceil(self.__nrOfSources/maxRowPerStep)
 
         if travelmode not in ('car','bike','foot','wheelchair'):
-            raise OsmException(f"Wrong travelmode {travelmode} -'car', 'bike', 'foot' or 'wheelchair' expected.")
+            raise OsmException(f"Wrong travelmode {travelmode} -'car', 'bike', 'foot' or 'wheelchair' expected.", 400)
           
         if not self.__coordinates:
             raise OsmException("No coordinates available. Cannot generate distance or time matrix ")
