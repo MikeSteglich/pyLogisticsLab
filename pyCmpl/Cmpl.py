@@ -1151,30 +1151,31 @@ class Cmpl(threading.Thread):
             
     # *********** running Cmpl ************  
     def __runCmpl(self, cmdList):
-        if not LOGISTICSLAB:
-            self.__cmplBinHandler = subprocess.Popen(cmdList, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:
-            startupinfo = subprocess.STARTUPINFO()
-            #startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW  
-            # Prevent cmd.exe window from popping up
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= (
-                subprocess.STARTF_USESTDHANDLES | subprocess.STARTF_USESHOWWINDOW
-            )
-            startupinfo.wShowWindow = subprocess.SW_HIDE
+        # no console window on Windows (GUI apps like LogisticsLab or the CMPL IDE)
+        flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0
+        # without output stdout is not read - DEVNULL, otherwise cmpl could block on a full pipe
+        stdout = subprocess.PIPE if self.__printOutput else subprocess.DEVNULL
+        self.__cmplBinHandler = subprocess.Popen(cmdList, stdout=stdout, stderr=subprocess.PIPE, creationflags=flags)
 
-            self.__cmplBinHandler = subprocess.Popen(cmdList, shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, startupinfo=startupinfo)
-        
-        while True and self.__printOutput:
-            line = self.__cmplBinHandler.stdout.readline()
-            if line:
-                self.__handleOutput(line)                
+        try:
+            if self.__printOutput:
+                while True:
+                    line = self.__cmplBinHandler.stdout.readline()
+                    if line:
+                        self.__handleOutput(line)
+                    else:
+                        break
+                errors = self.__cmplBinHandler.stderr.read()
             else:
-                break
+                _, errors = self.__cmplBinHandler.communicate()
 
-        if self.__cmplBinHandler.wait() != 0:
-            if self.__cmplBinHandler.stderr:
-                raise CmplException(self.__cmplBinHandler.stderr.read())
+            if self.__cmplBinHandler.wait() != 0:
+                raise CmplException(errors)
+
+        except BaseException:
+            # e.g. KeyboardInterrupt - cmpl and the solver must not keep running
+            stopProcessTree(self.__cmplBinHandler)
+            raise
 
         self.__status.readCmplMessages()
 
@@ -1206,8 +1207,8 @@ class Cmpl(threading.Thread):
                         self.__cmplServerExecute("disconnectFromScheduler")
 
             elif self.__cmplBinHandler != None:
-                if self.__cmplBinHandler.poll() == None:
-                    self.__cmplBinHandler.kill()
+                # cmpl and the solver it has started (e.g. HiGHS)
+                stopProcessTree(self.__cmplBinHandler)
 
             if self.__cmplDataFile != None and not self.__remoteMode and (self.__cmplArgs.runMode==PYCMPL or self.__isXlsData):
                 if os.path.isfile(self.__cmplDataFile):

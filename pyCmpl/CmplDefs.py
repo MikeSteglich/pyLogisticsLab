@@ -105,9 +105,6 @@ CMPL_STATUS_TXT = { CMPL_UNKNOWN    : "CMPL_UNKNOWN" , \
                     }
 
 
-LOGISTICSLAB = False
-PYLOGISTICSLAB = True
-
 #*************** end general definitions  ************************
 
 		

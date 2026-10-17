@@ -43,8 +43,6 @@ import math
 import copy
 
 
-if sys.platform in ('darwin', 'win32') and not LOGISTICSLAB and not PYLOGISTICSLAB:
-    import xlwings as xw
 
 
 
@@ -55,7 +53,7 @@ class InputSet:
         self.rank=rank
         self.sheet=""
         if "!" in cellRange:
-            val = re.findall('(.*)\!(.*)',cellRange)
+            val = re.findall(r'(.*)\!(.*)',cellRange)
             self.sheet=val[0][0].strip()
             self.cellRange=val[0][1].strip()
         else:
@@ -73,7 +71,7 @@ class InputParameter:
         self.sets=defSets
         self.sheet=""
         if "!" in cellRange:
-            val = re.findall('(.*)\!(.*)',cellRange)
+            val = re.findall(r'(.*)\!(.*)',cellRange)
             self.sheet=val[0][0].strip()
             self.cellRange=val[0][1].strip()
         else:
@@ -91,7 +89,7 @@ class OutputElement:
         self.sets=defSets
         self.sheet=sheet
         if "!" in cellRange:
-            val = re.findall('(.*)\!(.*)',cellRange)
+            val = re.findall(r'(.*)\!(.*)',cellRange)
             self.sheet=val[0][0].strip()
             self.cellRange=val[0][1].strip()
         else:
@@ -146,6 +144,11 @@ class CmplXlsData:
                 subprocess.check_call(['open', '-a', 'Microsoft Excel', self.__xlsFile])
                 time.sleep(0.4)
             
+        # xlwings is only imported when Excel data are used - it is not needed for pyCmpl otherwise
+        try:
+            import xlwings as xw
+        except ImportError:
+            raise CmplException("xlwings is required for reading Excel data (pip install xlwings)")
         self.__wb = xw.Book(self.__xlsFile)
         self.__getSheetNames(self.__wb)
 
@@ -169,9 +172,9 @@ class CmplXlsData:
             raise CmplException("Internal error: wrong type in __contenVal <"+valType+">"  )
     
         if valType=="val":
-            val = re.findall('(.*)\<(.*)\>',valString)
+            val = re.findall(r'(.*)\<(.*)\>',valString)
         else:
-            val = re.findall('(.*)\[(.*)\]',valString)
+            val = re.findall(r'(.*)\[(.*)\]',valString)
        
         #if len(val[0])<2:
         if not val:
@@ -206,7 +209,7 @@ class CmplXlsData:
 
     #*************** __outputNameType ***********************************
     def __outputNameType(self,valString):
-        outList=re.findall("(.*)\.(.*)",valString)
+        outList=re.findall(r"(.*)\.(.*)",valString)
         if not outList or len(outList[0])<2 or not outList[0][1] in ("name","activity", "type", "lowerBound", "upperBound", "marginal" ):
             self.__error(  "wrong output type " )
         return outList[0]
@@ -344,11 +347,11 @@ class CmplXlsData:
                         raise self.__error("set <"+ s.name+">: one of the indices are empty.")
                     if type(i)== tuple:
                         for e in i:
-                            if re.search('\s',str(e)):
+                            if re.search(r'\s',str(e)):
                                 self.__lineNr=s.lineNr
                                 raise self.__error("set <"+ s.name+">: index <"+ str(i)+ "> contains whitespaces.") 
 
-                    elif re.search('\s',str(i)):
+                    elif re.search(r'\s',str(i)):
                         self.__lineNr=s.lineNr
                         raise self.__error("set <"+ s.name+">: index <"+ str(i) + "> contains whitespaces.") 
                      
