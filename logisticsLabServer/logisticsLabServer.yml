@@ -15,6 +15,11 @@ docs: False                     # /docs, /redoc and /openapi.json
 logging:  True
 debugging: True
 #logPath: /var/log/logisticsLab   # default: directory of the server
+
+matrixCache: True               # raw OSM matrices (m, s) in a SQLite file - factors and costs are applied afterwards
+#matrixCacheFile: /var/lib/logisticsLab/matrixCache.sqlite   # default: matrixCache.sqlite in logPath
+matrixCacheMaxAge: 7            # days - afterwards the matrix is loaded again (the OSM data change)
+matrixCacheMaxEntries: 500      # least recently used entries are deleted
 #logMaxBytes: 5000000             # log rotation
 #logBackupCount: 5
 

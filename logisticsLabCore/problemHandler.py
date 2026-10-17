@@ -1,5 +1,5 @@
-import osm_data as osm
 from .exception import *
+from . import matrixService
 
 
 class ProblemHandler:
@@ -20,6 +20,7 @@ class ProblemHandler:
         self._objVal=None
         self._results={}
         self._size=''
+        self._matrixInfo=None         # info of the matrices calculated from coordinates - part of the results
 
     def solve(self):
         raise NotImplementedError
@@ -34,28 +35,16 @@ class ProblemHandler:
             return self._conf['maxSolvingTime']
         return maxSolvingTime
 
-    def _loadMatrix(self, coordinates, travelmode, matrixMode, sources=None, destinations=None):
-        """ loads a rounded distance or time matrix via OSM """
+    def _loadMatrix(self, coordinates, options, matrixMode, sources=None, destinations=None):
+        """ rounded distance (m), time (s) or cost matrix from coordinates - OSM servers (cached) or bee line
+
+            options: the problem item with the fields of MatrixOptions and CostOptions
+        """
         if not coordinates:
             raise LogLabCoreException('no coordinates are available')
-
-        try:
-            osmData = osm.Matrix(coordinates, sources=sources, destinations=destinations)
-
-            status, msg= osmData.loadMatrix(travelmode=travelmode)
-
-            if status!=200:
-                raise LogLabCoreException(msg)
-
-            if matrixMode=="times":
-                matrix = osmData.timeMatrix
-            else:
-                matrix = osmData.distanceMatrix
-
-        except osm.OsmException as e:
-            raise LogLabCoreException(e)
-
-        return [[round(value) for value in row] for row in matrix]
+        matrix, info = matrixService.matrix(coordinates, options, matrixMode or 'distances', sources, destinations)
+        self._matrixInfo = matrixService.mergeInfo(self._matrixInfo, info)
+        return matrix
 
     def _bipartiteMatrix(self, problemData, field):
         """ matrix [sources x destinations] from problemData.<field> or from sourceCoordinates and destinationCoordinates
@@ -74,7 +63,7 @@ class ProblemHandler:
         self._logger.debug(problemData.type, 'load distances')
         coordinates = problemData.sourceCoordinates + problemData.destinationCoordinates
         nrOfSources = len(problemData.sourceCoordinates)
-        matrix = self._loadMatrix(coordinates, problemData.travelmode, problemData.matrixMode,
+        matrix = self._loadMatrix(coordinates, problemData, problemData.matrixMode,
                                   sources=list(range(nrOfSources)),
                                   destinations=list(range(nrOfSources, len(coordinates))))
         return matrix, True
@@ -107,5 +96,7 @@ class ProblemHandler:
     size = property(getSize)
 
     def getResults(self):
+        if self._matrixInfo and self._results:
+            return {**self._results, 'matrixInfo': self._matrixInfo}
         return self._results
     results = property(getResults)

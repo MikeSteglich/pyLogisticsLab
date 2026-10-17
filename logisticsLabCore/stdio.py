@@ -1,6 +1,6 @@
 """ local interface of LogisticsLab for desktop apps - JSON-RPC 2.0 over stdin/stdout
 
-    python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProblems N] [--debug]
+    python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProblems N] [--debug] [--noMatrixCache]
 
     One JSON message per line (UTF-8). stdout is used only for the protocol - all other output goes to stderr.
     The process stops when stdin is closed or after the method shutdown.
@@ -169,6 +169,8 @@ def main():
                         help='OSM servers (default: the servers of the TH Wildau)')
     parser.add_argument('--maxProblems', type=int, default=2, help='problems solved at the same time')
     parser.add_argument('--debug', action='store_true', help='debug messages in the log file')
+    parser.add_argument('--noMatrixCache', action='store_true',
+                        help='without the cache of the OSM matrices (default: matrixCache.sqlite in logPath)')
     args = parser.parse_args()
 
     # stdout belongs to the protocol - print() and the output of CMPL and the solvers go to stderr
@@ -180,6 +182,7 @@ def main():
     solverLogFile = os.path.join(args.logPath, 'HiGHS.log')
     conf = {'maxProblems': args.maxProblems,
             'workDir': args.logPath,
+            'matrixCache': not args.noMatrixCache,
             'tpp': {'solverLogFile': solverLogFile}}
     logger = CoreLogger(os.path.join(args.logPath, 'logisticsLabLocal.log'), isDebugging=args.debug)
 

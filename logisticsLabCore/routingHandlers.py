@@ -78,8 +78,8 @@ class VrpHandler(ProblemHandler):
             times = d.times
         elif d.coordinates:
             self._logger.debug('vrp', 'load distances')
-            distances = self._loadMatrix(d.coordinates, d.travelmode, 'distances')
-            times = self._loadMatrix(d.coordinates, d.travelmode, 'times') if usesTimes else d.times
+            distances = self._loadMatrix(d.coordinates, d, 'distances')
+            times = self._loadMatrix(d.coordinates, d, 'times') if usesTimes else d.times
             self.__calculated = {'distances': distances, **({'times': times} if usesTimes else {})}
         else:
             raise LogLabCoreException('no distances and coordinates are available')

@@ -89,10 +89,12 @@ class Matrix:
         self.__durasMatrix = []
           
         self.__matrixStatus = 'exact'
+        self.__fillFactors = None
 
        
     def __checkDistances(self):
         self.__matrixStatus = 'exact'
+        self.__fillFactors = None
         self.__greatCircleDistances()
         sDistOsm = 0
         sDistGc = 0
@@ -129,6 +131,8 @@ class Matrix:
 
         if len(pIndices)>0:
             self.__matrixStatus = 'unexact'
+            # missing or implausible values: bee line distance x average detour (distance) or time factor (s/m)
+            self.__fillFactors = {'detourFactor': detourFactor, 'timeFactor': timeFactor, 'nrOfFilledValues': len(pIndices)}
 
         for i,row in enumerate(self.__durasMatrix):
             for j, tTime in enumerate(row):
@@ -160,6 +164,12 @@ class Matrix:
         return self.__matrixStatus
     
     matrixStatus = property(getMatrixstatus)
+
+    def getFillFactors(self):
+        """ None or the factors used for the missing or implausible values of an unexact matrix """
+        return self.__fillFactors
+
+    fillFactors = property(getFillFactors)
 
     def getDistanceMatrix(self):
         return self.__distMatrix

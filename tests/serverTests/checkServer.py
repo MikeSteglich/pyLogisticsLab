@@ -14,6 +14,7 @@
 from logLabClient import solve, solveWithStatus, request
 
 import importlib
+import math
 import os
 import sys
 
@@ -183,6 +184,51 @@ else:
 
     checkGeo('matrix wrong coordinate', 'matrix', {"coordinates": [[95, 13.4], [52.5, 13.4]]}, None, status=400)
     checkGeo('routing unknown travelmode', 'routing', {**route[0], "travelmode": "plane"}, None, status=422)
+
+    # cache of the OSM matrices - the same request again comes from the cache, noCache loads it again
+    coords = matrix[0]['coordinates']
+    request('matrix', {"coordinates": coords})
+    checkGeo('matrix cache', 'matrix', {"coordinates": coords}, lambda r: r['matrixInfo']['source'] == 'cache')
+    checkGeo('matrix noCache', 'matrix', {"coordinates": coords, "noCache": True}, lambda r: r['matrixInfo']['source'] == 'osm')
+
+    # costs: km x costPerKm + h x timeFactor x costPerHour, the durations include the timeFactor
+    costs = {"coordinates": coords, "matrixMode": "all", "costPerKm": 0.5, "costPerHour": 30, "timeFactor": 1.2}
+    checkGeo('matrix costs', 'matrix', costs,
+             lambda r: all(abs(r['costs'][i][j] - (r['distances'][i][j] / 1000 * 0.5 + r['durations'][i][j] / 3600 * 30)) < 1e-6
+                           for i in range(n) for j in range(n)) and r['matrixInfo']['costPerHour'] == 30)
+
+    # vrp from coordinates with maxTime: distances and times of the same raw data
+    ret = solve('vrp', {"coordinates": coords, "demands": [0, 1, 1, 1], "capacities": [5], "maxTime": 100000,
+                        "maxSolvingTime": 2}, verbose=False)
+    check('vrp distances and times from coordinates', ret.get('status') == 'solution'
+          and ret['results']['matrixInfo']['matrices'] == ['distances', 'times'] and 'times' in ret['results'],
+          f"- {ret.get('status')}: {ret.get('results', {}).get('matrixInfo', ret.get('message'))}")
+    checkSchema('vrp from coordinates', 'vrp', ret)
+
+
+# bee line matrices need no OSM servers
+def haversine(a, b):
+    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+    h = math.sin((la2-la1)/2)**2 + math.cos(la1) * math.cos(la2) * math.sin((lo2-lo1)/2)**2
+    return 2 * 6371008.8 * math.asin(math.sqrt(h))
+
+coords = matrix[0]['coordinates']
+beeLine = {"coordinates": coords, "matrixSource": "beeline", "detourFactor": 1.25, "averageSpeed": 40, "matrixMode": "both"}
+checkGeo('matrix beeline', 'matrix', beeLine,
+         lambda r: r['matrixInfo']['source'] == 'beeline'
+                   and all(abs(r['distances'][i][j] - haversine(coords[i], coords[j]) * 1.25) < 1e-6 for i in range(n) for j in range(n))
+                   and all(abs(r['durations'][i][j] - r['distances'][i][j] / (40 / 3.6)) < 1e-6 for i in range(n) for j in range(n)))
+
+# transportation problem with a cost matrix from coordinates
+tppCosts = {"sourceCoordinates": coords[:2], "destinationCoordinates": coords[2:], "supplies": [10, 10], "demands": [8, 8],
+            "matrixSource": "beeline", "matrixMode": "costs", "costPerKm": 1.5}
+ret = solve('tpp', tppCosts, verbose=False)
+check('tpp with costs from coordinates', ret.get('status') == 'solution'
+      and ret['results']['matrixInfo']['matrices'] == ['costs'] and ret['results']['varCosts'][0][0] > 0,
+      f"- {ret.get('status')}: {ret.get('results', {}).get('varCosts', ret.get('message'))}")
+checkSchema('tpp with costs from coordinates', 'tpp', ret)
+checkError('tpp costs without cost rates', 'tpp', {**tppCosts, "costPerKm": None}, 400)
+checkGeo('matrix detourFactor 0', 'matrix', {**beeLine, "detourFactor": 0}, None, status=422)
 
 checkGeo('matrix missing field', 'matrix', {"travelmode": "car"}, None, status=422)
 if restricted:

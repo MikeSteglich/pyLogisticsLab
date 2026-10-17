@@ -14,6 +14,7 @@ from .tppHandler import *
 from .locationHandlers import *
 from .routingHandlers import *
 from .flowHandlers import *
+from . import matrixService
 
 import logging
 import os
@@ -93,6 +94,7 @@ def workerMain(conn, conf, tmpDir=None):
         tempfile.tempdir = tmpDir
 
     logger = PipeLogger(conn)
+    matrixService.configure(conf, logger)       # own connection to the matrix cache of the core
     libLogger = logging.getLogger('pyLogisticsLab')
     libLogger.setLevel(logging.INFO)
     libLogger.addHandler(PipeLogHandler(logger))

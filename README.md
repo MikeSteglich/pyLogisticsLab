@@ -135,7 +135,7 @@ Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 a
 | `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`, `"wlp"`, `"pmedian"`, `"pcentre"`, `"contpmedian"`, `"contpcentre"`, `"scp"`, `"mcp"`, `"cpp"`, `"vrp"`, `"mincostflow"`, `"maxflow"`, `"multicommodity"`, `"multimodal"`) | je nach `type` |
 | `/v1/results` | Status bzw. Ergebnis zu einer `id` | – |
 | `/v1/cancel` | wartendes oder laufendes Problem abbrechen (`{"id": ...}`); der Status wechselt kurz danach zu `cancelled` | – |
-| `/v1/matrix` | Distanz- und/oder Zeitmatrix aus Koordinaten | `matrix` |
+| `/v1/matrix` | Matrix aus Koordinaten: `matrixMode` `distances` (m), `durations` (s), `costs`, `both` (Distanzen und Zeiten) oder `all`, optional `sources`, `destinations`, `rounded` und die Matrix-Optionen (siehe unten) | `matrix` |
 | `/v1/routing` | Route über mehrere Koordinaten | `routing` |
 | `/v1/coordinates`, `/v1/search`, `/v1/reverse` | Geocoding | `geocoding` |
 
@@ -167,6 +167,31 @@ Für die kontinuierlichen Standortprobleme gilt:
 - **Zielfunktion:** `contpmedian` minimiert die Summe Bedarf × Distanz, `contpcentre` die größte Distanz eines Kunden zu einem liefernden Standort. Beim unkapazitierten `contpcentre` zählen die Bedarfe nicht.
 - **Kapazitäten:** Mit `capacities` sind `demands` Pflicht. `isSingleSource: true` ordnet jeden Kunden genau einem Standort zu, `false` erlaubt die Aufteilung seines Bedarfs.
 - **Verfahren:** heuristisch, nicht beweisbar optimal. Start ist das diskrete `pmedian`/`pcentre` mit den Kunden als Kandidaten, danach abwechselnd Standortwahl (sphärischer Weiszfeld bzw. kleinste umschließende Kugelkappe) und Zuordnung (nächster Standort bzw. `Tpp.cmpl` mit Kapazitäten), dann weitere Zufallsstarts im Rahmen von `nrOfStarts` und `maxSolvingTime`.
+
+### Matrizen aus Koordinaten
+
+Alle Probleme mit Koordinaten (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `scp`, `mcp`, `vrp`) und `/v1/matrix` berechnen ihre Matrix an einer Stelle (`logisticsLabCore/matrixService.py`). Der Client braucht keine Matrizen zu verwalten.
+
+| Feld | Standard | Bedeutung |
+|---|---|---|
+| `matrixMode` | `distances` | `distances` (m), `times` (s) oder `costs`; bei `vrp` immer Distanzen, mit `timeWindows`/`maxTime` auch Zeiten |
+| `travelmode` | `car` | `car`, `foot`, `wheelchair`. Die OSM-Server der TH Wildau bieten derzeit nur `car` an. |
+| `matrixSource` | `osm` | `osm`: Straßennetz der OSM-Server. `beeline`: Luftlinie × `detourFactor`, ganz ohne OSM-Server |
+| `detourFactor` | 1,3 | nur `beeline`, typisch für Straßen sind 1,2–1,4 |
+| `averageSpeed` | car 50, foot 5, wheelchair 4 | km/h, nur `beeline`, für die Fahrzeiten |
+| `timeFactor` | 1,0 | Faktor auf alle Fahrzeiten, z. B. 1,2 für Lkw |
+| `costPerKm`, `costPerHour` | – | für `matrixMode: costs`: Kosten = km × `costPerKm` + h × `timeFactor` × `costPerHour`; mindestens einer ist nötig |
+| `noCache` | false | `true` lädt die Matrix neu von den OSM-Servern und erneuert den Cache-Eintrag |
+
+- **Rundung:** Distanzen und Zeiten werden auf ganze Zahlen gerundet, Kosten auf 2 Nachkommastellen. Bei `/v1/matrix` passiert das nur mit `rounded: true`.
+- **Cache:** Die Rohdaten der OSM-Server (Meter und Sekunden) liegen in einer SQLite-Datei. Die Faktoren werden erst danach angewendet. Ein Eintrag gilt also für alle Kostensätze und Zeitfaktoren, und andere Faktoren lösen keine neue OSM-Anfrage aus.
+  - **Gemessen:** Bei 200 Punkten 13,6 s über OSM, aus dem Cache 0,01 s.
+  - **Größe:** Ein Eintrag mit 200 × 200 belegt etwa 0,34 MB.
+  - **Datenschutz:** Der Cache speichert die Koordinaten der Anfragen, als Schlüssel nur in Hash-Form. Eine Matrix bekommt nur, wer genau dieselben Koordinaten schickt.
+- **`matrixInfo`:** steht im Ergebnis, sobald eine Matrix aus Koordinaten berechnet wurde.
+  - `source`: `osm`, `cache` oder `beeline`.
+  - `status`: `exact`, `unexact` oder `beeline`. Bei `unexact` hat der OSM-Server für einige Punktpaare keine Route oder einen unplausiblen Wert geliefert. Diese Werte sind mit Luftlinie × durchschnittlichem Umweg geschätzt, die Faktoren stehen in `fillFactors`.
+  - `matrices`: welche Matrizen berechnet wurden, dazu die verwendeten Faktoren.
 
 Wird die Matrix aus Koordinaten berechnet, steht sie zusätzlich im Ergebnis (`varCosts`, `distances` bzw. bei `vrp` `distances` und `times`). Bei `vrp` werden alle Zahlen gerundet, weil OR-Tools ganze Zahlen verlangt. Aus Koordinaten lädt `vrp` die Fahrzeiten nur, wenn `timeWindows` oder `maxTime` gesetzt sind.
 
@@ -221,6 +246,10 @@ python manageKeys.py remove DSS-WS2026
 | `logging`, `debugging` | True, True | Log-Stufen INFO/WARNING/ERROR bzw. zusätzlich DEBUG |
 | `logPath` | Serververzeichnis | Verzeichnis für alle Logdateien |
 | `logMaxBytes`, `logBackupCount` | 5 MB, 5 | Rotation von `logisticsLabServer.log` |
+| `matrixCache` | True | Cache der OSM-Matrizen |
+| `matrixCacheFile` | `matrixCache.sqlite` in `logPath` | Cache-Datei, von allen Solver-Prozessen gemeinsam genutzt |
+| `matrixCacheMaxAge` | 7 | Tage, danach wird eine Matrix neu geladen, weil sich die OSM-Daten ändern |
+| `matrixCacheMaxEntries` | 500 | Höchstzahl der Einträge, die am längsten unbenutzten werden zuerst gelöscht |
 | `<typ>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre/contpmedian/contpcentre 200, scp/mcp/cpp/multimodal 300, multicommodity 500, mincostflow/maxflow 2000 | maximale Problemgröße: Quellen + Senken, bei den übrigen Typen die Knoten |
 | `<typ>.maxSolvingTime` | 300, vrp 60, mincostflow/maxflow 120 | Obergrenze in Sekunden für die vom Client gewünschte Lösungszeit (bei `vrp` die Suchzeit von OR-Tools) |
 | `<typ>.maxRunTime` | – | feste Zeitgrenze des Watchdogs für diesen Problemtyp (ersetzt die Berechnung oben) |
@@ -233,6 +262,7 @@ Alle Logdateien landen in `logPath`:
 
 - `logisticsLabServer.log`: Anfragen, Ergebnisse (eine Zeile pro Problem mit Größe, Status, Zielwert und Laufzeit), Ablehnungen und Fehler, jeweils mit Key-Namen
 - `logisticsLab.log`: Zugriffe auf die OSM-Server (CSV)
+- `matrixCache.sqlite` (mit `-wal`/`-shm`): Cache der OSM-Matrizen, siehe oben
 - `HiGHS.log`: Ausgabe des Solvers. `logPath` ist zugleich das Arbeitsverzeichnis der Solver-Prozesse, deshalb landen auch alle anderen Dateien von CMPL und den Solvern dort.
 
 Für den Betrieb `debugging: False` setzen, sonst wird auch jede Statusabfrage während des Wartens geloggt.
@@ -242,11 +272,12 @@ Für den Betrieb `debugging: False` setzen, sonst wird auch jede Statusabfrage w
 Eine Desktop-App (z. B. Flutter unter Windows, macOS oder Linux) kann ohne Server lokal rechnen. Sie startet dafür die lokale Schnittstelle als Kindprozess und spricht über stdin/stdout mit ihr ([JSON-RPC 2.0](https://www.jsonrpc.org/specification), eine Nachricht pro Zeile, UTF-8). Es gibt keinen Port, keine Firewall-Abfrage und keine API-Keys. Der Prozess lebt so lange wie die App.
 
 ```bash
-python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProblems N] [--debug]
+python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProblems N] [--debug] [--noMatrixCache]
 ```
 
 - **`--logPath`:** Verzeichnis für Logdateien und `HiGHS.log`. Standard ist `logisticsLab` im Temp-Verzeichnis. Die App sollte ihr Support-Verzeichnis übergeben.
 - **`--osmConfig`:** OSM-Server. Standard sind die Server der TH Wildau (`logisticsLabCore/logisticsLab.yml`).
+- **Matrix-Cache:** Der Cache liegt in `--logPath` (`matrixCache.sqlite`), `--noMatrixCache` schaltet ihn ab. Ohne Netz rechnet die App mit `matrixSource: "beeline"`.
 - **Ende:** Der Prozess endet, wenn stdin geschlossen wird oder nach `shutdown`. Laufende Solver werden dabei mit beendet.
 - **Aufräumen:** Der Watchdog für hängende Solver ist auch lokal aktiv. Nicht abgeholte Ergebnisse werden nach 12 Stunden gelöscht. Verlassene Probleme werden lokal nicht abgebrochen, denn wenn die App endet, endet auch der Prozess.
 - **stdout gehört nur dem Protokoll.** Alle anderen Ausgaben, auch die von CMPL und HiGHS, gehen auf stderr.

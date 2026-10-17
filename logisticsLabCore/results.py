@@ -15,11 +15,27 @@ Vector = list[Number]
 Matrix = list[list[Number]]
 
 
+class MatrixInfo(BaseModel):
+    """ origin of the matrices calculated from coordinates (matrixService.py) """
+    model_config = ConfigDict(extra='forbid')
+    source: Literal['osm', 'cache', 'beeline']
+    status: Literal['exact', 'unexact', 'beeline']   # unexact: some values estimated with fillFactors
+    travelmode: str
+    matrices: list[Literal['distances', 'times', 'costs']]
+    fillFactors: Optional[dict] = None          # detourFactor, timeFactor, nrOfFilledValues
+    detourFactor: Optional[float] = None        # beeline
+    averageSpeed: Optional[float] = None        # beeline, km/h
+    timeFactor: Optional[float] = None
+    costPerKm: Optional[float] = None
+    costPerHour: Optional[float] = None
+
+
 class ResultFields(BaseModel):
     """ fields of all results - unknown fields are rejected, so that a test notices new fields """
     model_config = ConfigDict(extra='forbid')
     objVal: Number
     solvingTime: float                          # seconds in the solver process
+    matrixInfo: Optional[MatrixInfo] = None     # only if a matrix has been calculated from coordinates
 
 
 #*************** routing ************************************************

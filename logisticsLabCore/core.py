@@ -5,8 +5,10 @@ from .logger import *
 from .matrixHandler import *
 from .routeHandler import *
 from .geoCodingHandler import *
+from . import matrixService
 
 import osm_data as osm
+import os
 import time
 from pydantic import TypeAdapter
 
@@ -20,6 +22,10 @@ DEFAULT_CONF = {
     'runTimeGrace': 60,             # seconds added to maxSolvingTime for the watchdog
     'defaultMaxRunTime': 600,       # seconds - watchdog limit for problems without maxSolvingTime
     'workDir': None,                # working directory of the solver processes (files of CMPL and the solvers)
+    'matrixCache': True,            # raw OSM matrices in a SQLite file - default: matrixCache.sqlite in workDir
+    'matrixCacheFile': None,
+    'matrixCacheMaxAge': 7,         # days - the OSM data change
+    'matrixCacheMaxEntries': 500,   # least recently used entries are deleted
     'tsp': {},
     'tpp': {},
 }
@@ -42,6 +48,14 @@ class LogisticsLabCore:
 
         if osmConfigFile:
             osm.Config(optFile=osmConfigFile, logFile=osmLogFile)
+
+        # matrices of /v1/matrix in this process, of the problems in the solver processes (worker.py)
+        if not self.conf.get('matrixCacheFile') and self.conf.get('workDir'):
+            self.conf['matrixCacheFile'] = os.path.join(self.conf['workDir'], 'matrixCache.sqlite')
+        matrixService.configure(self.conf, self.logger)
+        if self.conf.get('matrixCache') and self.conf.get('matrixCacheFile'):
+            self.logger.info('core', f"matrix cache {self.conf['matrixCacheFile']} - "
+                                     f"{self.conf['matrixCacheMaxAge']} days, {self.conf['matrixCacheMaxEntries']} entries")
 
         self.jobs = JobManager(self.conf, self.logger, onStatusChange)
 
@@ -98,12 +112,7 @@ class LogisticsLabCore:
 
         if service == 'matrix':
             h = MatrixHandler(request, self.logger)
-            if request.matrixMode == 'distances':
-                content = {'distances': h.distances}
-            elif request.matrixMode == 'durations':
-                content = {'durations': h.durations}
-            else:
-                content = {'distances': h.distances, 'durations': h.durations}
+            content = h.content
         elif service == 'routing':
             h = RouteHandler(request, self.logger)
             content = {'route': h.route}

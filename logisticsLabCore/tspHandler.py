@@ -22,7 +22,7 @@ class TspHandler(ProblemHandler):
             if not problemData.coordinates:
                 raise LogLabCoreException('no distances and coordinates are available')
             self._logger.debug('tsp','load distances')
-            self.__distances=self._loadMatrix(problemData.coordinates, problemData.travelmode, problemData.matrixMode)
+            self.__distances=self._loadMatrix(problemData.coordinates, problemData, problemData.matrixMode)
         else:
             self.__distances=problemData.distances
 

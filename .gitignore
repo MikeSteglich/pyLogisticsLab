@@ -25,6 +25,7 @@ pubspec.lock
 # --- temporary data ---
 tmp/
 *.dump
+matrixCache.sqlite*
 
 # --- editor / OS ---
 .vscode/

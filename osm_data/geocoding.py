@@ -113,9 +113,10 @@ class Geocoding:
                             coords=(0,0)
                     elif serverTyp=='nominatim':
                         if data:
-                            lat = data[0]['lat']
-                            lon = data[0]['lon']
-                            coords =(lat,lon)  
+                            # nominatim sends strings - (lon, lat) as photon, swapped below
+                            lat = float(data[0]['lat'])
+                            lon = float(data[0]['lon'])
+                            coords =(lon,lat)
                         else:
                             coords=(0,0)
                 
@@ -201,8 +202,8 @@ class Geocoding:
                    
                         result=self.__setResultDefault()
 
-                        lat = e['lat']
-                        lon = e['lon']
+                        lat = float(e['lat'])        # nominatim sends strings
+                        lon = float(e['lon'])
                         result['coordinates'] = (lat,lon)  
                         
                         result['name'] = e['name']

@@ -9,10 +9,23 @@ class LogLabItem(BaseModel):
     """ base of all items - unknown fields are rejected """
     model_config = ConfigDict(extra='forbid')
 
-class GeoInput(LogLabItem):
-    """ options for calculating a distance or time matrix from coordinates via OSM """
+class MatrixOptions(LogLabItem):
+    """ options for calculating a matrix from coordinates [lat, lon] - see matrixService.py """
     travelmode:  Optional[Literal["car", "foot", "wheelchair"] ] = "car"
-    matrixMode: Optional[ Literal["distances", "times"] ]=  "distances"
+    matrixSource: Optional[Literal["osm", "beeline"]] = "osm"     # beeline: great-circle distance x detourFactor
+    detourFactor: Optional[float] = Field(1.3, gt=0)              # only beeline
+    averageSpeed: Optional[float] = Field(None, gt=0)             # km/h for beeline times - default by travelmode
+    timeFactor: Optional[float] = Field(1.0, gt=0)                # factor on the travel times, e.g. 1.2 for trucks
+    noCache: Optional[bool] = False                               # True: new matrix from the OSM servers
+
+class CostOptions(LogLabItem):
+    """ cost matrix: km x costPerKm + h x timeFactor x costPerHour """
+    costPerKm: Optional[float] = Field(None, ge=0)
+    costPerHour: Optional[float] = Field(None, ge=0)
+
+class GeoInput(MatrixOptions, CostOptions):
+    """ matrix of a problem from coordinates: distances (m), times (s) or costs """
+    matrixMode: Optional[ Literal["distances", "times", "costs"] ]=  "distances"
 
 class SolverOptions(LogLabItem):
     """ options for MIP solvers """
@@ -117,13 +130,12 @@ class CppItem(SolverOptions):
     edgeTypes: Optional[list] = None            # 0 directed, 1 undirected - default: all undirected
     startNode: int
 
-class VrpItem(LogLabItem):
+class VrpItem(MatrixOptions):
     """ vehicle routing problem - integer values, numbers are rounded """
     type: Literal["vrp"] = "vrp"
     distances: Optional[list] = None            # square matrix of all nodes incl. the depot
     times: Optional[list] = None                # travel times - needed for timeWindows and maxTime
     coordinates: Optional[list] = None          # instead of distances (and times)
-    travelmode:  Optional[Literal["car", "foot", "wheelchair"] ] = "car"
     demands: list
     capacities: list                            # one capacity per vehicle
     depot: Optional[int] = 0
@@ -186,10 +198,10 @@ ProblemItem = Annotated[Union[TspItem, TppItem, WlpItem, PMedianItem, PCentreIte
 class ResultItem(LogLabItem):
     id : str
 
-class MatrixItem(LogLabItem):
+class MatrixItem(MatrixOptions, CostOptions):
+    """ both: distances and durations, all: distances, durations and costs """
     coordinates: list
-    travelmode:  Optional[Literal["car", "foot", "wheelchair"] ] = "car"
-    matrixMode: Optional[ Literal["distances", "durations", "both"] ] =  "distances"
+    matrixMode: Optional[ Literal["distances", "durations", "costs", "both", "all"] ] =  "distances"
     sources: Optional[list] = None
     destinations: Optional[list] = None
     rounded: Optional[bool] = False
