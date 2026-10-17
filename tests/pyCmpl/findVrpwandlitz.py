@@ -1,4 +1,4 @@
-from pyLogisticsLab import Vrp as vrp
+import pyLogisticsLab as ll
 import sys
 import traceback
 
@@ -39,7 +39,7 @@ maxDist = 0
 
 try:
     
-    m =vrp.Vrp(distance_matrix ,demands, vehicle_capacities , depot , time_matrix, time_windows, service_time )
+    m =ll.Vrp(distance_matrix ,demands, vehicle_capacities , depot , time_matrix, time_windows, service_time )
 
     if maxTime > 0:
         m.setMaxTime(maxTime)
@@ -57,7 +57,7 @@ try:
     else:
         objVal = -1
 
-except vrp.VrpException as e: 
+except ll.LogLabException as e: 
     vrpOK = False
     vrpMsg = e
     traceback.print_exc()
