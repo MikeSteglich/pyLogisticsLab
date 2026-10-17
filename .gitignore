@@ -5,10 +5,9 @@ checkserver/checkServer.opt
 logisticsLabServer/apiKeys.yml
 logisticsLabServer/apiKeys.yml.tmp
 
-# --- CMPL binaries (installed separately) ---
-pyCmpl/binWin/
-pyCmpl/binMac/
-pyCmpl/binLinux/
+# --- CMPL binaries: CMPLHOME of this machine and original distributions ---
+cmpl/
+cmplDist/
 
 # --- logs ---
 *.log

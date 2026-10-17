@@ -24,10 +24,9 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 | `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle |
 | `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
 | `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
-| `pyCmpl/` | Python-Schnittstelle zu CMPL – die CMPL-Binärdateien sind **nicht** im Repository |
+| `cmpl/` | CMPL-Installation dieses Rechners (`bin/cmpl`, `Thirdparty/…`), nicht versioniert – siehe unten |
 | `confs/` | Konfigurationen für die OSM-Server |
 | `tests/` | Beispiel- und Testskripte für Bibliothek (`tests/pyCmpl`) und Server (`tests/serverTests`) |
-| `old/` | ältere Versionen, nicht mehr in Gebrauch |
 
 ## Installation
 
@@ -38,7 +37,20 @@ pip install -r requirements.txt
 export PYTHONPATH=$PYTHONPATH:/pfad/zu/pyLogisticsLab
 ```
 
-**CMPL-Binärdateien:** `pyCmpl` sucht CMPL je nach Betriebssystem unter `pyCmpl/binLinux/`, `pyCmpl/binMac/` oder `pyCmpl/binWin/` – oder unter `$CMPLHOME/bin/`, wenn `CMPLHOME` gesetzt ist. Die Verzeichnisse aus einer CMPL-Distribution dorthin kopieren. Ohne CMPL laufen nur TSP und VRP, die OR-Tools nutzen.
+**pyCmpl** ist ein eigenes Repository ([MikeSteglich/pyCmpl](https://github.com/MikeSteglich/pyCmpl)) und wird über `requirements.txt` in einer festen Version installiert (Git-Tag, z. B. `v2.1.0`). Derselbe Stand wird auch von der CMPL-Distribution und der CMPL-IDE verwendet.
+- **Neue Version übernehmen:** In pyCmpl einen neuen Tag setzen, in `requirements.txt` eintragen und neu installieren.
+- **pyCmpl gleichzeitig weiterentwickeln:** pyCmpl neben pyLogisticsLab klonen und mit `pip install -e ../pyCmpl` einbinden. Änderungen wirken dann sofort.
+- **Privates Repository:** Auf einem Server braucht pip Lesezugriff, z. B. über einen Deploy-Key (SSH) oder ein Token mit Leserecht.
+
+**CMPL-Binärdateien:** Sie sind nicht im Repository. pyCmpl sucht CMPL unter `$CMPLHOME/bin/cmpl` (unter Windows `cmpl.exe`). Ist `CMPLHOME` nicht gesetzt, setzt `pyLogisticsLab` die Variable auf `<Projekt>/cmpl`, sofern es dort ein `bin/` gibt. Das Verzeichnis hat das Layout einer CMPL-Installation:
+
+```
+cmpl/
+  bin/cmpl, bin/cmpl.opt, bin/modules.opt, bin/solversel.opt, bin/cmplstd.cmpl
+  Thirdparty/Highs/highs
+```
+
+Die Pfade zu den Solvern in `bin/cmpl.opt` sind relativ zu `bin/` (`../Thirdparty/Highs/highs`). Ohne CMPL laufen nur TSP und VRP, die OR-Tools nutzen. Für den Linux-Server wird eine CMPL-Distribution für Linux gebraucht.
 
 **Konfiguration mit Zugangsdaten:** Dateien mit Zugangsdaten sind nicht versioniert. Für sie gibt es Vorlagen:
 
@@ -62,7 +74,7 @@ m.solve()
 print(m.getObjValue(), m.getFlows())
 ```
 
-Weitere Beispiele stehen in `tests/pyCmpl/`. Fehler werden als `ll.LogLabException` gemeldet. Fortschrittsmeldungen gehen über das `logging`-Modul (Logger `pyLogisticsLab.*`) und nicht über `print`. Wer sie sehen will, ruft `logging.basicConfig(level=logging.INFO)` auf.
+Weitere Beispiele stehen in `tests/pyCmpl/`. Wer pyCmpl ohne `pyLogisticsLab` direkt nutzt, muss `CMPLHOME` selbst setzen. Fehler werden als `ll.LogLabException` gemeldet. Fortschrittsmeldungen gehen über das `logging`-Modul (Logger `pyLogisticsLab.*`) und nicht über `print`. Wer sie sehen will, ruft `logging.basicConfig(level=logging.INFO)` auf.
 
 ## Server
 
@@ -238,7 +250,7 @@ Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den 
 
 - **Gemeinsame Schnittstelle:** In Dart eine abstrakte Klasse (z. B. `LogisticsLabBackend` mit `submit`, `status`, `result`, `cancel`) mit zwei Implementierungen anlegen. `LocalBackend` startet den Prozess mit `Process.start` aus `dart:io` und liest stdout zeilenweise (`utf8.decoder` + `LineSplitter`). `RemoteBackend` spricht per HTTP mit dem Server und schickt den API-Key mit. Web und Mobil nutzen nur `RemoteBackend`, denn dort lassen sich keine Prozesse starten.
 - **Datenmodelle:** `python -m logisticsLabCore.schema > logisticsLab.schema.json` erzeugt das JSON Schema aller Items. Daraus lassen sich die Dart-Modelle generieren, z. B. mit `quicktype --lang dart`. Server und lokale Schnittstelle verwenden dieselben Items.
-- **Paketierung:** Die lokale Schnittstelle lässt sich mit PyInstaller im Modus `--onedir` zu einem Programm bündeln (`onefile` entpackt bei jedem Start). Die CMPL-Binärdateien der Zielplattform müssen mit hinein. Unter macOS muss jede mitgelieferte ausführbare Datei signiert sein, auch `cmpl` und HiGHS. Für eine App in der Sandbox braucht der Kindprozess außerdem die Entitlements `com.apple.security.inherit` und `com.apple.security.network.client`.
+- **Paketierung:** Die lokale Schnittstelle lässt sich mit PyInstaller im Modus `--onedir` zu einem Programm bündeln (`onefile` entpackt bei jedem Start). Die CMPL-Installation der Zielplattform (`cmpl/` mit `bin/` und `Thirdparty/`) muss mit hinein, und das Programm setzt `CMPLHOME` auf ihren Ort im Paket, bevor es den Kern startet. Unter macOS muss jede mitgelieferte ausführbare Datei signiert sein, auch `cmpl` und HiGHS. Für eine App in der Sandbox braucht der Kindprozess außerdem die Entitlements `com.apple.security.inherit` und `com.apple.security.network.client`.
 
 ## Betrieb unter Linux mit nginx
 
@@ -258,6 +270,7 @@ User=loglab
 Group=loglab
 WorkingDirectory=/opt/pyLogisticsLab/logisticsLabServer
 Environment=PYTHONPATH=/opt/pyLogisticsLab
+Environment=CMPLHOME=/opt/pyLogisticsLab/cmpl
 ExecStart=/opt/conda/envs/pyLogisticsLab/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=on-failure
 
