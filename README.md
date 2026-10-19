@@ -21,12 +21,12 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 | Verzeichnis | Inhalt |
 |---|---|
 | `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, die kontinuierlichen `ContPMedian`, `ContPCentre` (`contLocation.py`), `Scp`, `Mcp`, `Cpp`, `Vrp` und den Netzwerkflüssen `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` (`nwf.py`) |
-| `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle, Szenario-Format (`scenario.py`) und Kommandozeilen-Tool (`cli.py`) |
+| `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle, Szenario-Format (`scenario.py`) |
 | `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
 | `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
 | `cmpl/` | CMPL-Installation dieses Rechners (`bin/cmpl`, `Thirdparty/…`), nicht versioniert – siehe unten |
 | `confs/` | Konfigurationen für die OSM-Server |
-| `tools/` | `convertX.py`: Umwandlung der alten LogisticsLab-Dateien (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) in Szenarien |
+| `logisticsLabCli/` | Kommandozeilen-Tool `logisticslab`: Szenarien lösen und anzeigen, alte LogisticsLab-Dateien (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) umwandeln |
 | `tests/` | Beispiel- und Testskripte für Bibliothek (`tests/pyCmpl`) und Server (`tests/serverTests`), Beispielszenario (`tests/scenarios`) |
 
 ## Installation
@@ -34,9 +34,16 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 ```bash
 conda create -n pyLogisticsLab python=3.14
 conda activate pyLogisticsLab
-pip install -r requirements.txt
-export PYTHONPATH=$PYTHONPATH:/pfad/zu/pyLogisticsLab
+pip install -r requirements.txt          # pyCmpl aus GitHub und die übrigen Pakete
+pip install -e .                         # Arbeitsplatz und Desktop-App
+pip install -e ".[server]"               # REST-Server: zusätzlich fastapi, uvicorn, httpx
 ```
+
+`pip install -e .` installiert das Projekt aus `pyproject.toml` im Entwicklungsmodus. Danach lassen sich `pyLogisticsLab`, `logisticsLabCore`, `logisticsLabCli` und `osm_data` von überall importieren, ohne `PYTHONPATH`. Änderungen an den Quellen wirken sofort.
+- **Befehle:** Die Installation legt zwei Befehle an: `logisticslab` (Kommandozeilen-Tool, siehe unten) und `logisticslab-stdio` (lokale Schnittstelle für Desktop-Apps, gleich `python -m logisticsLabCore.stdio`).
+- **Nur im Entwicklungsmodus (`-e`):** `pyLogisticsLab` findet die CMPL-Installation unter `<Projekt>/cmpl` über den Ort seiner Quellen. Bei einer normalen Installation müsste `CMPLHOME` gesetzt sein.
+- **pyCmpl ist keine Abhängigkeit in `pyproject.toml`:** Sonst würde pip ein mit `pip install -e ../pyCmpl` eingebundenes pyCmpl durch die Fassung aus GitHub ersetzen. Wer pyCmpl lokal weiterentwickelt, installiert es zuerst mit `pip install -e ../pyCmpl` und dann `pip install -e . --no-deps`, falls die übrigen Pakete schon da sind.
+- **Der REST-Server** (`logisticsLabServer/`) ist kein Paket, sondern wird aus seinem Verzeichnis gestartet. Den Kern findet er über die Installation.
 
 **pyCmpl** ist ein eigenes Repository ([MikeSteglich/pyCmpl](https://github.com/MikeSteglich/pyCmpl)) und wird über `requirements.txt` in einer festen Version installiert (Git-Tag, z. B. `v2.1.0`). Derselbe Stand wird auch von der CMPL-Distribution und der CMPL-IDE verwendet.
 - **Neue Version übernehmen:** In pyCmpl einen neuen Tag setzen, in `requirements.txt` eintragen und neu installieren.
@@ -388,12 +395,13 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
 **Kommandozeilen-Tool:**
 
 ```bash
-python -m logisticsLabCore.cli show  tests/scenarios/brandenburg.json
-python -m logisticsLabCore.cli solve tests/scenarios/brandenburg.json                        # alle Probleme, Ausgabe am Bildschirm
-python -m logisticsLabCore.cli solve SZENARIO.json --problem "Touren ab Wildau" --set maxSolvingTime=30
-python -m logisticsLabCore.cli solve SZENARIO.json --out loesungen.json --quiet              # nur als Datei
-python -m logisticsLabCore.cli solve SZENARIO.json --json                                    # Lösungsdokumente am Bildschirm
-python -m logisticsLabCore.cli solve SZENARIO.json --server https://logisticslab.example.org/v1/ --apiKey ...
+logisticslab show  tests/scenarios/brandenburg.json
+logisticslab solve tests/scenarios/brandenburg.json                        # alle Probleme, Ausgabe am Bildschirm
+logisticslab solve SZENARIO.json --problem "Touren ab Wildau" --set maxSolvingTime=30
+logisticslab solve SZENARIO.json --out loesungen.json --quiet              # nur als Datei
+logisticslab solve SZENARIO.json --json                                    # Lösungsdokumente am Bildschirm
+logisticslab solve SZENARIO.json --server https://logisticslab.example.org/v1/ --apiKey ...
+logisticslab --help                                                        # ohne Installation: python -m logisticsLabCli ...
 ```
 
 - **Rechnen:** Ohne `--server` rechnet das Tool lokal mit dem Kern und den OSM-Servern aus `logisticsLabCore/logisticsLab.yml`, mit Matrix-Cache in `--logPath`. Mit `--server` schickt es Matrix- und Problemanfragen an einen LogisticsLab-Server. Am Server selbst muss dafür nichts geändert werden, denn das Tool übersetzt die Szenarien in die bestehenden `/v1`-Anfragen.
@@ -403,8 +411,8 @@ python -m logisticsLabCore.cli solve SZENARIO.json --server https://logisticslab
 ### Alte LogisticsLab-Dateien umwandeln
 
 ```bash
-python tools/convertX.py ALTE_DATEI.TPPX                                     # -> alte_datei.tppx.json daneben
-python tools/convertX.py --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-Daten/Szenarien
+logisticslab convert ALTE_DATEI.TPPX                                     # -> alte_datei.tppx.json daneben
+logisticslab convert --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-Daten/Szenarien
 ```
 
 - **Formate:** TPPX → `tpp`, DLPX → `wlp`/`pmedian`/`pcentre`/`mcp`, CLPX → `contpmedian`/`contpcentre`, NWFX → `mincostflow`, TSPX → `tsp`/`cpp`, VRPX → `vrp`. Die Optionen der Datei werden zu den Parametern des Problems.
@@ -413,7 +421,7 @@ python tools/convertX.py --dir LogisticsLab-Daten/Modelle-Ors --target Logistics
 - **Reihenfolge:** In den alten Dateien steht `x` = Länge, `y` = Breite. Die Umwandlung schreibt `[lat, lon]`.
 - **`DistFunc` entscheidet über die Matrix:** `GreatCircle…` ergibt Luftlinie, `OSM/…` Straßennetz, auch bei `TravelMode Bird`. `DistFactor` wird zu `costPerKm` bzw. `costPerHour`.
 - **Bezeichner:** Gleichnamige Quellen und Ziele am selben Ort werden ein Knoten mit beiden Rollen. Gleiche Namen an verschiedenen Orten bekommen `#2`, `#3` …
-- **Nur Dateien schreiben:** `convertX.py` erzeugt nur JSON-Dateien und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
+- **Nur Dateien schreiben:** `logisticslab convert` (`logisticsLabCli/convertX.py`) erzeugt nur JSON-Dateien und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
 
 ## Betrieb unter Linux mit nginx
 
@@ -432,7 +440,6 @@ After=network.target
 User=loglab
 Group=loglab
 WorkingDirectory=/opt/pyLogisticsLab/logisticsLabServer
-Environment=PYTHONPATH=/opt/pyLogisticsLab
 Environment=CMPLHOME=/opt/pyLogisticsLab/cmpl
 ExecStart=/opt/conda/envs/pyLogisticsLab/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=on-failure
@@ -490,12 +497,12 @@ Das Zertifikat bekommt man z. B. mit `certbot --nginx -d logisticslab.example.or
 
 ## Tests
 
-**Bibliothek** (`tests/pyCmpl/`, Projektverzeichnis im `PYTHONPATH`):
+**Bibliothek** (`tests/pyCmpl/`):
 - `find*.py`: Beispiele, die ein Modell direkt aufrufen und das Ergebnis ausgeben.
 - `checkLibrary.py`: Regressionstest aller Modelle. Er vergleicht die Zielfunktionswerte mit erwarteten Werten, prüft typische Fehlerfälle und endet mit Exit-Code 1, wenn etwas fehlschlägt.
 
 ```bash
-PYTHONPATH=. python tests/pyCmpl/checkLibrary.py
+python tests/pyCmpl/checkLibrary.py
 ```
 
 **Kern** (`tests/coreTests/`): `checkMatrixService.py` prüft den Matrix-Cache ohne OSM-Server. Geprüft werden Laden, Wiederverwendung, Neustart, `noCache`, Ablaufzeit, ein simuliertes Update der ORS-Server und die stündliche Statusabfrage, dazu Kostenformel und Luftlinie. Zum Schluss liest er den Datenstand der konfigurierten Server, falls sie erreichbar sind.

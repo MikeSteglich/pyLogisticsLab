@@ -18,7 +18,7 @@ SERVER_PID=
 if ! curl -s -o /dev/null "${URL}results"; then
     echo "starting the server - log: $TESTS_DIR/server.log"
     (cd "$PROJECT_DIR/logisticsLabServer" && \
-     PYTHONPATH="$PROJECT_DIR" exec "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 8000) > "$TESTS_DIR/server.log" 2>&1 &
+     exec "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 8000) > "$TESTS_DIR/server.log" 2>&1 &
     SERVER_PID=$!
     trap 'kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null' EXIT
     for i in $(seq 1 60); do

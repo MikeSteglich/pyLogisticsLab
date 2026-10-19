@@ -1,7 +1,7 @@
 """ converts the old LogisticsLab files (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) into scenario files (logisticsLabCore/scenario.py)
 
-    python tools/convertX.py FILE.TPPX [-o FILE.json]
-    python tools/convertX.py --dir SOURCE_DIR --target TARGET_DIR      all X files, the folders are kept
+    logisticslab convert FILE.TPPX [-o FILE.json]
+    logisticslab convert --dir SOURCE_DIR --target TARGET_DIR      all X files, the folders are kept
 
     Only OSM distances and travel times (or bee line) with geographic coordinates are converted - files with own
     matrices (DistFunc OwnDef) or planar coordinates (Map SimpleMap) are skipped. Matrices stored in the files
@@ -9,13 +9,10 @@
     'M' in COSTS (blocked connections) and the sections CAPACITIES and FIXEDCOSTS become a network of connections.
 """
 
-import argparse
 import json
 import os
 import re
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from logisticsLabCore.scenario import Scenario
 
 FORMATS = ('TPPX', 'TSPX', 'CLPX', 'DLPX', 'NWFX', 'VRPX')
@@ -403,47 +400,29 @@ def write(s, target):
         f.write('\n')
 
 
-def main():
-    parser = argparse.ArgumentParser(description='converts old LogisticsLab X files into scenario files')
-    parser.add_argument('file', nargs='?')
-    parser.add_argument('-o', '--output')
-    parser.add_argument('--dir', help='source directory - all X files')
-    parser.add_argument('--target', help='target directory for --dir')
-    args = parser.parse_args()
+def convertFile(path, output=None):
+    """ converts one file - returns the scenario file, raises SkipFile for files that are not converted """
+    s = convert(path)
+    target = output or os.path.join(os.path.dirname(path), targetName(path))
+    write(s, target)
+    return target
 
-    if args.file:
-        try:
-            s = convert(args.file)
-        except SkipFile as e:
-            sys.exit(f'{args.file}: skipped - {e}')
-        target = args.output or os.path.join(os.path.dirname(args.file), targetName(args.file))
-        write(s, target)
-        print(f'{args.file} -> {target}')
-        return
 
-    if not args.dir or not args.target:
-        parser.error('a file or --dir and --target are needed')
+def convertDir(source, target):
+    """ converts all X files of source into target, the folders are kept - (converted, skipped, failed) """
     converted, skipped, failed = 0, [], []
-    for root, _, files in os.walk(args.dir):
+    for root, _, files in os.walk(source):
         for fn in sorted(files):
             if fn.rsplit('.', 1)[-1] not in FORMATS:
                 continue
             path = os.path.join(root, fn)
-            rel = os.path.relpath(path, args.dir)
+            rel = os.path.relpath(path, source)
             try:
                 s = convert(path, source=rel)
-                write(s, os.path.join(args.target, os.path.dirname(rel), targetName(fn)))
+                write(s, os.path.join(target, os.path.dirname(rel), targetName(fn)))
                 converted += 1
             except SkipFile as e:
                 skipped.append(f'{rel}: {e}')
             except Exception as e:
                 failed.append(f'{rel}: {type(e).__name__} {e}')
-    print(f'{converted} converted, {len(skipped)} skipped, {len(failed)} failed')
-    for line in skipped:
-        print(f'   skipped  {line}')
-    for line in failed:
-        print(f'   FAILED   {line}')
-
-
-if __name__ == '__main__':
-    main()
+    return converted, skipped, failed

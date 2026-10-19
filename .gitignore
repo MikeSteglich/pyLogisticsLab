@@ -30,3 +30,7 @@ matrixCache.sqlite*
 # --- editor / OS ---
 .vscode/
 .DS_Store
+
+# --- packaging (pip install -e .) ---
+*.egg-info/
+build/

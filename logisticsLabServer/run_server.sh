@@ -1,4 +1,3 @@
 #runs in an env with fast_api
-# the project directory (parent of this directory) contains logisticsLabCore, pyLogisticsLab and osm_data
-export PYTHONPATH=$PYTHONPATH:"$(cd "$(dirname "$0")/.." && pwd)"
+# logisticsLabCore, pyLogisticsLab and osm_data are installed with pip install -e . in the project directory
 fastapi dev main.py

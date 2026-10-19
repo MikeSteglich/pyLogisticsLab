@@ -1,1 +1,0 @@
-export PYTHONPATH=$PYTHONPATH:/Users/mike/Documents/Projekte/pyLogisticsLab

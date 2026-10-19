@@ -10,16 +10,12 @@
 """
 
 import json
-import os
 import subprocess
 import sys
 
 
-projectDir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-
 # stdout of the child process is only used for the protocol, its log output goes to stderr
-process = subprocess.Popen([sys.executable, '-m', 'logisticsLabCore.stdio'], cwd=projectDir,
-                           env={**os.environ, 'PYTHONPATH': projectDir},
+process = subprocess.Popen([sys.executable, '-m', 'logisticsLabCore.stdio'],
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                            text=True, encoding='utf-8', bufsize=1)
 

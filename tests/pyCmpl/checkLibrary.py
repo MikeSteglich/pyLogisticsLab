@@ -1,6 +1,6 @@
 """ regression test of the pyLogisticsLab models - the same problems as tests/serverTests/checkServer.py
 
-    python checkLibrary.py      (project directory in PYTHONPATH)
+    python tests/pyCmpl/checkLibrary.py
 """
 
 import pyLogisticsLab as ll

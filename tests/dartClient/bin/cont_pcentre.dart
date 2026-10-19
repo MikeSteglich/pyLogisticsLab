@@ -35,13 +35,10 @@ LogisticsLabBackend createBackend(String mode) {
   if (mode == 'remote') {
     return RemoteBackend(Uri.parse(env['LOGLAB_URL'] ?? 'http://127.0.0.1:8000/v1/'), env['LOGLAB_API_KEY'] ?? '');
   }
-  // the project directory is two levels above tests/dartClient - in the app the bundled program is started instead
-  final projectDir = Directory.current.parent.parent.path;
+  // python with pip install -e . of the project - in the app the bundled program is started instead
   return LocalBackend(
     env['LOGLAB_PYTHON'] ?? 'python3',
     ['-m', 'logisticsLabCore.stdio', '--logPath', '${Directory.systemTemp.path}/logisticsLabDart'],
-    workingDirectory: projectDir,
-    environment: {'PYTHONPATH': projectDir},
   );
 }
 

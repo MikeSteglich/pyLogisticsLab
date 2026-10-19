@@ -63,9 +63,8 @@ class LocalBackend:
         self.__ready = threading.Event()
 
     def start(self):
-        env = {**os.environ, 'PYTHONPATH': PROJECT_DIR}
         # stderr: log output of the core, CMPL and HiGHS - stdout belongs to the protocol only
-        self.__process = subprocess.Popen(self.__command, cwd=PROJECT_DIR, env=env, stdin=subprocess.PIPE,
+        self.__process = subprocess.Popen(self.__command, stdin=subprocess.PIPE,
                                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                           text=True, encoding='utf-8', bufsize=1)
         threading.Thread(target=self.__readStdout, daemon=True).start()

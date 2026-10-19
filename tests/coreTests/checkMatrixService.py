@@ -1,6 +1,6 @@
 """ test of the matrix service (logisticsLabCore/matrixService.py) without OSM servers
 
-    python tests/coreTests/checkMatrixService.py      (project directory in PYTHONPATH)
+    python tests/coreTests/checkMatrixService.py
 
     osm.Matrix and the data state of the ORS servers are replaced by fakes - an update of the servers is simulated
     by another graph_build_date. At the end the data state of the configured servers is read, if they are available.
@@ -10,8 +10,6 @@ import os
 import sys
 import tempfile
 import time
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 
 from logisticsLabCore import matrixService as ms
 from logisticsLabCore.items import MatrixItem

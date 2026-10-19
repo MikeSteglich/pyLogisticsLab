@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyLogisticsLab"
+version = "1.0.0"
+description = "LogisticsLab - logistics models (CMPL, OR-Tools), core, local interface and command line tool"
+requires-python = ">=3.10"
+authors = [{ name = "Mike Steglich", email = "mike.steglich@th-wildau.de" }]
+# pyCmpl is installed separately (requirements.txt or pip install -e ../pyCmpl) - as dependency here pip would
+# replace an editable pyCmpl by the version of the git repository
+dependencies = [
+    "numpy",
+    "ortools",
+    "pydantic>=2",
+    "requests",
+    "PyYAML",
+    "simplification",
+]
+
+[project.optional-dependencies]
+server = ["fastapi", "uvicorn", "httpx"]
+
+[project.scripts]
+logisticslab = "logisticsLabCli.cli:main"                   # solve, show, convert of scenario files
+logisticslab-stdio = "logisticsLabCore.stdio:main"          # local JSON-RPC interface for desktop apps
+
+[tool.setuptools]
+packages = ["pyLogisticsLab", "logisticsLabCore", "logisticsLabCli", "osm_data"]
+
+[tool.setuptools.package-data]
+pyLogisticsLab = ["*.cmpl"]
+logisticsLabCore = ["logisticsLab.yml"]

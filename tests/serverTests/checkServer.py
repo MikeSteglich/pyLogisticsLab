@@ -18,8 +18,7 @@ import math
 import os
 import sys
 
-# result models of the core - the project directory is two levels up
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+# result models of the core
 from logisticsLabCore.results import RESULT_ITEMS, ProblemAnswer
 
 

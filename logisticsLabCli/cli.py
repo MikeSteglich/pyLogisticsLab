@@ -1,8 +1,12 @@
-""" command line tool for scenario files (scenario.py) - solves their problems locally or with a server
+""" command line tool of LogisticsLab - scenario files (logisticsLabCore/scenario.py)
 
-    python -m logisticsLabCore.cli solve SCENARIO.json [--problem NAME ...] [--out SOLUTIONS.json] [--json] [--quiet]
-                                         [--set NAME=VALUE ...] [--server URL --apiKey KEY] [--logPath DIR]
-    python -m logisticsLabCore.cli show SCENARIO.json
+    logisticslab solve SCENARIO.json [--problem NAME ...] [--out SOLUTIONS.json] [--json] [--quiet]
+                                     [--set NAME=VALUE ...] [--server URL --apiKey KEY] [--logPath DIR]
+    logisticslab show SCENARIO.json
+    logisticslab convert OLD.TPPX [-o NEW.json]
+    logisticslab convert --dir SOURCE_DIR --target TARGET_DIR
+
+    (logisticslab is installed by pip install -e . - otherwise python -m logisticsLabCli ...)
 
     solve   solves all problems of the scenario (or the ones given by --problem) and prints the results.
             --out writes the solution documents (logisticsLabSolution) as JSON file, --json prints them as JSON.
@@ -10,94 +14,18 @@
             Without --server the problems are solved in this process (local core, OSM servers of logisticsLab.yml).
             With --server they are sent to a LogisticsLab server - the key from --apiKey or LOGLAB_API_KEY.
     show    prints a summary of the scenario
+    convert converts old LogisticsLab files (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) into scenario files - see convertX.py
 """
 
-from .scenario import Scenario, ScenarioSolver, ScenarioException
+from logisticsLabCore.scenario import Scenario, ScenarioSolver, ScenarioException
+from .backends import LocalBackend, RemoteBackend
+from . import convertX
 
 import argparse
 import json
 import os
 import sys
 import tempfile
-import time
-import urllib.error
-import urllib.request
-
-
-#*************** backends ************************************************
-
-class LocalBackend:
-    """ the core in this process - the problems are solved in its solver processes """
-
-    def __init__(self, logPath, osmConfig=None):
-        from .core import LogisticsLabCore
-        from .logger import CoreLogger
-        os.makedirs(logPath, exist_ok=True)
-        conf = {'maxProblems': 1, 'workDir': logPath, 'tpp': {'solverLogFile': os.path.join(logPath, 'HiGHS.log')}}
-        osmConfig = osmConfig or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logisticsLab.yml')
-        self.core = LogisticsLabCore(conf, CoreLogger(os.path.join(logPath, 'logisticsLabCli.log')),
-                                     osmConfigFile=osmConfig, osmLogFile=os.path.join(logPath, 'logisticsLab.log'))
-
-    def matrix(self, payload):
-        from .exception import LogLabCoreException
-        try:
-            return self.core.geo('matrix', payload)
-        except LogLabCoreException as e:
-            raise ScenarioException(f'matrix: {e}')
-
-    def solve(self, payload):
-        from .exception import LogLabCoreException
-        try:
-            id = self.core.submit(payload)
-        except LogLabCoreException as e:
-            raise ScenarioException(str(e))
-        except Exception as e:                       # validation errors of the items
-            raise ScenarioException(f'wrong problem: {e}')
-        while self.core.jobs.get(id).status in ('waiting', 'running'):
-            time.sleep(0.1)
-        content, _, _ = self.core.fetch(id)
-        return content
-
-    def close(self):
-        self.core.shutdown()
-
-
-class RemoteBackend:
-    """ a LogisticsLab server (REST) - the results are polled via /v1/results """
-
-    def __init__(self, url, apiKey):
-        self.url = url if url.endswith('/') else url + '/'
-        self.apiKey = apiKey
-
-    def __post(self, endpoint, body):
-        request = urllib.request.Request(self.url + endpoint, data=json.dumps(body).encode('utf-8'), method='POST',
-                                         headers={'Content-Type': 'application/json', 'X-API-Key': self.apiKey})
-        try:
-            with urllib.request.urlopen(request, timeout=600) as response:
-                return response.status, json.loads(response.read())
-        except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read() or b'{}')
-        except urllib.error.URLError as e:
-            raise ScenarioException(f'server {self.url} not available: {e.reason}')
-
-    def matrix(self, payload):
-        code, answer = self.__post('matrix', payload)
-        if code != 200:
-            raise ScenarioException(f'matrix: {code} {answer.get("message") or answer.get("detail")}')
-        return answer
-
-    def solve(self, payload):
-        code, answer = self.__post('solve', payload)
-        if code != 200:
-            raise ScenarioException(f'{code} {answer.get("message") or answer.get("detail") or answer}')
-        while True:
-            _, result = self.__post('results', {'id': answer['id']})
-            if result.get('status') not in ('waiting', 'running'):
-                return result
-            time.sleep(0.3)
-
-    def close(self):
-        pass
 
 
 #*************** output ************************************************
@@ -182,10 +110,31 @@ def parseValue(text):
         return text
 
 
+#*************** convert ************************************************
+
+def convert(args, parser):
+    if args.file:
+        try:
+            target = convertX.convertFile(args.file, args.output)
+        except convertX.SkipFile as e:
+            sys.exit(f'{args.file}: skipped - {e}')
+        print(f'{args.file} -> {target}')
+        return 0
+    if not args.dir or not args.target:
+        parser.error('convert needs a file or --dir and --target')
+    converted, skipped, failed = convertX.convertDir(args.dir, args.target)
+    print(f'{converted} converted, {len(skipped)} skipped, {len(failed)} failed')
+    for line in skipped:
+        print(f'   skipped  {line}')
+    for line in failed:
+        print(f'   FAILED   {line}')
+    return 1 if failed else 0
+
+
 #*************** main ************************************************
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='solves the problems of LogisticsLab scenario files')
+    parser = argparse.ArgumentParser(prog='logisticslab', description='LogisticsLab scenario files: solve, show, convert')
     sub = parser.add_subparsers(dest='command', required=True)
     p = sub.add_parser('solve', help='solves the problems of a scenario')
     p.add_argument('scenario')
@@ -200,7 +149,15 @@ def main(argv=None):
     p.add_argument('--logPath', default=os.path.join(tempfile.gettempdir(), 'logisticsLabCli'))
     p = sub.add_parser('show', help='summary of a scenario')
     p.add_argument('scenario')
+    p = sub.add_parser('convert', help='converts old LogisticsLab files into scenario files')
+    p.add_argument('file', nargs='?', help='an old file, e.g. europa.TPPX')
+    p.add_argument('-o', '--output', help='scenario file (default: <name>.<format>.json next to the old file)')
+    p.add_argument('--dir', help='source directory - all X files, the folders are kept')
+    p.add_argument('--target', help='target directory for --dir')
     args = parser.parse_args(argv)
+
+    if args.command == 'convert':
+        return convert(args, parser)
 
     try:
         with open(args.scenario, encoding='utf-8') as f:
