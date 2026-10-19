@@ -354,7 +354,7 @@ Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den 
 
 ## Szenario-Format und Kommandozeilen-Tool
 
-Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebig viele Probleme rechnen, z. B. TPP, WLP, VRP und Min-Cost-Flow auf denselben Knoten. Ein Beispiel ist `tests/scenarios/brandenburg.json`. Die Datenmodelle stehen in `logisticsLabCore/scenario.py`. Sie sind Teil des JSON Schemas (`python -m logisticsLabCore.schema`).
+Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebig viele Probleme rechnen, z. B. TPP, WLP, VRP und Min-Cost-Flow auf denselben Knoten. Ein Beispiel ist `tests/scenarios/brandenburg.llab`. Die Datenmodelle stehen in `logisticsLabCore/scenario.py`. Sie sind Teil des JSON Schemas (`python -m logisticsLabCore.schema`).
 
 ```json
 { "format": "logisticsLab", "version": 1, "id": "brandenburg",
@@ -365,6 +365,18 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
   "vehicles": [ { "id": "LKW", "capacity": 60, "count": 2, "depot": "D1" } ],
   "problems": [ { "name": "Lagerstandorte", "type": "wlp", "parameters": { "isCapacitated": true } } ] }
 ```
+
+**Dateien:** Szenarien haben die Endung **`.llab`**, Lösungsdokumente **`.llsol`**. Beide sind innen JSON.
+- **Erkennung am Inhalt:** Das Tool nimmt auch andere Endungen an. Entscheidend ist das Feld `format` (`logisticsLab` bzw. `logisticsLabSolution`).
+- **Eigene Endung:** Mit ihr kann die Desktop-App die Dateien per Doppelklick öffnen und im Dateidialog filtern. `.ll` ist für LLVM vergeben.
+- **VS Code:** In `.vscode/settings.json` (Projekt oder Benutzer) eintragen:
+
+```json
+"files.associations": { "*.llab": "json", "*.llsol": "json" },
+"json.schemas": [ { "fileMatch": ["*.llab"], "url": "./.vscode/logisticsLab-scenario.schema.json" } ]
+```
+
+  Die Schema-Datei erzeugt `python -m logisticsLabCore.schema --scenario > .vscode/logisticsLab-scenario.schema.json`. Danach prüft VS Code Szenarien beim Bearbeiten und bietet Vervollständigung an. Ein Szenario darf außerdem ein Feld `"$schema"` haben.
 
 **Regeln:**
 - **Koordinaten:** Jeder Knoten hat geografische Koordinaten `[lat, lon]`. Die Adresse (`address` oder `addressDetails`) ist optional.
@@ -395,12 +407,13 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
 **Kommandozeilen-Tool:**
 
 ```bash
-logisticslab show  tests/scenarios/brandenburg.json
-logisticslab solve tests/scenarios/brandenburg.json                        # alle Probleme, Ausgabe am Bildschirm
-logisticslab solve SZENARIO.json --problem "Touren ab Wildau" --set maxSolvingTime=30
-logisticslab solve SZENARIO.json --out loesungen.json --quiet              # nur als Datei
-logisticslab solve SZENARIO.json --json                                    # Lösungsdokumente am Bildschirm
-logisticslab solve SZENARIO.json --server https://logisticslab.example.org/v1/ --apiKey ...
+logisticslab show  tests/scenarios/brandenburg.llab
+logisticslab solve tests/scenarios/brandenburg.llab                        # alle Probleme, Ausgabe am Bildschirm
+logisticslab solve SZENARIO.llab --problem "Touren ab Wildau" --set maxSolvingTime=30
+logisticslab solve SZENARIO.llab --out --quiet                             # nur als Datei SZENARIO.llsol
+logisticslab solve SZENARIO.llab --out loesungen.llsol                     # Datei mit eigenem Namen
+logisticslab solve SZENARIO.llab --json                                    # Lösungsdokumente am Bildschirm
+logisticslab solve SZENARIO.llab --server https://logisticslab.example.org/v1/ --apiKey ...
 logisticslab --help                                                        # ohne Installation: python -m logisticsLabCli ...
 ```
 
@@ -411,7 +424,7 @@ logisticslab --help                                                        # ohn
 ### Alte LogisticsLab-Dateien umwandeln
 
 ```bash
-logisticslab convert ALTE_DATEI.TPPX                                     # -> alte_datei.tppx.json daneben
+logisticslab convert ALTE_DATEI.TPPX                                     # -> alte_datei.tppx.llab daneben
 logisticslab convert --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-Daten/Szenarien
 ```
 
@@ -421,7 +434,7 @@ logisticslab convert --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-
 - **Reihenfolge:** In den alten Dateien steht `x` = Länge, `y` = Breite. Die Umwandlung schreibt `[lat, lon]`.
 - **`DistFunc` entscheidet über die Matrix:** `GreatCircle…` ergibt Luftlinie, `OSM/…` Straßennetz, auch bei `TravelMode Bird`. `DistFactor` wird zu `costPerKm` bzw. `costPerHour`.
 - **Bezeichner:** Gleichnamige Quellen und Ziele am selben Ort werden ein Knoten mit beiden Rollen. Gleiche Namen an verschiedenen Orten bekommen `#2`, `#3` …
-- **Nur Dateien schreiben:** `logisticslab convert` (`logisticsLabCli/convertX.py`) erzeugt nur JSON-Dateien und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
+- **Nur Dateien schreiben:** `logisticslab convert` (`logisticsLabCli/convertX.py`) erzeugt nur Szenarien (`.llab`) und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
 
 ## Betrieb unter Linux mit nginx
 

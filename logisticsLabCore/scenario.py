@@ -149,6 +149,7 @@ class Problem(Item):
     matrix: Optional[MatrixSettings] = None      # overrides the matrix options of the scenario for this problem
 
 class Scenario(Item):
+    schema_: Optional[str] = Field(None, alias='$schema')   # optional, e.g. for the editor - not used
     format: Literal['logisticsLab'] = FORMAT
     version: Literal[1] = VERSION
     id: str
@@ -197,7 +198,7 @@ class Scenario(Item):
 
     def dataHash(self):
         """ hash of the data (without names, descriptions and problems) - a solution refers to it """
-        data = self.model_dump(by_alias=True, exclude={'name', 'description', 'source', 'problems'})
+        data = self.model_dump(by_alias=True, exclude={'schema_', 'name', 'description', 'source', 'problems'})
         return 'sha256:' + hashlib.sha256(json.dumps(data, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 

@@ -16,6 +16,7 @@ import re
 from logisticsLabCore.scenario import Scenario
 
 FORMATS = ('TPPX', 'TSPX', 'CLPX', 'DLPX', 'NWFX', 'VRPX')
+SCENARIO_EXTENSION = '.llab'
 TABLES = ('SOURCES', 'DESTINATIONS', 'NODES', 'EDGES')
 MATRICES = ('COSTS', 'CAPACITIES', 'FIXEDCOSTS', 'DISTANCES', 'TIMES', 'PRENODES')
 UNBOUNDED_TIME = 2147483647
@@ -388,9 +389,9 @@ def convert(path, source=None):
 
 
 def targetName(path):
-    """ drogma.CLPX -> drogma.clpx.json - the same name exists for several formats """
+    """ drogma.CLPX -> drogma.clpx.llab - the same name exists for several formats """
     stem, ext = os.path.basename(path).rsplit('.', 1)
-    return f'{stem}.{ext.lower()}.json'
+    return f'{stem}.{ext.lower()}{SCENARIO_EXTENSION}'
 
 
 def write(s, target):

@@ -1,6 +1,7 @@
 """ JSON Schema of all requests, answers and of the scenario format - e.g. to generate the Dart models of the Flutter app
 
     python -m logisticsLabCore.schema > logisticsLab.schema.json
+    python -m logisticsLabCore.schema --scenario > scenario.schema.json     only the scenario format (.llab), e.g. for an editor
 
     The same items are used by the REST server and by the local stdio interface.
     The results of a problem type are described by RESULT_ITEMS (e.g. contpcentre -> ContLocationResults).
@@ -22,5 +23,11 @@ def schema():
     return defs
 
 
+def scenarioSchema():
+    """ standalone JSON Schema of the scenario format """
+    return {'$schema': 'https://json-schema.org/draft/2020-12/schema', **Scenario.model_json_schema(by_alias=True)}
+
+
 if __name__ == '__main__':
-    print(json.dumps(schema(), indent=2, ensure_ascii=False))
+    import sys
+    print(json.dumps(scenarioSchema() if '--scenario' in sys.argv else schema(), indent=2, ensure_ascii=False))

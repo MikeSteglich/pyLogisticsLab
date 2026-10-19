@@ -1,15 +1,17 @@
 """ command line tool of LogisticsLab - scenario files (logisticsLabCore/scenario.py)
 
-    logisticslab solve SCENARIO.json [--problem NAME ...] [--out SOLUTIONS.json] [--json] [--quiet]
+    logisticslab solve SCENARIO.llab [--problem NAME ...] [--out [SOLUTIONS.llsol]] [--json] [--quiet]
                                      [--set NAME=VALUE ...] [--server URL --apiKey KEY] [--logPath DIR]
-    logisticslab show SCENARIO.json
-    logisticslab convert OLD.TPPX [-o NEW.json]
+    logisticslab show SCENARIO.llab
+    logisticslab convert OLD.TPPX [-o NEW.llab]
     logisticslab convert --dir SOURCE_DIR --target TARGET_DIR
 
     (logisticslab is installed by pip install -e . - otherwise python -m logisticsLabCli ...)
 
     solve   solves all problems of the scenario (or the ones given by --problem) and prints the results.
-            --out writes the solution documents (logisticsLabSolution) as JSON file, --json prints them as JSON.
+            --out writes the solution documents (logisticsLabSolution) as JSON file - without a name next to the
+            scenario as <name>.llsol, --json prints them as JSON.
+            Scenarios are .llab and solutions .llsol files (JSON) - other names are accepted, the field format counts.
             --set overrides a parameter of the problems, e.g. --set p=3 --set maxSolvingTime=30
             Without --server the problems are solved in this process (local core, OSM servers of logisticsLab.yml).
             With --server they are sent to a LogisticsLab server - the key from --apiKey or LOGLAB_API_KEY.
@@ -103,6 +105,18 @@ def showScenario(s):
               + (f' network {p.network} ({p.networkMode})' if p.network else ''))
 
 
+SCENARIO_EXTENSIONS = ('.llab', '.json')
+SOLUTION_EXTENSION = '.llsol'
+
+
+def solutionName(scenario):
+    """ europa.tppx.llab -> europa.tppx.llsol, next to the scenario """
+    for ext in SCENARIO_EXTENSIONS:
+        if scenario.lower().endswith(ext):
+            return scenario[:-len(ext)] + SOLUTION_EXTENSION
+    return scenario + SOLUTION_EXTENSION
+
+
 def parseValue(text):
     try:
         return json.loads(text)
@@ -139,7 +153,7 @@ def main(argv=None):
     p = sub.add_parser('solve', help='solves the problems of a scenario')
     p.add_argument('scenario')
     p.add_argument('--problem', action='append', help='name of a problem (default: all)')
-    p.add_argument('--out', help='file for the solution documents (JSON)')
+    p.add_argument('--out', nargs='?', const='', help='file for the solution documents - without a name: <scenario>.llsol')
     p.add_argument('--json', action='store_true', help='print the solution documents as JSON')
     p.add_argument('--quiet', action='store_true', help='no output on the screen')
     p.add_argument('--set', action='append', default=[], metavar='NAME=VALUE', help='parameter of the problems')
@@ -151,7 +165,7 @@ def main(argv=None):
     p.add_argument('scenario')
     p = sub.add_parser('convert', help='converts old LogisticsLab files into scenario files')
     p.add_argument('file', nargs='?', help='an old file, e.g. europa.TPPX')
-    p.add_argument('-o', '--output', help='scenario file (default: <name>.<format>.json next to the old file)')
+    p.add_argument('-o', '--output', help='scenario file (default: <name>.<format>.llab next to the old file)')
     p.add_argument('--dir', help='source directory - all X files, the folders are kept')
     p.add_argument('--target', help='target directory for --dir')
     args = parser.parse_args(argv)
@@ -194,9 +208,12 @@ def main(argv=None):
 
     if args.json and not args.quiet:
         print(json.dumps(solutions, indent=2, ensure_ascii=False))
-    if args.out:
+    if args.out is not None:
+        args.out = args.out or solutionName(args.scenario)
         with open(args.out, 'w', encoding='utf-8') as f:
             json.dump(solutions, f, indent=2, ensure_ascii=False)
+        if not args.quiet:
+            print(f'\nsolutions written to {args.out}')
     return 1 if nrOfErrors else 0
 
 
