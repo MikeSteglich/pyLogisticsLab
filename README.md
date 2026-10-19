@@ -327,6 +327,7 @@ Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den 
   - **Anfragen:** die Problem-Items (`ContPCentreItem` …) und die Geo-Items.
   - **Antworten:** `ProblemAnswer` (`{id, status, message, results}`) und je Problemtyp ein Ergebnismodell für `results`. Die Zuordnung steht in `RESULT_ITEMS` in `logisticsLabCore/results.py`, z. B. `contpmedian`/`contpcentre` → `ContLocationResults`, `mincostflow`/`maxflow` → `FlowResults`. `checkServer.py` prüft jede echte Antwort gegen diese Modelle, ein neues oder umbenanntes Ergebnisfeld fällt also auf.
 - **Beispiel-Client:** `tests/dartClient` ist ein lauffähiges Dart-Paket ohne externe Abhängigkeiten. Es enthält `LogisticsLabBackend` mit `LocalBackend` (Kindprozess, JSON-RPC) und `RemoteBackend` (REST, Abfrage von `/v1/results`), typisierte Ergebnisse in `lib/src/results.dart` und das Beispiel `bin/cont_pcentre.dart`. Fehler kommen in beiden Fällen als `LogisticsLabException` mit `httpStatus`. Für die Flutter-App lässt sich `lib/` direkt übernehmen.
+- **Python-Client:** `tests/pythonClient` zeigt dasselbe in Python, nur mit der Standardbibliothek. `logisticsLabClient.py` enthält `LocalBackend` und `RemoteBackend` mit `solve`, `submit`/`wait`/`result`, `cancel` und `geo`. `rawProtocol.py` zeigt das Protokoll ohne Hilfsmodul, jede Nachricht wird ausgegeben.
 - **Paketierung:** Die lokale Schnittstelle lässt sich mit PyInstaller im Modus `--onedir` zu einem Programm bündeln (`onefile` entpackt bei jedem Start). Die CMPL-Installation der Zielplattform (`cmpl/` mit `bin/` und `Thirdparty/`) muss mit hinein, und das Programm setzt `CMPLHOME` auf ihren Ort im Paket, bevor es den Kern startet. Unter macOS muss jede mitgelieferte ausführbare Datei signiert sein, auch `cmpl` und HiGHS. Für eine App in der Sandbox braucht der Kindprozess außerdem die Entitlements `com.apple.security.inherit` und `com.apple.security.network.client`.
 
 ## Betrieb unter Linux mit nginx
@@ -459,6 +460,18 @@ cd tests/dartClient
 dart pub get
 LOGLAB_PYTHON=/pfad/zu/python dart run bin/cont_pcentre.dart local    # lokale Schnittstelle als Kindprozess
 dart run bin/cont_pcentre.dart remote                                 # Server, LOGLAB_URL und LOGLAB_API_KEY aus der .env
+```
+
+**Python-Client** (`tests/pythonClient/`): Beispiele für die JSON-RPC-Kommunikation mit der lokalen Schnittstelle, analog zum Dart-Client.
+- **`logisticsLabClient.py`:** `LocalBackend` startet `python -m logisticsLabCore.stdio` als Kindprozess. `RemoteBackend` spricht mit dem REST-Server. Beide haben dieselbe Schnittstelle, Fehler kommen als `LogisticsLabException` mit `httpStatus`.
+- **`contPCentre.py`:** dasselbe Beispiel wie `cont_pcentre.dart`, mit `local` oder `remote`. Für `remote` kommt der Key aus `LOGLAB_API_KEY` oder der `.env`.
+- **`rawProtocol.py`:** das Protokoll ohne Hilfsmodul: `ready`, `solve`, `jobStatus`, `result`, `shutdown`, jede Nachricht wird ausgegeben.
+- **`parallelAndCancel.py`:** mehrere Probleme gleichzeitig mit Statusmeldungen, ein Abbruch, eine Luftlinien-Kostenmatrix und eine abgelehnte Anfrage (422).
+
+```bash
+python tests/pythonClient/rawProtocol.py
+python tests/pythonClient/contPCentre.py local      # oder remote
+python tests/pythonClient/parallelAndCancel.py
 ```
 
 **OSM-Server direkt** (`tests/osmTests/`): `get*.py` nutzen die Bibliothek `osm_data`, `ors*.py` fragen einen OpenRouteService-Server direkt per HTTP ab (Koordinaten `[lon, lat]`, kein LogisticsLab-Key). Diese Skripte testen die OSM-Server, nicht den LogisticsLab-Server.
