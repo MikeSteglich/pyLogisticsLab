@@ -18,6 +18,15 @@ try:
         print('obj   ', m.getObjValue())
         print('flows ', m.getFlows())
 
+    print('== min cost flow with fixed costs (CMPL) - edge 1-3 is too expensive, the flow goes via 2-3')
+    m = ll.MinCostFlow(edges, costs=[4, 3, 2, 2, 1], supplies=supplies, demands=demands, maxCaps=[15, 15, 20, 10, 15],
+                       fixedCosts=[10, 60, 10, 30, 10])
+    m.solve()
+    if m.isSolution():
+        print('obj   ', m.getObjValue(), '(variable', m.getVarCosts(), '+ fixed', m.getFixedCosts(), ')')
+        print('flows ', m.getFlows())
+        print('usages', m.getUsages())
+
     print('== maximal flow from 0 to 3 (CMPL)')
     m = ll.MaxFlow(edges, source=0, sink=3, maxCaps=[15, 8, 20, 5, 10])
     m.solve()

@@ -33,7 +33,7 @@ EXPECTED = {
     'findMcpServer':            [10],
     'findCppServer':            [26],
     'findVrpServer':            [28],
-    'findMinCostFlowServer':    [114],
+    'findMinCostFlowServer':    [114, 180],
     'findMaxFlowServer':        [15],
     'findMultiCommodityServer': [62],
     'findMultiModalServer':     [90],

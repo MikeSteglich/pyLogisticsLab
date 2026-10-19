@@ -58,7 +58,15 @@ class FlowHandler(ProblemHandler):
 class MinCostFlowHandler(FlowHandler):
     def _createProblem(self, d):
         return ll.MinCostFlow(d.edges, d.costs, d.supplies, d.demands, d.minCaps, d.maxCaps,
-                              maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+                              maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime),
+                              fixedCosts=d.fixedCosts, mipGap=d.mipGap)
+
+    def _setResults(self, p):
+        self._results['flows'] = p.getFlows()
+        if p.isFixedCosts():
+            self._results['usages'] = p.getUsages()
+            self._results['totalVarCosts'] = p.getVarCosts()
+            self._results['totalFixedCosts'] = p.getFixedCosts()
 
 
 class MaxFlowHandler(FlowHandler):

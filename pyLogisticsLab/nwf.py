@@ -1,6 +1,7 @@
 """ network flow problems
 
     MinCostFlow          min cost flow problem                                           - LP, minCostFlow.cmpl
+                         with fixed costs of the edges                                   - MIP, minCostFlowFixed.cmpl
     MaxFlow              maximal flow from source to sink                                - LP, maxFlow.cmpl
     MultiCommodityFlow   min cost flow of several commodities with joint arc capacities  - LP, multiCommodity.cmpl
     MultiModalFlow       min cost flow with several modes (e.g. truck, train) and fixed costs - MIP, multimodal.cmpl
@@ -159,10 +160,10 @@ class _CmplFlow(object):
 
 #*************** single commodity flows ************************************************
 class _SingleFlow(_CmplFlow):
-    """ flow of one commodity with minimal and maximal capacities of the edges - LP """
+    """ flow of one commodity with minimal and maximal capacities of the edges - LP, MIP with fixed costs """
 
-    def __init__(self, edges, nrOfNodes, cmplFile, minCaps, maxCaps, maxSolvingTime):
-        super().__init__(edges, nrOfNodes, cmplFile, 0.0, maxSolvingTime)
+    def __init__(self, edges, nrOfNodes, cmplFile, minCaps, maxCaps, maxSolvingTime, mipGap=0.0):
+        super().__init__(edges, nrOfNodes, cmplFile, mipGap, maxSolvingTime)
         self._minCaps = _vector(minCaps, self._nrOfEdges, 'minimal capacities', 0)
         self._maxCaps = _vector(maxCaps, self._nrOfEdges, 'maximal capacities', None)
         _numbers(self._minCaps, 'minimal capacity')
@@ -190,36 +191,63 @@ class _SingleFlow(_CmplFlow):
 
 #*************** MinCostFlow ************************************************
 class MinCostFlow(_SingleFlow):
-    """ min cost flow problem (minCostFlow.cmpl)
+    """ min cost flow problem (minCostFlow.cmpl), with fixed costs (minCostFlowFixed.cmpl)
 
         edges       [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
         costs       cost rate of every edge
         supplies    supply of every node, demands: demand of every node (default 0) - totals must be equal
         minCaps     minimal flow of every edge (default 0), maxCaps: maximal flow (default unlimited)
+        fixedCosts  optional fixed costs of every edge - paid if the edge carries flow (MIP, mipGap)
+                    a minimal flow minCaps > 0 forces the use of the edge
     """
 
     #*********** constructor **********
-    def __init__(self, edges, costs, supplies, demands=None, minCaps=None, maxCaps=None, maxSolvingTime=10):
+    def __init__(self, edges, costs, supplies, demands=None, minCaps=None, maxCaps=None, maxSolvingTime=10,
+                 fixedCosts=None, mipGap=0.001):
         self._supplies = setNumVector(supplies)
         n = len(self._supplies)
         self._demands = _vector(demands, n, 'demands', 0)
         _numbers(self._demands, 'demand')
         _checkBalance(self._supplies, self._demands)
 
-        super().__init__(edges, n, 'minCostFlow.cmpl', minCaps, maxCaps, maxSolvingTime)
+        self._isFixedCosts = fixedCosts is not None
+        super().__init__(edges, n, 'minCostFlowFixed.cmpl' if self._isFixedCosts else 'minCostFlow.cmpl',
+                         minCaps, maxCaps, maxSolvingTime, mipGap if self._isFixedCosts else 0.0)
         self._costs = _vector(costs, self._nrOfEdges, 'costs', None)
         _numbers(self._costs, 'cost')
+        self._fixedCosts = _vector(fixedCosts, self._nrOfEdges, 'fixed costs', 0)
+        _numbers(self._fixedCosts, 'fixed cost')
+        self._usages = [ 0 for _ in range(self._nrOfEdges) ]
     #*********** end constructor ******
 
     def solve(self):
-        logger.info('    ... solving min cost flow problem')
+        logger.info('    ... solving min cost flow problem' + (' with fixed costs' if self._isFixedCosts else ''))
         nodes, arcs = self._sets()
         # no flow on an edge exceeds the total supply and the flows forced by minimal capacities
         maxCaps = self._capacities(sum(self._supplies) + sum(self._minCaps))
-        par = self._parameters((('c', (arcs,), self._costs), ('minKap', (arcs,), self._minCaps), ('maxKap', (arcs,), maxCaps),
-                                ('a', (nodes,), self._supplies), ('b', (nodes,), self._demands)))
-        if self._run((nodes, arcs), par):
+        definitions = [('c', (arcs,), self._costs), ('minKap', (arcs,), self._minCaps), ('maxKap', (arcs,), maxCaps),
+                       ('a', (nodes,), self._supplies), ('b', (nodes,), self._demands)]
+        if self._isFixedCosts:
+            definitions.append(('F', (arcs,), self._fixedCosts))
+        if self._run((nodes, arcs), self._parameters(definitions)):
             self._readFlows()
+            # used: the edge carries flow or its fixed costs are paid - without fixed costs y can be 1 without flow
+            self._usages = [ 1 if self._flows[e] > 1e-9 or (self._isFixedCosts and self._fixedCosts[e] > 0
+                                                             and round(self._activity(self._model.y, (i, j))) == 1) else 0
+                             for e, (i, j) in enumerate(self._edges) ]
+
+    def isFixedCosts(self):
+        return self._isFixedCosts
+
+    def getUsages(self):
+        """ 1 if the edge is used """
+        return self._usages
+
+    def getVarCosts(self):
+        return sum(c * f for c, f in zip(self._costs, self._flows))
+
+    def getFixedCosts(self):
+        return sum(fc * u for fc, u in zip(self._fixedCosts, self._usages))
 #*************** end MinCostFlow ********************************************
 
 

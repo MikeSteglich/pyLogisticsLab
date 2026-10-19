@@ -128,7 +128,7 @@ Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 a
 | `/v1/mcp` | Maximal Covering: `distances` oder Koordinaten, `radius`, `demands`, `maxSrcCost` (Budget für die Fixkosten der Standorte; mit `fixedCosts` 1 die Anzahl) | `mcp` |
 | `/v1/cpp` | Chinese Postman: `edges` (`[[i, j], ...]`), `edgeWeights`, `startNode`; optional `edgeTypes` (0 gerichtet, 1 ungerichtet, Standard 1) | `cpp` |
 | `/v1/vrp` | Tourenplanung: `distances` oder `coordinates` (alle Knoten mit Depot), `demands`, `capacities` (je Fahrzeug), `depot`; optional `times`, `timeWindows`, `serviceTimes`, `maxTime`, `maxDist`, `maxWaitingTime`, `maxSolvingTime` | `vrp` |
-| `/v1/mincostflow` | Min-Cost-Flow: `edges`, `costs` je Kante, `supplies`, optional `demands`, `minCaps`, `maxCaps` | `mincostflow` |
+| `/v1/mincostflow` | Min-Cost-Flow: `edges`, `costs` je Kante, `supplies`, optional `demands`, `minCaps`, `maxCaps`, `fixedCosts` je Kante (fallen an, wenn die Kante Fluss trägt; macht das Problem zum MIP, mit `mipGap`) | `mincostflow` |
 | `/v1/maxflow` | maximaler Fluss: `edges`, `source`, `sink`, `maxCaps`, optional `minCaps`, `nrOfNodes` | `maxflow` |
 | `/v1/multicommodity` | Multi-Commodity-Flow: `edges`, `costs` [Kanten × Güter], `supplies`/`demands` [Knoten × Güter], optional gemeinsame `minCaps`/`maxCaps` je Kante, `capacityFactors` [Kanten × Güter] | `multicommodity` |
 | `/v1/multimodal` | multimodaler Fluss: `edges`, `costs` [Kanten × Verkehrsträger] (`null`: Verkehrsträger auf dieser Kante nicht verfügbar), `supplies`, optional `demands`, `fixedCosts`, `minCaps` (Mindestmenge, wenn genutzt), `maxCaps` | `multimodal` |
@@ -150,7 +150,7 @@ Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach fo
 | `scp`, `mcp` | `activeSources`, `coveringSources` (alle geöffneten Quellen im Radius je Senke), `assignments` (nächste davon; bei `mcp` `-1` für nicht überdeckte Senken) |
 | `cpp` | `eulerTour` (Knotenfolge), `edgeUsages` (Nutzungen je übergebener Kante) |
 | `vrp` | `routes`, `routeLoads`, `routeDistances` je Fahrzeug, mit Zeitfenstern auch `routeTimes`; unbenutzte Fahrzeuge haben die Route `[depot, depot]` |
-| `mincostflow`, `maxflow` | `flows` je Kante; bei `maxflow` ist `objVal` der maximale Fluss |
+| `mincostflow`, `maxflow` | `flows` je Kante; bei `maxflow` ist `objVal` der maximale Fluss; `mincostflow` mit `fixedCosts` zusätzlich `usages` (0/1 je Kante), `totalVarCosts`, `totalFixedCosts` |
 | `multicommodity` | `flows` [Kanten × Güter] |
 | `multimodal` | `flows` und `usages` (0/1) [Kanten × Verkehrsträger], `totalVarCosts`, `totalFixedCosts` |
 
@@ -159,7 +159,8 @@ Für die Netzwerkflüsse gilt:
 - **Unbegrenzte Kapazitäten:** `null` oder `"M"`.
 - **Ausgleich:** Gesamtangebot und Gesamtnachfrage müssen gleich sein, bei `multicommodity` je Gut. Sonst kommt 400. Einen Überschuss gleicht man mit einem Dummy-Knoten aus.
 - **Parallele Kanten:** Keines der Flussmodelle erlaubt parallele Kanten zwischen denselben Knoten. Mehrere Verkehrswege bildet man über `multimodal` mit Verkehrsträgern ab.
-- **Solver:** Alle vier laufen über CMPL und HiGHS (`minCostFlow.cmpl`, `maxFlow.cmpl`, `multiCommodity.cmpl`, `multimodal.cmpl` in `pyLogisticsLab/`).
+- **Solver:** Alle vier laufen über CMPL und HiGHS (`minCostFlow.cmpl`, mit Fixkosten `minCostFlowFixed.cmpl`, `maxFlow.cmpl`, `multiCommodity.cmpl`, `multimodal.cmpl` in `pyLogisticsLab/`).
+- **Fixkosten:** Bei `mincostflow` bleibt `minCaps` eine feste Mindestmenge. Eine Kante mit `minCaps > 0` wird also immer genutzt und kostet ihre Fixkosten. Bei `multimodal` gilt die Mindestmenge dagegen nur, wenn der Verkehrsträger genutzt wird.
 - **Unbeschränkter Max-Flow:** Gibt es einen Weg von `source` nach `sink` nur über unbegrenzte Kanten, kommt 400.
 
 Für die kontinuierlichen Standortprobleme gilt:

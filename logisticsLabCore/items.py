@@ -158,6 +158,8 @@ class MinCostFlowItem(FlowOptions):
     demands: Optional[list] = None              # demand of every node - default 0, totals must be equal
     minCaps: Optional[list] = None              # minimal flow of every edge - default 0
     maxCaps: Optional[list] = None              # maximal flow of every edge - default unlimited
+    fixedCosts: Optional[list] = None           # fixed costs of every edge if it is used - MIP
+    mipGap: Optional[float] = 0.001             # only with fixedCosts
 
 class MaxFlowItem(FlowOptions):
     type: Literal["maxflow"] = "maxflow"

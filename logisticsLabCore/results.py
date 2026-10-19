@@ -96,6 +96,9 @@ class ContLocationResults(ResultFields):
 class FlowResults(ResultFields):
     """ mincostflow, maxflow - objVal of maxflow is the maximal flow """
     flows: Vector                               # flow of every edge
+    usages: Optional[list[int]] = None          # mincostflow with fixedCosts: 0/1 for every edge
+    totalVarCosts: Optional[Number] = None      # mincostflow with fixedCosts
+    totalFixedCosts: Optional[Number] = None
 
 class MultiCommodityResults(ResultFields):
     flows: Matrix                               # [edges x commodities]

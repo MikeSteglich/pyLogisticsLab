@@ -12,6 +12,16 @@ payloads.append({
     "maxCaps": [15, 8, 20, 5, 10]           # null or "M": unlimited
 })
 
+# with fixed costs of the edges (MIP) - edge 1-3 is too expensive, the flow goes via 2-3
+payloads.append({
+    "edges": [[0, 1], [0, 2], [1, 2], [1, 3], [2, 3]],
+    "costs": [4, 3, 2, 2, 1],
+    "supplies": [20, 0, 0, 0],
+    "demands": [0, 0, 5, 15],
+    "maxCaps": [15, 15, 20, 10, 15],
+    "fixedCosts": [10, 60, 10, 30, 10]
+})
+
 
 if __name__ == '__main__':
     for k, payload in enumerate(payloads):

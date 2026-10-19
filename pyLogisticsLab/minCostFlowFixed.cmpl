@@ -1,0 +1,23 @@
+%data
+
+# min cost flow problem with fixed costs (fixed charge network flow)
+#   N nodes, A arcs
+#   a[i], b[i]      supply and demand of node i
+#   c[i,j]          cost rate of arc (i,j)
+#   F[i,j]          fixed costs if arc (i,j) is used
+#   minKap, maxKap  minimal and maximal flow of arc (i,j)
+
+var:
+	{ [i,j] in A: x[i,j] : real[minKap[i,j]..maxKap[i,j]]; }
+	{ [i,j] in A: y[i,j] : binary; }
+
+obj:
+	sum { [i,j] in A: c[i,j] * x[i,j] + F[i,j] * y[i,j] } ->min;
+
+con:
+	{ i in N :
+ 		sum{[i,j] in A  : x[i,j] } -  sum{[j,i] in A  : x[j,i] } = a[i] - b[i];
+	}
+
+	# flow only on used arcs - a minimal flow minKap > 0 forces the use of the arc
+	{ [i,j] in A: x[i,j] <= maxKap[i,j] * y[i,j]; }

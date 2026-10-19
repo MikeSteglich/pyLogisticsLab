@@ -79,6 +79,15 @@ check('vrp', vrp, 28, heuristic=True)
 
 print('== network flows')
 check('mincostflow', ll.MinCostFlow(edges, [4, 4, 2, 2, 1], supplies, demands, maxCaps=maxCaps), 114)
+check('mincostflow fixed costs 0 = LP', ll.MinCostFlow(edges, [4, 4, 2, 2, 1], supplies, demands, maxCaps=maxCaps,
+                                                       fixedCosts=[0] * 5), 114)
+fixed = dict(costs=[4, 3, 2, 2, 1], maxCaps=[15, 15, 20, 10, 15], fixedCosts=[10, 60, 10, 30, 10])
+check('mincostflow fixed costs', ll.MinCostFlow(edges, fixed['costs'], supplies, demands, maxCaps=fixed['maxCaps'],
+                                                fixedCosts=fixed['fixedCosts']), 180)
+# fixed charge flow = multimodal flow with one mode
+check('multimodal one mode = mincostflow fixed costs',
+      ll.MultiModalFlow(edges, [[c] for c in fixed['costs']], supplies, demands, fixedCosts=[[f] for f in fixed['fixedCosts']],
+                        maxCaps=[[c] for c in fixed['maxCaps']]), 180)
 check('maxflow', ll.MaxFlow(edges, 0, 3, maxCaps), 15)
 check('multicommodity', ll.MultiCommodityFlow(edges, [[4, 1], [4, 1], [2, 1], [2, 1], [1, 1]],
                                               [[10, 5], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [10, 5]],
