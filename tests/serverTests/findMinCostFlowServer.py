@@ -22,6 +22,16 @@ payloads.append({
     "fixedCosts": [10, 60, 10, 30, 10]
 })
 
+# node 1 handles at most 12 units, 5 units of supply remain (balance auto)
+payloads.append({
+    "edges": [[0, 1], [0, 2], [1, 2], [1, 3], [2, 3]],
+    "costs": [4, 4, 2, 2, 1],
+    "supplies": [25, 0, 0, 0],
+    "demands": [0, 0, 5, 15],
+    "nodeMaxCaps": [None, 12, None, None],
+    "balance": "auto"
+})
+
 
 if __name__ == '__main__':
     for k, payload in enumerate(payloads):

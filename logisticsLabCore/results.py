@@ -94,17 +94,24 @@ class ContLocationResults(ResultFields):
 
 #*************** network flows ************************************************
 
-class FlowResults(ResultFields):
+class NodeFlowResults(ResultFields):
+    """ flows through the nodes (with nodeMinCaps / nodeMaxCaps) and the balance (with balance auto) """
+    nodeFlows: Optional[Union[Vector, Matrix]] = None        # flow through every node [nodes] or [nodes x commodities]
+    unusedSupplies: Optional[Union[Vector, Matrix]] = None   # supply that remains at a node
+    unmetDemands: Optional[Union[Vector, Matrix]] = None     # demand of a node that is not delivered
+    totalShortageCosts: Optional[Number] = None
+
+class FlowResults(NodeFlowResults):
     """ mincostflow, maxflow - objVal of maxflow is the maximal flow """
     flows: Vector                               # flow of every edge
     usages: Optional[list[int]] = None          # mincostflow with fixedCosts: 0/1 for every edge
     totalVarCosts: Optional[Number] = None      # mincostflow with fixedCosts
     totalFixedCosts: Optional[Number] = None
 
-class MultiCommodityResults(ResultFields):
+class MultiCommodityResults(NodeFlowResults):
     flows: Matrix                               # [edges x commodities]
 
-class MultiModalResults(ResultFields):
+class MultiModalResults(NodeFlowResults):
     flows: Matrix                               # [edges x modes]
     usages: list[list[int]]                     # 0/1 [edges x modes]
     totalVarCosts: Number

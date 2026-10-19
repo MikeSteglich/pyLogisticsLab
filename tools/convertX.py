@@ -305,8 +305,8 @@ def convertNwfx(data, id, source):
         roles = ['supplier'] if volume > 0 else ['customer'] if volume < 0 else ['transit']
         maxCap = unlimitedOrNumber(r.get('MaxCap'))
         nodes.add(r, roles, supply=volume if volume > 0 else None, demand=-volume if volume < 0 else None,
-                  minThroughput=number(r.get('MinCap')) or None,
-                  maxThroughput=None if maxCap in ('M', 0, None) else maxCap)
+                  minCap=number(r.get('MinCap')) or None,
+                  maxCap=None if maxCap in ('M', 0, None) else maxCap)
     edges = []
     for r in data['tables']['EDGES']:
         e = {'from': nodes.idOf(r['From']), 'to': nodes.idOf(r['To'])}

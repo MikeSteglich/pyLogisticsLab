@@ -151,12 +151,20 @@ class FlowOptions(LogLabItem):
     """ network flow problems - nodes are 0-based indices, capacities null or "M" mean unlimited """
     edges: list                                 # [[i, j], ...]
     maxSolvingTime: Optional[int] = 60
+    nodeMinCaps: Optional[list] = None          # minimal flow through every node (incl. its own supply and demand)
+    nodeMaxCaps: Optional[list] = None          # maximal flow through every node - null or "M": unlimited
 
-class MinCostFlowItem(FlowOptions):
+class BalanceOptions(LogLabItem):
+    """ unequal totals of supply and demand """
+    balance: Optional[Literal["exact", "auto"]] = "auto"    # auto: surplus supply remains, surplus demand is unmet,
+                                                             # exact: the totals must be equal
+    shortageCosts: Optional[list] = None        # costs per unit of unmet demand of every node - default 0
+
+class MinCostFlowItem(FlowOptions, BalanceOptions):
     type: Literal["mincostflow"] = "mincostflow"
     costs: list                                 # cost rate of every edge
     supplies: list                              # supply of every node
-    demands: Optional[list] = None              # demand of every node - default 0, totals must be equal
+    demands: Optional[list] = None              # demand of every node - default 0, totals equal or balance auto
     minCaps: Optional[list] = None              # minimal flow of every edge - default 0
     maxCaps: Optional[list] = None              # maximal flow of every edge - default unlimited
     fixedCosts: Optional[list] = None           # fixed costs of every edge if it is used - MIP
@@ -170,7 +178,7 @@ class MaxFlowItem(FlowOptions):
     minCaps: Optional[list] = None
     nrOfNodes: Optional[int] = None             # default: largest node index of the edges + 1
 
-class MultiCommodityItem(FlowOptions):
+class MultiCommodityItem(FlowOptions, BalanceOptions):
     type: Literal["multicommodity"] = "multicommodity"
     costs: list                                 # [edges x commodities]
     supplies: list                              # [nodes x commodities]
@@ -179,7 +187,7 @@ class MultiCommodityItem(FlowOptions):
     maxCaps: Optional[list] = None              # joint maximal capacity of every edge
     capacityFactors: Optional[list] = None      # [edges x commodities] capacity used by one unit - default 1
 
-class MultiModalItem(FlowOptions):
+class MultiModalItem(FlowOptions, BalanceOptions):
     type: Literal["multimodal"] = "multimodal"
     costs: list                                 # [edges x modes] - null: mode not available on the edge
     supplies: list                              # supply of every node

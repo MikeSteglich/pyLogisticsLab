@@ -102,6 +102,20 @@ check('multicommodity = mincostflow', ll.MultiCommodityFlow(edges, [[c] for c in
 check('multimodal = mincostflow', ll.MultiModalFlow(edges, [[c] for c in [4, 4, 2, 2, 1]], supplies, demands,
                                                     maxCaps=[[c] for c in maxCaps]), 114)
 
+# node capacities and unequal totals of supply and demand (balance auto)
+check('mincostflow node capacity, supply surplus',
+      ll.MinCostFlow(edges, [4, 4, 2, 2, 1], [25, 0, 0, 0], [0, 0, 5, 15], nodeMaxCaps=[None, 12, None, None],
+                     balance='auto'), 95)
+check('multimodal node capacity, demand surplus with shortage costs',
+      ll.MultiModalFlow(edges, [[4, 1], [4, None], [2, None], [2, 1], [1, None]], [20, 0, 0, 0], [0, 0, 10, 15],
+                        nodeMaxCaps=[None, None, 8, None], balance='auto', shortageCosts=[0, 0, 0, 100]), 45)
+check('multicommodity balance auto per commodity',
+      ll.MultiCommodityFlow(edges, [[4, 1], [4, 1], [2, 1], [2, 1], [1, 1]], [[10, 5], [0, 0], [0, 0], [0, 0]],
+                            [[0, 0], [0, 0], [0, 0], [8, 7]], maxCaps=[15, 8, 20, 'M', 10], balance='auto'), 50)
+check('mincostflow unbalanced, default balance auto', ll.MinCostFlow(edges, [4, 4, 2, 2, 1], [25, 0, 0, 0], demands,
+                                                                     maxCaps=maxCaps), 114)
+check('maxflow node capacity', ll.MaxFlow(edges, 0, 3, maxCaps, nodeMaxCaps=[None, None, 6, None]), 11)
+
 print('== continuous location')
 check('contpmedian', ll.ContPMedian(3, coordinates, contDemands), 4968.608, heuristic=True)
 check('contpmedian capacitated, split', ll.ContPMedian(3, coordinates, contDemands, capacities=100, isSingleSource=False),
@@ -124,9 +138,13 @@ discrete.solve()
 check('contpcentre <= discrete pcentre', ll.ContPCentre(3, coordinates), discrete.getObjValue(), heuristic=True)
 
 print('== errors')
-checkException('mincostflow unbalanced', lambda: ll.MinCostFlow(edges, [4, 4, 2, 2, 1], supplies, [0, 0, 5, 14]))
+checkException('mincostflow unbalanced with balance exact',
+               lambda: ll.MinCostFlow(edges, [4, 4, 2, 2, 1], supplies, [0, 0, 5, 14], balance='exact'))
 checkException('maxflow unbounded', lambda: ll.MaxFlow(edges, 0, 3, ['M'] * 5))
 checkException('maxflow parallel edges', lambda: ll.MaxFlow([[0, 1], [0, 1]], 0, 1, [3, 7]))
+checkException('mincostflow wrong balance', lambda: ll.MinCostFlow(edges, [4, 4, 2, 2, 1], supplies, demands, balance='x'))
+checkException('multimodal minimal node capacities', lambda: ll.MultiModalFlow(
+    edges, [[1], [1], [1], [1], [1]], supplies, demands, nodeMinCaps=[0, 5, 0, 0]))
 checkException('contpmedian capacity too small', lambda: ll.ContPMedian(3, coordinates, contDemands, capacities=10))
 checkException('contpcentre two hemispheres', lambda: ll.ContPCentre(1, [[0, 0], [0, 120], [0, -120]]))
 

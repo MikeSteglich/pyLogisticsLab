@@ -13,6 +13,17 @@ payloads.append({
     "minCaps": [[0, 10], [0, 0], [0, 0], [0, 10], [0, 0]]
 })
 
+# demand surplus of 5 units - unmet demand at node 3 costs 100 per unit, node 2 handles at most 8 units
+payloads.append({
+    "edges": [[0, 1], [0, 2], [1, 2], [1, 3], [2, 3]],
+    "costs": [[4, 1], [4, None], [2, None], [2, 1], [1, None]],
+    "supplies": [20, 0, 0, 0],
+    "demands": [0, 0, 10, 15],
+    "nodeMaxCaps": [None, None, 8, None],
+    "balance": "auto",
+    "shortageCosts": [0, 0, 0, 100]
+})
+
 
 if __name__ == '__main__':
     for k, payload in enumerate(payloads):

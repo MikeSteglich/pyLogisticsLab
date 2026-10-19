@@ -17,7 +17,7 @@ class FlowHandler(ProblemHandler):
         self._type = problemData.type
         self._logger.debug(self._type, f'init {self._type}')
 
-        d = problemData
+        d = self._data = problemData
         if not isinstance(d.edges, list) or not d.edges:
             raise LogLabCoreException('no edges are available')
         nrOfNodes = self._nrOfNodes(d)
@@ -38,6 +38,17 @@ class FlowHandler(ProblemHandler):
     def _setResults(self, p):
         self._results['flows'] = p.getFlows()
 
+    def _nodeResults(self, p, d):
+        """ throughput with node capacities, unused supply and unmet demand with balance auto """
+        if d.nodeMinCaps is not None or d.nodeMaxCaps is not None:
+            self._results['nodeFlows'] = p.getNodeFlows()
+        # the balance only if a surplus has been balanced
+        total = lambda v: sum(sum(x) if isinstance(x, list) else x for x in v)
+        if getattr(d, 'balance', 'exact') == 'auto' and (total(p.getUnusedSupplies()) > 1e-9 or total(p.getUnmetDemands()) > 1e-9):
+            self._results['unusedSupplies'] = p.getUnusedSupplies()
+            self._results['unmetDemands'] = p.getUnmetDemands()
+            self._results['totalShortageCosts'] = p.getShortageCosts()
+
     def solve(self):
         try:
             self._logger.debug(self._type, 'solve')
@@ -51,6 +62,7 @@ class FlowHandler(ProblemHandler):
         if self._isSolution:
             self._objVal = self._problem.getObjValue()
             self._setResults(self._problem)
+            self._nodeResults(self._problem, self._data)
         else:
             self._logger.info(self._type, f'no solution - {self._problem.getMessage()}')
 
@@ -59,7 +71,8 @@ class MinCostFlowHandler(FlowHandler):
     def _createProblem(self, d):
         return ll.MinCostFlow(d.edges, d.costs, d.supplies, d.demands, d.minCaps, d.maxCaps,
                               maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime),
-                              fixedCosts=d.fixedCosts, mipGap=d.mipGap)
+                              fixedCosts=d.fixedCosts, mipGap=d.mipGap, nodeMinCaps=d.nodeMinCaps,
+                              nodeMaxCaps=d.nodeMaxCaps, balance=d.balance, shortageCosts=d.shortageCosts)
 
     def _setResults(self, p):
         self._results['flows'] = p.getFlows()
@@ -78,19 +91,23 @@ class MaxFlowHandler(FlowHandler):
 
     def _createProblem(self, d):
         return ll.MaxFlow(d.edges, d.source, d.sink, d.maxCaps, d.minCaps, nrOfNodes=d.nrOfNodes,
-                          maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+                          maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime),
+                          nodeMinCaps=d.nodeMinCaps, nodeMaxCaps=d.nodeMaxCaps)
 
 
 class MultiCommodityHandler(FlowHandler):
     def _createProblem(self, d):
         return ll.MultiCommodityFlow(d.edges, d.costs, d.supplies, d.demands, d.minCaps, d.maxCaps, d.capacityFactors,
-                                     maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+                                     maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime), nodeMinCaps=d.nodeMinCaps,
+                                     nodeMaxCaps=d.nodeMaxCaps, balance=d.balance, shortageCosts=d.shortageCosts)
 
 
 class MultiModalHandler(FlowHandler):
     def _createProblem(self, d):
         return ll.MultiModalFlow(d.edges, d.costs, d.supplies, d.demands, d.fixedCosts, d.minCaps, d.maxCaps,
-                                 mipGap=d.mipGap, maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+                                 mipGap=d.mipGap, maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime),
+                                 nodeMinCaps=d.nodeMinCaps, nodeMaxCaps=d.nodeMaxCaps, balance=d.balance,
+                                 shortageCosts=d.shortageCosts)
 
     def _setResults(self, p):
         self._results['flows'] = p.getFlows()

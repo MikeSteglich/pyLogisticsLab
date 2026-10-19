@@ -34,7 +34,7 @@ TO_S = {'s': 1, 'min': 60, 'h': 3600}
 Unlimited = Union[float, Literal['M'], None]
 
 PROBLEM_TYPES = ('tpp', 'wlp', 'pmedian', 'pcentre', 'scp', 'mcp', 'contpmedian', 'contpcentre', 'tsp', 'cpp', 'vrp',
-                 'mincostflow', 'maxflow')
+                 'mincostflow', 'maxflow', 'multicommodity', 'multimodal')
 
 
 class ScenarioException(Exception):
@@ -74,8 +74,11 @@ class Node(Item):
     costFactor: float = 1.0                      # customer: factor on its costs
     timeWindow: Optional[list[Optional[float]]] = None   # [earliest, latest] in units.time, latest null: open
     serviceTime: float = 0                       # in units.time
-    minThroughput: float = 0                     # networks: flow through the node
-    maxThroughput: Unlimited = None
+    minCap: float = 0                            # networks: minimal flow through the node (incl. own supply, demand)
+    maxCap: Unlimited = None                     # networks: maximal flow through the node
+    shortageCost: float = 0                      # networks with balance auto: costs per unit of unmet demand
+    supplies: Optional[dict[str, float]] = None  # multicommodity: supply per commodity
+    demands: Optional[dict[str, float]] = None   # multicommodity: demand per commodity
 
     @model_validator(mode='after')
     def check(self):
@@ -84,12 +87,30 @@ class Node(Item):
         return self
 
 class Mode(Item):
-    """ transport mode of an edge - costs from the OSM distance and time """
+    """ transport mode at an edge - costs from the OSM distance and time, missing values from the mode definition """
     costPerKm: Optional[float] = None
     costPerHour: Optional[float] = None
     fixedCost: Optional[float] = None
-    minFlow: float = 0
+    minFlow: Optional[float] = None              # minimal flow if the mode is used
     capacity: Unlimited = None
+
+class ModeDefinition(Mode):
+    """ transport mode of the scenario, e.g. truck, train - the defaults for all edges """
+    id: str
+    name: Optional[str] = None
+
+class EdgeCommodity(Item):
+    costPerKm: Optional[float] = None
+    costPerHour: Optional[float] = None
+    capacityFactor: Optional[float] = None       # capacity of the edge used by one unit
+
+class Commodity(Item):
+    """ commodity of the scenario - default cost rates and capacity factor for all edges """
+    id: str
+    name: Optional[str] = None
+    costPerKm: Optional[float] = None
+    costPerHour: Optional[float] = None
+    capacityFactor: float = 1.0
 
 class Edge(Item):
     """ allowed connection - its length and time come from the OSM servers """
@@ -99,7 +120,8 @@ class Edge(Item):
     capacity: Unlimited = None
     minFlow: float = 0
     fixedCost: Optional[float] = None
-    modes: Optional[dict[str, Mode]] = None
+    modes: Optional[dict[str, Mode]] = None      # multimodal: available modes, default all modes of the scenario
+    commodities: Optional[dict[str, EdgeCommodity]] = None   # multicommodity: values per commodity
 
 class Network(Item):
     directed: bool = False
@@ -138,6 +160,8 @@ class Scenario(Item):
     nodes: list[Node]
     networks: dict[str, Network] = {}
     vehicles: list[Vehicle] = []
+    commodities: list[Commodity] = []
+    modes: list[ModeDefinition] = []
     problems: list[Problem] = []
 
     @model_validator(mode='after')
@@ -150,9 +174,19 @@ class Scenario(Item):
             for e in net.edges:
                 if e.from_ not in known or e.to not in known:
                     raise ValueError(f'network {name}: edge {e.from_}-{e.to} with an unknown node')
+        commodities, modes = { c.id for c in self.commodities }, { m.id for m in self.modes }
         for n in self.nodes:
             if n.assignedTo and n.assignedTo not in known:
                 raise ValueError(f'node {n.id}: unknown assignedTo {n.assignedTo}')
+            for k in list(n.supplies or {}) + list(n.demands or {}):
+                if k not in commodities:
+                    raise ValueError(f'node {n.id}: unknown commodity {k}')
+        for name, net in self.networks.items():
+            for e in net.edges:
+                if any(k not in commodities for k in e.commodities or {}):
+                    raise ValueError(f'network {name}: edge {e.from_}-{e.to} with an unknown commodity')
+                if any(m not in modes for m in e.modes or {}):
+                    raise ValueError(f'network {name}: edge {e.from_}-{e.to} with an unknown mode')
         for v in self.vehicles:
             if v.depot and v.depot not in known:
                 raise ValueError(f'vehicle {v.id}: unknown depot {v.depot}')
@@ -617,80 +651,169 @@ class ScenarioSolver:
         return payload, results
 
     #*********** network flows ************
-    def _flows(self, type):
+    def _network(self, type):
+        """ nodes and arcs of the network of the problem - an undirected edge gives an arc in both directions """
         if not self.problem.network:
             raise ScenarioException(f'problem {self.problem.name}: {type} needs a network')
         net = self.s.networks[self.problem.network]
-        kind = self._kind('costs' if (self.opts.costPerKm or self.opts.costPerHour) else 'distances')
-        values = self._edgeValues(net, kind)
-        par = self.par
-
-        # nodes with a throughput limit are split into in and out - the arc in -> out carries the throughput
         ids = sorted({ e.from_ for e in net.edges } | { e.to for e in net.edges })
-        split = { i for i in ids if not unlimited(self.nodes[i].maxThroughput) and self.nodes[i].maxThroughput > 0
-                  or self.nodes[i].minThroughput > 0 }
-        names = []
-        for i in ids:
-            names += [i + '#in', i + '#out'] if i in split else [i]
-        pos = { n: k for k, n in enumerate(names) }
-        inNode = lambda i: pos[i + '#in'] if i in split else pos[i]
-        outNode = lambda i: pos[i + '#out'] if i in split else pos[i]
-
-        arcs, costs, minCaps, maxCaps, fixedCosts, origin = [], [], [], [], [], []
+        nodes = [ self._node(i, 'node of the network') for i in ids ]
+        pos = { n: k for k, n in enumerate(ids) }
+        D, T = self._rawMatrix(nodes, nodes)
+        arcs = []                                    # (edge, from, to, distance in m, time in s)
         for e in net.edges:
             directed = net.directed if e.directed is None else e.directed
             for a, b in ((e.from_, e.to),) if directed else ((e.from_, e.to), (e.to, e.from_)):
-                arcs.append([outNode(a), inNode(b)])
-                costs.append(values[(a, b)])
-                minCaps.append(e.minFlow)
-                maxCaps.append('M' if unlimited(e.capacity) else e.capacity)
-                fixedCosts.append(e.fixedCost or 0)
-                origin.append((a, b))
-        for i in sorted(split):
-            n = self.nodes[i]
-            arcs.append([pos[i + '#in'], pos[i + '#out']])
-            costs.append(0)
-            minCaps.append(n.minThroughput)
-            maxCaps.append('M' if unlimited(n.maxThroughput) or n.maxThroughput == 0 else n.maxThroughput)
-            fixedCosts.append(0)
-            origin.append((i, None))
+                arcs.append((e, a, b, D[pos[a]][pos[b]], T[pos[a]][pos[b]]))
+        return nodes, pos, arcs
 
-        # supplies at the node or its in node, demands at the node or its out node
-        supplies, demands = [0] * len(names), [0] * len(names)
-        for i in ids:
-            n = self.nodes[i]
-            if not unlimited(n.supply) and n.supply:
-                supplies[inNode(i)] = n.supply
-            if not unlimited(n.demand) and n.demand:
-                demands[outNode(i)] = n.demand
+    def _rate(self, d, t, *levels):
+        """ costs of a connection - costPerKm and costPerHour of the first level that has them, else of the scenario """
+        cpk = next((l.costPerKm for l in levels if l is not None and l.costPerKm is not None), self.opts.costPerKm)
+        cph = next((l.costPerHour for l in levels if l is not None and l.costPerHour is not None), self.opts.costPerHour)
+        return d / 1000 * (cpk or 0) + t / 3600 * (cph or 0)
+
+    def _nodeOptions(self, nodes):
+        """ node capacities, balance and shortage costs for the library """
+        mins = [ n.minCap or 0 for n in nodes ]
+        maxs = [ None if unlimited(n.maxCap) else n.maxCap for n in nodes ]
+        shortage = [ n.shortageCost or 0 for n in nodes ]
+        balance = self.par.get('balance', 'auto')
+        out = {'nodeMinCaps': mins if any(mins) else None,
+               'nodeMaxCaps': maxs if any(m is not None for m in maxs) else None, 'balance': balance}
+        if balance == 'auto' and any(shortage):
+            out['shortageCosts'] = shortage
+        return out
+
+    def _nodeResults(self, nodes, r, values=lambda v: v):
+        """ flow through the nodes, unused supply and unmet demand - values maps a value of the library (e.g. a list per commodity) """
+        out = {}
+        for key, name in (('nodeFlows', 'flow'), ('unusedSupplies', 'unusedSupply'), ('unmetDemands', 'unmetDemand')):
+            for n, v in zip(nodes, r.get(key) or []):
+                if (sum(v) if isinstance(v, list) else v) > 1e-9:
+                    out.setdefault(n.id, {})[name] = values(v)
+        return out
+
+    def _summary(self, r):
+        return { k: r[k] for k in ('totalVarCosts', 'totalFixedCosts', 'totalShortageCosts') if k in r }
+
+    def _flows(self, type):
+        nodes, pos, arcs = self._network(type)
+        kind = self._kind('costs' if (self.opts.costPerKm or self.opts.costPerHour) else 'distances')
+        par = self.par
+        edges = [ [pos[a], pos[b]] for _, a, b, _, _ in arcs ]
+        costs = [ self._value(kind, d, t) for _, _, _, d, t in arcs ]
+        minCaps = [ e.minFlow for e, *_ in arcs ]
+        maxCaps = [ 'M' if unlimited(e.capacity) else e.capacity for e, *_ in arcs ]
+        nodeOptions = self._nodeOptions(nodes)
 
         if type == 'mincostflow':
-            payload = {'type': 'mincostflow', 'edges': arcs, 'costs': costs, 'supplies': supplies, 'demands': demands,
-                       'minCaps': minCaps, 'maxCaps': maxCaps, **self._common()}
+            payload = {'type': 'mincostflow', 'edges': edges, 'costs': costs,
+                       'supplies': [ 0 if unlimited(n.supply) else n.supply for n in nodes ],
+                       'demands': [ 0 if unlimited(n.demand) else n.demand for n in nodes ],
+                       'minCaps': minCaps, 'maxCaps': maxCaps, **nodeOptions, **self._common()}
             if par.get('useFixedCosts'):
-                payload['fixedCosts'] = fixedCosts
+                payload['fixedCosts'] = [ e.fixedCost or 0 for e, *_ in arcs ]
         else:
-            payload = {'type': 'maxflow', 'edges': arcs, 'source': outNode(self._node(par['source'], 'source').id),
-                       'sink': inNode(self._node(par['sink'], 'sink').id), 'maxCaps': maxCaps, 'minCaps': minCaps,
-                       'nrOfNodes': len(names), 'maxSolvingTime': par.get('maxSolvingTime')}
+            payload = {'type': 'maxflow', 'edges': edges, 'source': pos[self._node(par['source'], 'source').id],
+                       'sink': pos[self._node(par['sink'], 'sink').id], 'maxCaps': maxCaps, 'minCaps': minCaps,
+                       'nrOfNodes': len(nodes), 'maxSolvingTime': par.get('maxSolvingTime'),
+                       'nodeMinCaps': nodeOptions['nodeMinCaps'], 'nodeMaxCaps': nodeOptions['nodeMaxCaps']}
 
         def results(r):
-            edges, nodes = [], {}
-            for (a, b), f, c, k in zip(origin, r['flows'], costs, range(len(origin))):
-                if b is None:
-                    nodes[a] = {'throughput': f}
-                elif f > 1e-9:
-                    entry = {'from': a, 'to': b, 'flow': f, 'rate': c}
+            out = {'edges': []}
+            for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
+                if f > 1e-9:
+                    entry = {'from': a, 'to': b, 'flow': f, 'rate': costs[k]}
                     if r.get('usages'):
                         entry['used'] = r['usages'][k]
-                    edges.append(entry)
-            out = {'edges': edges}
-            if nodes:
-                out['nodes'] = nodes
-            if 'totalVarCosts' in r:
-                out['summary'] = {'totalVarCosts': r['totalVarCosts'], 'totalFixedCosts': r['totalFixedCosts']}
+                    out['edges'].append(entry)
+            nodeResults = self._nodeResults(nodes, r)
+            if nodeResults:
+                out['nodes'] = nodeResults
+            if self._summary(r):
+                out['summary'] = self._summary(r)
             return out
         return payload, results
 
     def _mincostflow(self): return self._flows('mincostflow')
     def _maxflow(self): return self._flows('maxflow')
+
+    def _multicommodity(self):
+        nodes, pos, arcs = self._network('multicommodity')
+        commodities = [ c for c in self.s.commodities if c.id in self.par.get('commodities', [ c.id for c in self.s.commodities ]) ]
+        if not commodities:
+            raise ScenarioException(f'problem {self.problem.name}: multicommodity needs commodities')
+        self.valueUnit = 'costs'
+        ids = [ c.id for c in commodities ]
+        costs, factors = [], []
+        for e, a, b, d, t in arcs:
+            ec = e.commodities or {}
+            costs.append([ self._rate(d, t, ec.get(c.id), c) for c in commodities ])
+            factors.append([ ec[c.id].capacityFactor if c.id in ec and ec[c.id].capacityFactor is not None
+                             else c.capacityFactor for c in commodities ])
+        payload = {'type': 'multicommodity', 'edges': [ [pos[a], pos[b]] for _, a, b, _, _ in arcs ], 'costs': costs,
+                   'supplies': [ [ (n.supplies or {}).get(k, 0) for k in ids ] for n in nodes ],
+                   'demands': [ [ (n.demands or {}).get(k, 0) for k in ids ] for n in nodes ],
+                   'minCaps': [ e.minFlow for e, *_ in arcs ],
+                   'maxCaps': [ 'M' if unlimited(e.capacity) else e.capacity for e, *_ in arcs ],
+                   'capacityFactors': factors, **self._nodeOptions(nodes), 'maxSolvingTime': self.par.get('maxSolvingTime')}
+        perCommodity = lambda v: { k: x for k, x in zip(ids, v) if x > 1e-9 }
+
+        def results(r):
+            edges = []
+            for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
+                if sum(f) > 1e-9:
+                    edges.append({'from': a, 'to': b, 'flow': sum(f), 'flows': perCommodity(f)})
+            out = {'edges': edges}
+            nodeResults = self._nodeResults(nodes, r, perCommodity)
+            if nodeResults:
+                out['nodes'] = nodeResults
+            if self._summary(r):
+                out['summary'] = self._summary(r)
+            return out
+        return payload, results
+
+    def _multimodal(self):
+        nodes, pos, arcs = self._network('multimodal')
+        modes = self.s.modes
+        if not modes:
+            raise ScenarioException(f'problem {self.problem.name}: multimodal needs modes')
+        self.valueUnit = 'costs'
+        costs, fixed, minCaps, maxCaps = [], [], [], []
+        for e, a, b, d, t in arcs:
+            row = ([], [], [], [])
+            for m in modes:
+                # without modes at the edge all modes are available, otherwise only the given ones
+                em = (e.modes or {}).get(m.id) if e.modes is not None else Mode()
+                if em is None:
+                    for lst, v in zip(row, (None, 0, 0, 0)):
+                        lst.append(v)
+                    continue
+                pick = lambda attr, default: next((v for v in (getattr(em, attr), getattr(m, attr)) if v is not None), default)
+                cap = pick('capacity', None)
+                for lst, v in zip(row, (self._rate(d, t, em, m), pick('fixedCost', 0), pick('minFlow', 0),
+                                        None if unlimited(cap) else cap)):
+                    lst.append(v)
+            for lst, r_ in zip((costs, fixed, minCaps, maxCaps), row):
+                lst.append(r_)
+        payload = {'type': 'multimodal', 'edges': [ [pos[a], pos[b]] for _, a, b, _, _ in arcs ], 'costs': costs,
+                   'supplies': [ 0 if unlimited(n.supply) else n.supply for n in nodes ],
+                   'demands': [ 0 if unlimited(n.demand) else n.demand for n in nodes ],
+                   'fixedCosts': fixed, 'minCaps': minCaps, 'maxCaps': maxCaps, **self._nodeOptions(nodes),
+                   **self._common()}
+
+        def results(r):
+            edges = []
+            for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
+                if sum(f) > 1e-9:
+                    edges.append({'from': a, 'to': b, 'flow': sum(f),
+                                  'modes': { m.id: x for m, x in zip(modes, f) if x > 1e-9 }})
+            out = {'edges': edges}
+            nodeResults = self._nodeResults(nodes, r)
+            if nodeResults:
+                out['nodes'] = nodeResults
+            if self._summary(r):
+                out['summary'] = self._summary(r)
+            return out
+        return payload, results

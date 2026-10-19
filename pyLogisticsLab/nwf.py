@@ -10,6 +10,14 @@
 
     Nodes are 0-based indices, edges are lists [[i, j], ...] of node indices.
     Capacities None or 'M' mean unlimited. Results are lists in the order of the edges.
+
+    All classes accept capacities of the nodes and (except MaxFlow) unequal totals of supply and demand:
+        nodeMinCaps, nodeMaxCaps   minimal and maximal flow through a node (incl. its own supply and demand)
+        balance                    'auto' (default): a surplus of supply remains at the sources, a surplus of demand
+                                   remains unmet at the sinks, 'exact': the totals must be equal
+        shortageCosts              costs per unit of unmet demand of every sink (default 0, balance 'auto')
+    Internally the network is extended - a node with a capacity is split into an in and an out node, dummy nodes
+    take the surplus. The results refer to the original nodes and edges only.
 """
 
 from .tools import *
@@ -190,7 +198,7 @@ class _SingleFlow(_CmplFlow):
 
 
 #*************** MinCostFlow ************************************************
-class MinCostFlow(_SingleFlow):
+class _MinCostFlowModel(_SingleFlow):
     """ min cost flow problem (minCostFlow.cmpl), with fixed costs (minCostFlowFixed.cmpl)
 
         edges       [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
@@ -252,7 +260,7 @@ class MinCostFlow(_SingleFlow):
 
 
 #*************** MaxFlow ************************************************
-class MaxFlow(_SingleFlow):
+class _MaxFlowModel(_SingleFlow):
     """ maximal flow from source to sink (maxFlow.cmpl)
 
         edges       [[i, j], ...], nodes 0..nrOfNodes-1 (default: largest node index of the edges + 1), no parallel edges
@@ -304,7 +312,7 @@ class MaxFlow(_SingleFlow):
 
 
 #*************** MultiCommodityFlow ************************************************
-class MultiCommodityFlow(_CmplFlow):
+class _MultiCommodityModel(_CmplFlow):
     """ min cost flow problem of several commodities with joint capacities of the edges
 
         edges            [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
@@ -365,7 +373,7 @@ class MultiCommodityFlow(_CmplFlow):
 
 
 #*************** MultiModalFlow ************************************************
-class MultiModalFlow(_CmplFlow):
+class _MultiModalModel(_CmplFlow):
     """ min cost flow problem with several modes (e.g. truck, train, ship) on the edges and fixed costs
 
         edges       [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
@@ -443,4 +451,336 @@ class MultiModalFlow(_CmplFlow):
 
     def getFixedCosts(self):
         return sum(self._fixedCosts[e][m] * self._usages[e][m] for e in range(self._nrOfEdges) for m in range(self._nrOfModes))
+#*************** end MultiModalFlow ********************************************
+
+
+#*************** extended network: node capacities and balance ************************************************
+class _Extension:
+    """ extended network of a flow problem
+
+        A node v with a capacity is split into v (in) and an out node: all edges leaving v leave the out node, the edge
+        v -> out carries the throughput (inflow + own supply = outflow + own demand). Own supplies stay at v,
+        own demands move to the out node.
+        balance 'auto': a dummy sink takes a surplus of supply (edges from the sources, costs 0), a dummy source
+        delivers a surplus of demand (edges to the sinks, costs shortageCosts) - per commodity.
+        The added edges follow the original ones - kinds[k] = (kind, node) of the added edge E + k.
+    """
+
+    def __init__(self, edges, n, supplies, demands, nodeMinCaps, nodeMaxCaps, balance, shortageCosts):
+        self.orig = [ tuple(e) for e in setEdges(edges, n) ]
+        self.n, self.E, self.K = n, len(self.orig), len(supplies[0])
+        self.supplies, self.demands = supplies, demands
+        self.nodeMin = _vector(nodeMinCaps, n, 'minimal capacities of the nodes', 0)
+        self.nodeMax = _vector(nodeMaxCaps, n, 'maximal capacities of the nodes', None)
+        _numbers(self.nodeMin, 'minimal capacity of a node')
+        _numbers(self.nodeMax, 'maximal capacity of a node', allowUnlimited=True)
+        if balance not in ('exact', 'auto'):
+            raise LogLabException(f"LogisticsLab error: Wrong balance <{balance}> - 'exact' or 'auto' expected")
+        K = self.K
+        if shortageCosts is None:
+            self.shortage = [ [0] * K for _ in range(n) ]
+        elif shortageCosts and isinstance(shortageCosts[0], (list, tuple)):
+            self.shortage = _matrix(shortageCosts, n, K, 'shortage costs', 0)
+        else:
+            self.shortage = [ [c] * K for c in _vector(shortageCosts, n, 'shortage costs', 0) ]
+        for row in self.shortage:
+            _numbers(row, 'shortage cost')
+
+        self.split = [ v for v in range(n) if not _isUnlimited(self.nodeMax[v]) or self.nodeMin[v] > 0 ]
+        self.outOf = list(range(n))
+        for k, v in enumerate(self.split):
+            self.outOf[v] = n + k
+        N = n + len(self.split)
+        self.edges = [ [self.outOf[i], j] for i, j in self.orig ]
+        self.kinds = []
+        for v in self.split:
+            self.edges.append([v, self.outOf[v]])
+            self.kinds.append(('node', v))
+        S = [ [0] * K for _ in range(N) ]
+        D = [ [0] * K for _ in range(N) ]
+        for v in range(n):
+            S[v] = list(supplies[v])
+            D[self.outOf[v]] = list(demands[v])
+
+        self.sink = self.source = None
+        if balance == 'auto':
+            surplus = [ sum(r[k] for r in supplies) - sum(r[k] for r in demands) for k in range(K) ]
+            if any(s > 1e-9 for s in surplus):
+                self.sink = N
+                N += 1
+                S.append([0] * K)
+                D.append([ max(0, s) for s in surplus ])
+                for v in range(n):
+                    if any(supplies[v][k] > 0 and surplus[k] > 1e-9 for k in range(K)):
+                        self.edges.append([v, self.sink])
+                        self.kinds.append(('surplus', v))
+            if any(s < -1e-9 for s in surplus):
+                self.source = N
+                N += 1
+                S.append([ max(0, -s) for s in surplus ])
+                D.append([0] * K)
+                for v in range(n):
+                    if any(demands[v][k] > 0 and surplus[k] < -1e-9 for k in range(K)):
+                        self.edges.append([self.source, self.outOf[v]])
+                        self.kinds.append(('shortage', v))
+        self.N, self.S, self.D = N, S, D
+
+    def addedRow(self, kind, v, node, surplus, shortage):
+        """ value of an added edge - node, surplus and shortage are functions of the node """
+        return {'node': node, 'surplus': surplus, 'shortage': shortage}[kind](v)
+
+    def results(self, flows):
+        """ flows [extended edges x K] -> original flows, throughput, unused supply and unmet demand per node """
+        K, n = self.K, self.n
+        flows = [ f if isinstance(f, list) else [f] for f in flows ]
+        unused = [ [0] * K for _ in range(n) ]
+        unmet = [ [0] * K for _ in range(n) ]
+        for k, (kind, v) in enumerate(self.kinds):
+            if kind == 'surplus':
+                unused[v] = flows[self.E + k]
+            elif kind == 'shortage':
+                unmet[v] = flows[self.E + k]
+        through = [ [ self.supplies[v][k] - unused[v][k] for k in range(K) ] for v in range(n) ]
+        for e, (i, j) in enumerate(self.orig):
+            for k in range(K):
+                through[j][k] += flows[e][k]
+        return flows[:self.E], through, unused, unmet
+
+
+class _Extended:
+    """ common part of the public flow classes - the model of the extended network is self._model """
+
+    _isSingle = True
+
+    def solve(self):
+        self._model.solve()
+        if self._model.isSolution():
+            self._flows, self._through, self._unused, self._unmet = self._x.results(self._model.getFlows())
+
+    def isSolution(self):
+        return self._model.isSolution()
+
+    def getObjValue(self):
+        return self._model.getObjValue()
+
+    def getMessage(self):
+        return self._model.getMessage()
+
+    def __out(self, rows):
+        if not self._model.isSolution():
+            return []
+        return [ r[0] for r in rows ] if self._isSingle else rows
+
+    def getFlows(self):
+        """ flow on every original edge """
+        return self.__out(self._flows)
+
+    def getNodeFlows(self):
+        """ flow through every node: inflow + own supply (= outflow + own demand) """
+        return self.__out(self._through)
+
+    def getUnusedSupplies(self):
+        """ balance 'auto': supply that remains at a node """
+        return self.__out(self._unused)
+
+    def getUnmetDemands(self):
+        """ balance 'auto': demand of a node that is not delivered """
+        return self.__out(self._unmet)
+
+    def getShortageCosts(self):
+        return sum(c * u for row, urow in zip(self._x.shortage, self._unmet) for c, u in zip(row, urow)) \
+               if self._model.isSolution() else 0
+
+
+#*************** MinCostFlow ************************************************
+class MinCostFlow(_Extended):
+    """ min cost flow problem (minCostFlow.cmpl), with fixed costs (minCostFlowFixed.cmpl)
+
+        edges       [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
+        costs       cost rate of every edge
+        supplies    supply of every node, demands: demand of every node (default 0)
+        minCaps     minimal flow of every edge (default 0), maxCaps: maximal flow (default unlimited)
+        fixedCosts  optional fixed costs of every edge - paid if the edge carries flow (MIP, mipGap)
+                    a minimal flow minCaps > 0 forces the use of the edge
+        nodeMinCaps, nodeMaxCaps, balance, shortageCosts - see the description of the module
+    """
+
+    def __init__(self, edges, costs, supplies, demands=None, minCaps=None, maxCaps=None, maxSolvingTime=10,
+                 fixedCosts=None, mipGap=0.001, nodeMinCaps=None, nodeMaxCaps=None, balance='auto', shortageCosts=None):
+        supplies = setNumVector(supplies)
+        n = len(supplies)
+        demands = _vector(demands, n, 'demands', 0)
+        _numbers(demands, 'demand')
+        x = self._x = _Extension(edges, n, [ [s] for s in supplies ], [ [d] for d in demands ],
+                                 nodeMinCaps, nodeMaxCaps, balance, shortageCosts)
+        costs = _vector(costs, x.E, 'costs', None)
+        minCaps = _vector(minCaps, x.E, 'minimal capacities', 0)
+        maxCaps = _vector(maxCaps, x.E, 'maximal capacities', None)
+        fixed = None if fixedCosts is None else _vector(fixedCosts, x.E, 'fixed costs', 0)
+        for kind, v in x.kinds:
+            costs.append(x.addedRow(kind, v, lambda v: 0, lambda v: 0, lambda v: x.shortage[v][0]))
+            minCaps.append(x.nodeMin[v] if kind == 'node' else 0)
+            maxCaps.append(x.nodeMax[v] if kind == 'node' else None)
+            if fixed is not None:
+                fixed.append(0)
+        self._costs = costs
+        self._model = _MinCostFlowModel(x.edges, costs, [ r[0] for r in x.S ], [ r[0] for r in x.D ], minCaps, maxCaps,
+                                        maxSolvingTime, fixed, mipGap)
+
+    def isFixedCosts(self):
+        return self._model.isFixedCosts()
+
+    def getUsages(self):
+        """ 1 if the edge is used """
+        return self._model.getUsages()[:self._x.E]
+
+    def getVarCosts(self):
+        return sum(c * f for c, f in zip(self._costs, self.getFlows()))
+
+    def getFixedCosts(self):
+        return self._model.getFixedCosts()
+#*************** end MinCostFlow ********************************************
+
+
+#*************** MaxFlow ************************************************
+class MaxFlow(_Extended):
+    """ maximal flow from source to sink (maxFlow.cmpl)
+
+        edges       [[i, j], ...], nodes 0..nrOfNodes-1 (default: largest node index of the edges + 1), no parallel edges
+        maxCaps     maximal flow of every edge, minCaps: minimal flow (default 0)
+        nodeMinCaps, nodeMaxCaps   minimal and maximal flow through a node, also through source and sink
+        objective value: the maximal flow from source to sink
+    """
+
+    def __init__(self, edges, source, sink, maxCaps, minCaps=None, nrOfNodes=None, maxSolvingTime=10,
+                 nodeMinCaps=None, nodeMaxCaps=None):
+        if nrOfNodes is None:
+            nodes = [ n for e in setEdges(edges) for n in e ]
+            nrOfNodes = max(nodes) + 1 if nodes else 0
+        for name, node in (('source', source), ('sink', sink)):
+            if not isinstance(node, int) or not 0 <= node < nrOfNodes:
+                raise LogLabException(f'LogisticsLab error: Wrong {name} <{node}>')
+        if source == sink:
+            raise LogLabException('LogisticsLab error: Source and sink must be different')
+        zeros = [ [0] for _ in range(nrOfNodes) ]
+        x = self._x = _Extension(edges, nrOfNodes, zeros, zeros, nodeMinCaps, nodeMaxCaps, 'exact', None)
+        maxCaps = _vector(maxCaps, x.E, 'maximal capacities', None)
+        minCaps = _vector(minCaps, x.E, 'minimal capacities', 0)
+        for kind, v in x.kinds:
+            minCaps.append(x.nodeMin[v])
+            maxCaps.append(x.nodeMax[v])
+        # the flow leaves the source at its in node and reaches the sink at its out node - both pass their node edge
+        self._model = _MaxFlowModel(x.edges, source, x.outOf[sink], maxCaps, minCaps, x.N, maxSolvingTime)
+        self._source = source
+
+    def solve(self):
+        super().solve()
+        if self._model.isSolution():
+            # the flow from the source is no supply - throughput = inflow, at the source the outflow
+            self._through[self._source] = [self._model.getObjValue()]
+#*************** end MaxFlow ********************************************
+
+
+#*************** MultiCommodityFlow ************************************************
+class MultiCommodityFlow(_Extended):
+    """ min cost flow problem of several commodities with joint capacities of the edges
+
+        edges            [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
+        costs            [edges x commodities] cost rates
+        supplies         [nodes x commodities], demands: [nodes x commodities] (default 0)
+        minCaps          joint minimal capacity of every edge (default 0), maxCaps: joint maximal capacity (default unlimited)
+        capacityFactors  [edges x commodities] capacity used by one unit of a commodity (default 1)
+        nodeMinCaps, nodeMaxCaps   joint capacities of the nodes (one unit of every commodity uses 1)
+        balance, shortageCosts     per commodity - shortageCosts [nodes] or [nodes x commodities]
+        results [edges x commodities] or [nodes x commodities]
+    """
+
+    _isSingle = False
+
+    def __init__(self, edges, costs, supplies, demands=None, minCaps=None, maxCaps=None, capacityFactors=None,
+                 maxSolvingTime=60, nodeMinCaps=None, nodeMaxCaps=None, balance='auto', shortageCosts=None):
+        if not isinstance(supplies, (list, tuple)) or not supplies or not isinstance(supplies[0], (list, tuple)):
+            raise LogLabException('LogisticsLab error: Wrong supplies - matrix [nodes x commodities] expected')
+        n, K = len(supplies), len(supplies[0])
+        supplies = _matrix(supplies, n, K, 'supplies', 0)
+        demands = _matrix(demands, n, K, 'demands', 0)
+        for name, m in (('supply', supplies), ('demand', demands)):
+            for row in m:
+                _numbers(row, name)
+        x = self._x = _Extension(edges, n, supplies, demands, nodeMinCaps, nodeMaxCaps, balance, shortageCosts)
+        costs = _matrix(costs, x.E, K, 'costs', None)
+        factors = _matrix(capacityFactors, x.E, K, 'capacity factors', 1)
+        minCaps = _vector(minCaps, x.E, 'minimal capacities', 0)
+        maxCaps = _vector(maxCaps, x.E, 'maximal capacities', None)
+        for kind, v in x.kinds:
+            costs.append(x.shortage[v] if kind == 'shortage' else [0] * K)
+            factors.append([1] * K)
+            minCaps.append(x.nodeMin[v] if kind == 'node' else 0)
+            maxCaps.append(x.nodeMax[v] if kind == 'node' else None)
+        self._model = _MultiCommodityModel(x.edges, costs, x.S, x.D, minCaps, maxCaps, factors, maxSolvingTime)
+#*************** end MultiCommodityFlow ********************************************
+
+
+#*************** MultiModalFlow ************************************************
+class MultiModalFlow(_Extended):
+    """ min cost flow problem with several modes (e.g. truck, train, ship) on the edges and fixed costs
+
+        edges       [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
+        costs       [edges x modes] cost rates - None: the mode is not available on this edge
+        supplies    supply of every node, demands: demand of every node (default 0)
+        fixedCosts  [edges x modes] fixed costs if a mode is used on an edge (default 0)
+        minCaps     [edges x modes] minimal flow if a mode is used (default 0), maxCaps: maximal flow (default unlimited)
+        nodeMaxCaps, balance, shortageCosts - see the description of the module
+        nodeMinCaps are not supported - minimal flows of the model apply only if a mode is used
+    """
+
+    def __init__(self, edges, costs, supplies, demands=None, fixedCosts=None, minCaps=None, maxCaps=None,
+                 mipGap=0.001, maxSolvingTime=60, nodeMinCaps=None, nodeMaxCaps=None, balance='auto', shortageCosts=None):
+        supplies = setNumVector(supplies)
+        n = len(supplies)
+        demands = _vector(demands, n, 'demands', 0)
+        _numbers(demands, 'demand')
+        if nodeMinCaps is not None and any(c for c in nodeMinCaps):
+            raise LogLabException('LogisticsLab error: Minimal capacities of the nodes are not supported by MultiModalFlow')
+        x = self._x = _Extension(edges, n, [ [s] for s in supplies ], [ [d] for d in demands ],
+                                 None, nodeMaxCaps, balance, shortageCosts)
+        if not isinstance(costs, (list, tuple)) or not costs or not isinstance(costs[0], (list, tuple)):
+            raise LogLabException('LogisticsLab error: Wrong costs - matrix [edges x modes] expected')
+        V = len(costs[0])
+        costs = _matrix(costs, x.E, V, 'costs', None)
+        fixed = _matrix(fixedCosts, x.E, V, 'fixed costs', 0)
+        minCaps = _matrix(minCaps, x.E, V, 'minimal capacities', 0)
+        maxCaps = _matrix(maxCaps, x.E, V, 'maximal capacities', None)
+        for kind, v in x.kinds:
+            # the added edges use the first mode - the others are not available there
+            costs.append([x.shortage[v][0] if kind == 'shortage' else 0] + [None] * (V - 1))
+            fixed.append([0] * V)
+            minCaps.append([0] * V)
+            maxCaps.append([x.nodeMax[v] if kind == 'node' else None] + [0] * (V - 1))
+        self._costs, self._nrOfModes = costs, V
+        self._model = _MultiModalModel(x.edges, costs, [ r[0] for r in x.S ], [ r[0] for r in x.D ], fixed, minCaps,
+                                       maxCaps, mipGap, maxSolvingTime)
+
+    def solve(self):
+        self._model.solve()
+        if self._model.isSolution():
+            # flows per mode on the original edges, the node and balance flows summed over the modes
+            modeFlows = self._model.getFlows()
+            _, self._through, self._unused, self._unmet = self._x.results([ [sum(f)] for f in modeFlows ])
+            self._flows = modeFlows[:self._x.E]
+
+    def getFlows(self):
+        """ [edges x modes] flows """
+        return self._flows if self._model.isSolution() else []
+
+    def getUsages(self):
+        """ [edges x modes] 1 if the mode is used on the edge """
+        return self._model.getUsages()[:self._x.E]
+
+    def getVarCosts(self):
+        return sum(self._costs[e][m] * f for e, row in enumerate(self.getFlows()) for m, f in enumerate(row)
+                   if self._costs[e][m] is not None)
+
+    def getFixedCosts(self):
+        return self._model.getFixedCosts()
 #*************** end MultiModalFlow ********************************************

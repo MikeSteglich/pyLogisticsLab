@@ -33,10 +33,10 @@ EXPECTED = {
     'findMcpServer':            [10],
     'findCppServer':            [26],
     'findVrpServer':            [28],
-    'findMinCostFlowServer':    [114, 180],
+    'findMinCostFlowServer':    [114, 180, 95],
     'findMaxFlowServer':        [15],
     'findMultiCommodityServer': [62],
-    'findMultiModalServer':     [90],
+    'findMultiModalServer':     [90, 45],
     'findContPMedianServer':    [4968.608, 6039.286],
     'findContPCentreServer':    [42.566, 56.541],
 }
@@ -119,8 +119,13 @@ print('== errors')
 flow = importlib.import_module('findMinCostFlowServer').payloads[0]
 cont = importlib.import_module('findContPMedianServer').payloads[0]
 
-checkError('mincostflow unbalanced', 'mincostflow', {**flow, "demands": [0, 0, 5, 14]}, 400)
+checkError('mincostflow unbalanced with balance exact', 'mincostflow', {**flow, "demands": [0, 0, 5, 14], "balance": "exact"}, 400)
+ret = solve('mincostflow', {**flow, "supplies": [25, 0, 0, 0]}, verbose=False)
+check('mincostflow unbalanced, default balance auto', ret.get('status') == 'solution'
+      and ret['results'].get('unusedSupplies') == [5.0, 0, 0, 0], f"- {ret.get('status')}: {ret.get('results', {}).get('unusedSupplies')}")
 checkError('mincostflow capacity too small', 'mincostflow', {**flow, "maxCaps": [1, 1, 1, 1, 1]}, 404)
+checkError('mincostflow wrong balance', 'mincostflow', {**flow, "balance": "x"}, 422)
+checkError('mincostflow node capacity too small', 'mincostflow', {**flow, "nodeMaxCaps": [5, None, None, None]}, 404)
 checkError('maxflow unbounded', 'maxflow', {"edges": flow["edges"], "source": 0, "sink": 3, "maxCaps": ["M"] * 5}, 400)
 checkError('maxflow missing field', 'maxflow', {"edges": flow["edges"], "source": 0, "sink": 3}, 422)
 checkError('contpmedian capacity too small', 'contpmedian', {**cont, "capacities": 10}, 400)

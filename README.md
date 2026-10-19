@@ -159,7 +159,12 @@ Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach fo
 Für die Netzwerkflüsse gilt:
 - **Knoten und Kanten:** Knoten sind Indizes ab 0, Kanten Paare `[i, j]`.
 - **Unbegrenzte Kapazitäten:** `null` oder `"M"`.
-- **Ausgleich:** Gesamtangebot und Gesamtnachfrage müssen gleich sein, bei `multicommodity` je Gut. Sonst kommt 400. Einen Überschuss gleicht man mit einem Dummy-Knoten aus.
+- **Ausgleich (`balance`):**
+  - `"auto"` (Standard): wie bei TPP. Bei Angebotsüberschuss bleibt Angebot an den Quellen ungenutzt. Bei Nachfrageüberschuss wird das ganze Angebot geliefert, und ein Teil der Nachfrage bleibt offen. `shortageCosts` legt je Knoten Kosten pro nicht gelieferter Einheit fest, Standard 0. Gilt für alle Flüsse außer `maxflow`.
+  - `"exact"`: Gesamtangebot und Gesamtnachfrage müssen gleich sein, bei `multicommodity` je Gut. Sonst kommt 400.
+- **Knotenkapazitäten:** `nodeMinCaps`/`nodeMaxCaps` begrenzen den Fluss durch jeden Knoten, einschließlich eigenem Angebot und eigener Nachfrage, z. B. an einem Umschlagpunkt. Bei `multicommodity` gilt die Grenze gemeinsam für alle Güter. Bei `multimodal` gibt es nur `nodeMaxCaps`, denn Mindestmengen gelten dort nur für genutzte Verkehrsträger.
+- **Umsetzung:** Intern teilt die Bibliothek einen Knoten mit Kapazität in einen Eingangs- und einen Ausgangsknoten. Dummy-Knoten nehmen den Überschuss auf. Die Ergebnisse beziehen sich nur auf die ursprünglichen Knoten und Kanten.
+- **Ergebnisse dazu:** mit Knotenkapazitäten `nodeFlows`. Wurde ein Überschuss ausgeglichen, kommen `unusedSupplies`, `unmetDemands` und `totalShortageCosts` hinzu, jeweils je Knoten, bei `multicommodity` je Knoten und Gut.
 - **Parallele Kanten:** Keines der Flussmodelle erlaubt parallele Kanten zwischen denselben Knoten. Mehrere Verkehrswege bildet man über `multimodal` mit Verkehrsträgern ab.
 - **Solver:** Alle vier laufen über CMPL und HiGHS (`minCostFlow.cmpl`, mit Fixkosten `minCostFlowFixed.cmpl`, `maxFlow.cmpl`, `multiCommodity.cmpl`, `multimodal.cmpl` in `pyLogisticsLab/`).
 - **Fixkosten:** Bei `mincostflow` bleibt `minCaps` eine feste Mindestmenge. Eine Kante mit `minCaps > 0` wird also immer genutzt und kostet ihre Fixkosten. Bei `multimodal` gilt die Mindestmenge dagegen nur, wenn der Verkehrsträger genutzt wird.
@@ -367,8 +372,13 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
 - **Netze** (`networks`): legen die erlaubten Verbindungen fest, mit Kapazität, Mindestfluss, Fixkosten und Richtung je Kante. Ihre Länge und Fahrzeit kommt von OSM.
   - `networkMode: edges`: nur diese Kanten sind erlaubt. Bei TPP und Standortproblemen sind die übrigen Paare dann gesperrt.
   - `networkMode: shortestPaths`: Es entsteht eine vollständige Matrix aus den kürzesten Wegen über das Netz. Bei TSP enthält die Lösung den ganzen Weg (`path`).
-  - Flüsse und CPP brauchen ein Netz. Knoten mit `maxThroughput` begrenzen den Durchfluss.
-- **Weitere Knotenattribute:** `minSupply`/`maxSupply`, `minDemand`/`maxDemand` (wirksam mit `useSupplyRanges`/`useDemandRanges`), `timeWindow`, `serviceTime`, `active: false` (Knoten wird ignoriert).
+  - Flüsse und CPP brauchen ein Netz. `minCap`/`maxCap` eines Knotens begrenzen den Durchfluss, einschließlich eigenem Angebot und eigener Nachfrage. `capacity` ist dagegen die Kapazität eines Standorts bei den Standortproblemen.
+  - Ungleiche Gesamtangebote und -nachfragen werden ausgeglichen (`"balance": "auto"`, Standard). Mit `"balance": "exact"` gibt es stattdessen einen Fehler. Nicht gelieferte Mengen kosten je Senke `shortageCost`, Standard 0.
+- **Weitere Knotenattribute:** `minSupply`/`maxSupply`, `minDemand`/`maxDemand` (wirksam mit `useSupplyRanges`/`useDemandRanges`), `timeWindow`, `serviceTime`, `active: false` (Knoten wird ignoriert), `shortageCost` (bei `balance: auto`).
+- **Güter und Verkehrsträger:** für `multicommodity` und `multimodal`.
+  - `commodities`: Liste der Güter mit `costPerKm`, `costPerHour` und `capacityFactor`. An den Knoten stehen `supplies`/`demands` je Gut, an den Kanten optional abweichende Werte unter `commodities`.
+  - `modes`: Liste der Verkehrsträger mit `costPerKm`, `costPerHour`, `fixedCost`, `minFlow` und `capacity`. Eine Kante ohne `modes` erlaubt alle Verkehrsträger. Mit `modes` erlaubt sie nur die genannten, mit eventuell eigenen Werten.
+  - Die Kosten kommen auch hier aus der OSM-Distanz und -Fahrzeit.
   - `fixed` und `assignedTo` werden bisher nur gespeichert. Die Probleme berücksichtigen sie noch nicht, das Ergebnis enthält dann eine Warnung.
 
 **Ergebnisse** sind eigene Dokumente (`logisticsLabSolution`). Sie stehen nicht im Szenario.
