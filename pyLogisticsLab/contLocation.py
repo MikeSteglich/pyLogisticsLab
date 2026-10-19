@@ -152,7 +152,7 @@ class _ContLocation(object):
     _isMinimax = False
 
     def __init__(self, p, coordinates, demands=None, capacities=None, isSingleSource=True,
-                 nrOfStarts=20, mipGap=0.001, maxSolvingTime=60):
+                 nrOfStarts=20, mipGap=0.001, maxSolvingTime=60, costFactors=None):
 
         if not isinstance(coordinates, (list, tuple)) or not coordinates:
             raise LogLabException('LogisticsLab error: Wrong coordinates - list of [lat, lon] expected')
@@ -177,6 +177,13 @@ class _ContLocation(object):
         self._demands = np.asarray(self._vector(demands, self._n, 'demands'), dtype=float)
         if self._isMinimax and not self._isCapacitated:
             self._demands = np.ones(self._n)            # every customer is covered, the demands do not matter
+
+        # cost factor of every customer - costs = demand x cost factor x distance (only p-median)
+        self._costFactors = np.ones(self._n)
+        if costFactors is not None:
+            self._costFactors = np.asarray(self._vector(costFactors, self._n, 'cost factors'), dtype=float)
+            if self._isMinimax and not np.allclose(self._costFactors, 1):
+                raise LogLabException('LogisticsLab error: Cost factors are not supported by the p-centre problem')
 
         if self._isCapacitated:
             if isinstance(capacities, (int, float)) and not isinstance(capacities, bool):
@@ -245,7 +252,7 @@ class _ContLocation(object):
 
     def __discreteStart(self):
         """ discrete problem with the customers as candidates - None if it cannot be solved """
-        D = (_angles(self._A, self._A) * EARTH_RADIUS).tolist()
+        D = (_angles(self._A, self._A) * EARTH_RADIUS * self._costFactors).tolist()
         # different capacities cannot be assigned to candidates - the start solution is then uncapacitated
         isCap = self._isCapacitated and len(set(self._capacities)) == 1
         supplies = [self._capacities[0]] * self._n if isCap else [0] * self._n
@@ -267,7 +274,7 @@ class _ContLocation(object):
 
     def __randomStart(self):
         """ k-means++ - the next start location is a customer chosen with a probability of demand x distance^2 """
-        w = self._demands + 1e-12
+        w = self._demands * self._costFactors + 1e-12
         idx = [ self._random.choices(range(self._n), weights=w)[0] ]
         for _ in range(1, self._p):
             d = _angles(self._A, self._A[idx]).min(axis=1)
@@ -302,7 +309,7 @@ class _ContLocation(object):
             flows[dist.argmin(axis=0), np.arange(self._n)] = self._demands
             return flows
         try:
-            tpp = Tpp(dist.tolist(), self._capacities, self._demands.tolist(),
+            tpp = Tpp((dist * self._costFactors).tolist(), self._capacities, self._demands.tolist(),
                       objSense='minimax' if self._isMinimax else 'min', isSingleSource=self._isSingleSource,
                       mipGap=self._mipGap, maxSolvingTime=self.__remaining())
             tpp.solve()
@@ -317,11 +324,11 @@ class _ContLocation(object):
         used = flows > 1e-9
         for k in range(self._p):
             if used[k].any():
-                X[k] = self._location(self._A[used[k]], flows[k][used[k]], X[k])
+                X[k] = self._location(self._A[used[k]], flows[k][used[k]] * self._costFactors[used[k]], X[k])
         unused = [ k for k in range(self._p) if not used[k].any() ]
         if unused:
             served = (_angles(X, self._A) * used).max(axis=0)
-            weight = served if self._isMinimax else served * self._demands
+            weight = served if self._isMinimax else served * self._demands * self._costFactors
             for k, j in zip(unused, np.argsort(-weight)):
                 X[k] = self._A[j]
         return X
@@ -381,14 +388,15 @@ class ContPMedian(_ContLocation):
         demands          demand of every customer (default 1) - required with capacities
         capacities       None: uncapacitated, a number or a list of p capacities: capacitated
         isSingleSource   True (default): every customer is supplied by one facility, False: demands can be split
-        objective value: sum of demand x distance (km)
+        costFactors      optional factor of every customer on its costs (default 1)
+        objective value: sum of demand x cost factor x distance (km)
     """
 
     def _location(self, A, w, x0):
         return weberPoint(A, w, x0)
 
     def _objective(self, X, flows):
-        return float(np.sum(flows * _angles(X, self._A)) * EARTH_RADIUS)
+        return float(np.sum(flows * self._costFactors * _angles(X, self._A)) * EARTH_RADIUS)
 #*************** end ContPMedian ************************************************
 
 

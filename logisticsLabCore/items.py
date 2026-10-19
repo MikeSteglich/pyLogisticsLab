@@ -99,6 +99,7 @@ class ContLocationFields(SolverOptions):
     capacities: Optional[Union[int, float, list]] = None   # null: uncapacitated, a number or p numbers: capacitated
     isSingleSource: Optional[bool] = True       # False: the demand of a customer can be split
     nrOfStarts: Optional[int] = 20              # start solutions of the heuristic
+    costFactors: Optional[list] = None          # contpmedian: factor of every customer on its costs (default 1)
 
 class ContPMedianItem(ContLocationFields):
     type: Literal["contpmedian"] = "contpmedian"

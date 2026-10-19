@@ -1,0 +1,57 @@
+{
+  "format": "logisticsLab",
+  "version": 1,
+  "id": "brandenburg",
+  "name": "Werk Ludwigsfelde, zwei Lager, vier Kunden",
+  "description": "Beispiel für das Szenario-Format - ein Datensatz, mehrere Probleme",
+  "units": { "distance": "km", "time": "min" },
+  "matrix": { "matrixSource": "osm", "travelmode": "car", "costPerKm": 0.5, "costPerHour": 30 },
+
+  "nodes": [
+    { "id": "W", "name": "Werk Ludwigsfelde", "coordinates": [52.30, 13.26], "roles": ["supplier"], "supply": 100,
+      "addressDetails": { "city": "Ludwigsfelde", "postcode": "14974", "country": "DE" } },
+    { "id": "D1", "name": "Lager Wildau", "coordinates": [52.32, 13.63], "roles": ["candidate", "depot", "transit"],
+      "capacity": 80, "fixedCost": 5000, "maxThroughput": 80,
+      "addressDetails": { "city": "Wildau", "postcode": "15745", "country": "DE" } },
+    { "id": "D2", "name": "Lager Brandenburg", "coordinates": [52.41, 12.55], "roles": ["candidate", "transit"],
+      "capacity": 60, "fixedCost": 4000,
+      "addressDetails": { "city": "Brandenburg an der Havel", "country": "DE" } },
+    { "id": "B", "name": "Berlin", "coordinates": [52.52, 13.40], "roles": ["customer"], "demand": 40,
+      "timeWindow": [0, 240], "serviceTime": 10 },
+    { "id": "P", "name": "Potsdam", "coordinates": [52.39, 13.06], "roles": ["customer"], "demand": 25,
+      "timeWindow": [0, 360], "serviceTime": 10 },
+    { "id": "F", "name": "Frankfurt (Oder)", "coordinates": [52.34, 14.55], "roles": ["customer"], "demand": 20,
+      "timeWindow": [60, 480], "serviceTime": 15, "costFactor": 1.2 },
+    { "id": "C", "name": "Cottbus", "coordinates": [51.76, 14.33], "roles": ["customer"], "demand": 15,
+      "timeWindow": [60, 480], "serviceTime": 15 }
+  ],
+
+  "networks": {
+    "supply": {
+      "directed": true,
+      "edges": [
+        { "from": "W", "to": "D1", "capacity": 100, "fixedCost": 200 },
+        { "from": "W", "to": "D2", "capacity": 60, "fixedCost": 150 },
+        { "from": "D1", "to": "B", "fixedCost": 50 },
+        { "from": "D1", "to": "F", "fixedCost": 80 },
+        { "from": "D1", "to": "C", "fixedCost": 80 },
+        { "from": "D2", "to": "P", "fixedCost": 40 },
+        { "from": "D2", "to": "B", "fixedCost": 60 }
+      ]
+    }
+  },
+
+  "vehicles": [ { "id": "LKW", "capacity": 60, "count": 2, "depot": "D1" } ],
+
+  "problems": [
+    { "name": "Transport direkt vom Werk", "type": "tpp", "parameters": { "matrixMode": "costs" } },
+    { "name": "Lagerstandorte (WLP)", "type": "wlp", "parameters": { "matrixMode": "costs", "isCapacitated": true } },
+    { "name": "Ein Lager (p-Median)", "type": "pmedian",
+      "parameters": { "p": 1, "matrixMode": "distances", "isDemandWeighted": true } },
+    { "name": "Touren ab Wildau", "type": "vrp", "parameters": { "maxSolvingTime": 5 } },
+    { "name": "Rundreise", "type": "tsp", "parameters": { "startNode": "D1" } },
+    { "name": "Distribution über die Lager", "type": "mincostflow", "network": "supply",
+      "parameters": { "matrixMode": "costs", "useFixedCosts": true } },
+    { "name": "Freie Standorte", "type": "contpmedian", "parameters": { "p": 2 } }
+  ]
+}

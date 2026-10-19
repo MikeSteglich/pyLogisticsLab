@@ -161,7 +161,7 @@ class ContLocationHandler(ProblemHandler):
         try:
             self._problem = self.model(d.p, d.coordinates, d.demands, d.capacities, isSingleSource=d.isSingleSource,
                                        nrOfStarts=d.nrOfStarts, mipGap=d.mipGap,
-                                       maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+                                       maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime), costFactors=d.costFactors)
         except ll.LogLabException as e:
             raise LogLabCoreException(e)
 

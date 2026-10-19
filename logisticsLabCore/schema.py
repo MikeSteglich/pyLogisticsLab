@@ -1,4 +1,4 @@
-""" JSON Schema of all requests and answers - e.g. to generate the Dart models of the Flutter app
+""" JSON Schema of all requests, answers and of the scenario format - e.g. to generate the Dart models of the Flutter app
 
     python -m logisticsLabCore.schema > logisticsLab.schema.json
 
@@ -8,6 +8,7 @@
 
 from .items import *
 from .results import RESULT_ITEMS, ProblemAnswer
+from .scenario import Scenario
 
 import json
 
@@ -16,7 +17,7 @@ from pydantic.json_schema import models_json_schema
 
 def schema():
     results = list(dict.fromkeys(RESULT_ITEMS.values()))       # unique, in the order of the types
-    items = list(PROBLEM_ITEMS.values()) + list(GEO_ITEMS.values()) + [ResultItem, ProblemAnswer] + results
+    items = list(PROBLEM_ITEMS.values()) + list(GEO_ITEMS.values()) + [ResultItem, ProblemAnswer] + results + [Scenario]
     _, defs = models_json_schema([(i, 'validation') for i in items], title='LogisticsLab')
     return defs
 

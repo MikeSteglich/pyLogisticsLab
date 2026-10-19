@@ -21,12 +21,13 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 | Verzeichnis | Inhalt |
 |---|---|
 | `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, die kontinuierlichen `ContPMedian`, `ContPCentre` (`contLocation.py`), `Scp`, `Mcp`, `Cpp`, `Vrp` und den Netzwerkflüssen `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` (`nwf.py`) |
-| `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle |
+| `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle, Szenario-Format (`scenario.py`) und Kommandozeilen-Tool (`cli.py`) |
 | `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
 | `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
 | `cmpl/` | CMPL-Installation dieses Rechners (`bin/cmpl`, `Thirdparty/…`), nicht versioniert – siehe unten |
 | `confs/` | Konfigurationen für die OSM-Server |
-| `tests/` | Beispiel- und Testskripte für Bibliothek (`tests/pyCmpl`) und Server (`tests/serverTests`) |
+| `tools/` | `convertX.py`: Umwandlung der alten LogisticsLab-Dateien (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) in Szenarien |
+| `tests/` | Beispiel- und Testskripte für Bibliothek (`tests/pyCmpl`) und Server (`tests/serverTests`), Beispielszenario (`tests/scenarios`) |
 
 ## Installation
 
@@ -338,6 +339,71 @@ Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den 
 - **Beispiel-Client:** `tests/dartClient` ist ein lauffähiges Dart-Paket ohne externe Abhängigkeiten. Es enthält `LogisticsLabBackend` mit `LocalBackend` (Kindprozess, JSON-RPC) und `RemoteBackend` (REST, Abfrage von `/v1/results`), typisierte Ergebnisse in `lib/src/results.dart` und das Beispiel `bin/cont_pcentre.dart`. Fehler kommen in beiden Fällen als `LogisticsLabException` mit `httpStatus`. Für die Flutter-App lässt sich `lib/` direkt übernehmen.
 - **Python-Client:** `tests/pythonClient` zeigt dasselbe in Python, nur mit der Standardbibliothek. `logisticsLabClient.py` enthält `LocalBackend` und `RemoteBackend` mit `solve`, `submit`/`wait`/`result`, `cancel` und `geo`. `rawProtocol.py` zeigt das Protokoll ohne Hilfsmodul, jede Nachricht wird ausgegeben.
 - **Paketierung:** Die lokale Schnittstelle lässt sich mit PyInstaller im Modus `--onedir` zu einem Programm bündeln (`onefile` entpackt bei jedem Start). Die CMPL-Installation der Zielplattform (`cmpl/` mit `bin/` und `Thirdparty/`) muss mit hinein, und das Programm setzt `CMPLHOME` auf ihren Ort im Paket, bevor es den Kern startet. Unter macOS muss jede mitgelieferte ausführbare Datei signiert sein, auch `cmpl` und HiGHS. Für eine App in der Sandbox braucht der Kindprozess außerdem die Entitlements `com.apple.security.inherit` und `com.apple.security.network.client`.
+
+## Szenario-Format und Kommandozeilen-Tool
+
+Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebig viele Probleme rechnen, z. B. TPP, WLP, VRP und Min-Cost-Flow auf denselben Knoten. Ein Beispiel ist `tests/scenarios/brandenburg.json`. Die Datenmodelle stehen in `logisticsLabCore/scenario.py`. Sie sind Teil des JSON Schemas (`python -m logisticsLabCore.schema`).
+
+```json
+{ "format": "logisticsLab", "version": 1, "id": "brandenburg",
+  "units": { "distance": "km", "time": "min" },
+  "matrix": { "matrixSource": "osm", "travelmode": "car", "costPerKm": 0.5, "costPerHour": 30 },
+  "nodes": [ { "id": "W", "coordinates": [52.30, 13.26], "roles": ["supplier"], "supply": 100 }, "..." ],
+  "networks": { "supply": { "directed": true, "edges": [ { "from": "W", "to": "D1", "capacity": 100 } ] } },
+  "vehicles": [ { "id": "LKW", "capacity": 60, "count": 2, "depot": "D1" } ],
+  "problems": [ { "name": "Lagerstandorte", "type": "wlp", "parameters": { "isCapacitated": true } } ] }
+```
+
+**Regeln:**
+- **Koordinaten:** Jeder Knoten hat geografische Koordinaten `[lat, lon]`. Die Adresse (`address` oder `addressDetails`) ist optional.
+- **Distanzen und Fahrzeiten:** kommen nur von den OSM-Servern, über den Matrix-Cache, oder als Luftlinie (`matrixSource: beeline`). Eigene Matrizen gibt es im Szenario nicht.
+- **Kosten:** werden abgeleitet: km × `costPerKm` + h × `timeFactor` × `costPerHour`, bei Kunden mal `costFactor`. `matrixMode` eines Problems wählt `distances`, `times` oder `costs`.
+- **Einheiten:** `units` legt die Einheiten fest, `distance` m oder km, `time` s, min oder h. `costPerKm` und `costPerHour` beziehen sich immer auf km und h.
+- **Rollen:** bestimmen, was ein Problem liest.
+  - `supplier` → `customer`: TPP.
+  - `candidate` → `customer`: WLP, P-Median, P-Center, SCP, MCP.
+  - `facility`: kontinuierliche Standorte, ihre Anzahl ist `p` und ihre Kapazitäten gelten.
+  - `depot`: VRP.
+- **Netze** (`networks`): legen die erlaubten Verbindungen fest, mit Kapazität, Mindestfluss, Fixkosten und Richtung je Kante. Ihre Länge und Fahrzeit kommt von OSM.
+  - `networkMode: edges`: nur diese Kanten sind erlaubt. Bei TPP und Standortproblemen sind die übrigen Paare dann gesperrt.
+  - `networkMode: shortestPaths`: Es entsteht eine vollständige Matrix aus den kürzesten Wegen über das Netz. Bei TSP enthält die Lösung den ganzen Weg (`path`).
+  - Flüsse und CPP brauchen ein Netz. Knoten mit `maxThroughput` begrenzen den Durchfluss.
+- **Weitere Knotenattribute:** `minSupply`/`maxSupply`, `minDemand`/`maxDemand` (wirksam mit `useSupplyRanges`/`useDemandRanges`), `timeWindow`, `serviceTime`, `active: false` (Knoten wird ignoriert).
+  - `fixed` und `assignedTo` werden bisher nur gespeichert. Die Probleme berücksichtigen sie noch nicht, das Ergebnis enthält dann eine Warnung.
+
+**Ergebnisse** sind eigene Dokumente (`logisticsLabSolution`). Sie stehen nicht im Szenario.
+- **Bezug:** Jedes Dokument verweist mit `scenario.hash` auf genau einen Datenstand des Szenarios und enthält das Problem mit seinen Parametern.
+- **Inhalt:** `matrixInfo`, `valueUnit` (Einheit der Matrixwerte) und Warnungen. Dazu `results` mit `objVal`, `summary`, `nodes`, `assignments`, `routes` oder `edges`, jeweils über Knoten-IDs, und die bisherigen Felder unter `native`.
+
+**Kommandozeilen-Tool:**
+
+```bash
+python -m logisticsLabCore.cli show  tests/scenarios/brandenburg.json
+python -m logisticsLabCore.cli solve tests/scenarios/brandenburg.json                        # alle Probleme, Ausgabe am Bildschirm
+python -m logisticsLabCore.cli solve SZENARIO.json --problem "Touren ab Wildau" --set maxSolvingTime=30
+python -m logisticsLabCore.cli solve SZENARIO.json --out loesungen.json --quiet              # nur als Datei
+python -m logisticsLabCore.cli solve SZENARIO.json --json                                    # Lösungsdokumente am Bildschirm
+python -m logisticsLabCore.cli solve SZENARIO.json --server https://logisticslab.example.org/v1/ --apiKey ...
+```
+
+- **Rechnen:** Ohne `--server` rechnet das Tool lokal mit dem Kern und den OSM-Servern aus `logisticsLabCore/logisticsLab.yml`, mit Matrix-Cache in `--logPath`. Mit `--server` schickt es Matrix- und Problemanfragen an einen LogisticsLab-Server. Am Server selbst muss dafür nichts geändert werden, denn das Tool übersetzt die Szenarien in die bestehenden `/v1`-Anfragen.
+- **Parameter überschreiben:** `--set NAME=WERT` gilt für die Parameter der Probleme, z. B. `p`, `maxSolvingTime`, `matrixMode`.
+- **Exit-Code:** 1, wenn ein Problem mit einem Fehler endet.
+
+### Alte LogisticsLab-Dateien umwandeln
+
+```bash
+python tools/convertX.py ALTE_DATEI.TPPX                                     # -> alte_datei.tppx.json daneben
+python tools/convertX.py --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-Daten/Szenarien
+```
+
+- **Formate:** TPPX → `tpp`, DLPX → `wlp`/`pmedian`/`pcentre`/`mcp`, CLPX → `contpmedian`/`contpcentre`, NWFX → `mincostflow`, TSPX → `tsp`/`cpp`, VRPX → `vrp`. Die Optionen der Datei werden zu den Parametern des Problems.
+- **Übersprungen:** Dateien mit eigenen Matrizen (`DistFunc OwnDef`) oder ebenen Koordinaten (`Map SimpleMap`).
+- **Gespeicherte Matrizen** werden nicht übernommen. Ausnahmen: `M` in `COSTS` (gesperrte Verbindung), `CAPACITIES` und `FIXEDCOSTS` werden zu einem Netz `connections`.
+- **Reihenfolge:** In den alten Dateien steht `x` = Länge, `y` = Breite. Die Umwandlung schreibt `[lat, lon]`.
+- **`DistFunc` entscheidet über die Matrix:** `GreatCircle…` ergibt Luftlinie, `OSM/…` Straßennetz, auch bei `TravelMode Bird`. `DistFactor` wird zu `costPerKm` bzw. `costPerHour`.
+- **Bezeichner:** Gleichnamige Quellen und Ziele am selben Ort werden ein Knoten mit beiden Rollen. Gleiche Namen an verschiedenen Orten bekommen `#2`, `#3` …
+- **Nur Dateien schreiben:** `convertX.py` erzeugt nur JSON-Dateien und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
 
 ## Betrieb unter Linux mit nginx
 
