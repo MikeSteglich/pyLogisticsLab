@@ -20,7 +20,10 @@ headers = {
 
 # coordinates [lat, lon] of addresses - see also /v1/search (one address, several hits) and /v1/reverse
 payload = {
-    "adresses": ['Schönwalde,16348,DE', 'Klosterfelde', 'Marchlewskistr. 43, 10243 Berlin']
+    "adresses": ['Schönwalde,16348,DE', 'Klosterfelde', 'Marchlewskistr. 43, 10243 Berlin', 'Xyzqwv Nirgendwo 999'],
+    "limit": 3,                     # hits per address - several hits: the user chooses
+    "countrycodes": ["DE"],         # only hits in Germany
+    "near": [52.32, 13.63]          # hits near Wildau first
 }
 
 # geo services answer directly - no id and no polling
@@ -28,6 +31,9 @@ response = requests.post(url + 'coordinates', json=payload, headers=headers)
 answer = response.json()
 print('http', response.status_code, '-', answer.get('status'), '-', answer.get('message'))
 if response.status_code == 200:
-    print('coordinates:')
-    for i, row in enumerate(answer['coordinates']):
-        print('   ', i, row)
+    # coordinates: first hit of every address, None if there is no hit
+    for address, coordinates, hits in zip(payload['adresses'], answer['coordinates'], answer['hits']):
+        print(f'{address}: {coordinates}')
+        for hit in hits:
+            print(f"      {hit['name'] or hit['street']}, {hit['postcode']} {hit['city']} ({hit['countrycode']})"
+                  f" {hit['coordinates']} - {hit['server']}")

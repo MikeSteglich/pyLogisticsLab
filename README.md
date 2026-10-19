@@ -137,7 +137,8 @@ Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 a
 | `/v1/cancel` | wartendes oder laufendes Problem abbrechen (`{"id": ...}`); der Status wechselt kurz danach zu `cancelled` | – |
 | `/v1/matrix` | Matrix aus Koordinaten: `matrixMode` `distances` (m), `durations` (s), `costs`, `both` (Distanzen und Zeiten) oder `all`, optional `sources`, `destinations`, `rounded` und die Matrix-Optionen (siehe unten) | `matrix` |
 | `/v1/routing` | Route über mehrere Koordinaten | `routing` |
-| `/v1/coordinates`, `/v1/search`, `/v1/reverse` | Geocoding | `geocoding` |
+| `/v1/coordinates` | Koordinaten `[lat, lon]` zu `adresses`, optional `limit` (Treffer je Adresse, 1–10), `countrycodes` (z. B. `["DE"]`), `near` (`[lat, lon]`, nahe Treffer zuerst). Antwort: `coordinates` (erster Treffer, `null` ohne Treffer) und `hits` (je Adresse eine Liste mit `coordinates`, `name`, `street`, `postcode`, `city`, `country`, `countrycode`, `server`) | `geocoding` |
+| `/v1/search`, `/v1/reverse` | Treffer zu einer Adresse (`adress`) bzw. Adresse zu einer Koordinate (`coordinate`), `results` ist ohne Treffer leer | `geocoding` |
 
 Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach folgen die problemspezifischen Felder. Koordinaten werden als `[lat, lon]` übergeben. Alle Indizes sind **0-basiert**, also Position in der übergebenen Liste bzw. Zeile der Matrix. `-1` bedeutet „keine“.
 
@@ -168,6 +169,11 @@ Für die kontinuierlichen Standortprobleme gilt:
 - **Zielfunktion:** `contpmedian` minimiert die Summe Bedarf × Distanz, `contpcentre` die größte Distanz eines Kunden zu einem liefernden Standort. Beim unkapazitierten `contpcentre` zählen die Bedarfe nicht.
 - **Kapazitäten:** Mit `capacities` sind `demands` Pflicht. `isSingleSource: true` ordnet jeden Kunden genau einem Standort zu, `false` erlaubt die Aufteilung seines Bedarfs.
 - **Verfahren:** heuristisch, nicht beweisbar optimal. Start ist das diskrete `pmedian`/`pcentre` mit den Kunden als Kandidaten, danach abwechselnd Standortwahl (sphärischer Weiszfeld bzw. kleinste umschließende Kugelkappe) und Zuordnung (nächster Standort bzw. `Tpp.cmpl` mit Kapazitäten), dann weitere Zufallsstarts im Rahmen von `nrOfStarts` und `maxSolvingTime`.
+
+Zum Geocoding:
+- **Kein Treffer:** `null` bzw. eine leere Liste, nie `[0, 0]`. Das wäre ein gültiger Punkt im Atlantik und würde still in Matrizen eingehen.
+- **`countrycodes`:** Nominatim filtert auf dem Server. Photon kennt keinen Länderfilter, dort wird unter den abgerufenen Treffern (höchstens 10) gefiltert. Gibt es darunter keinen im Land, ist die Liste leer.
+- **`near`:** bevorzugt Treffer in der Nähe, ohne die Relevanz zu ersetzen. Photon gewichtet sie selbst, mit einem Radius von einigen 10 km (`zoom=10`), bei Nominatim gilt ein bevorzugter Kartenausschnitt von etwa 50 km um den Punkt (`viewbox`). Weiter entfernte Treffer bleiben möglich. Für einen harten Ausschluss sind `countrycodes` gedacht.
 
 ### Matrizen aus Koordinaten
 

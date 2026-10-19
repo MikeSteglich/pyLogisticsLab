@@ -118,7 +118,10 @@ class LogisticsLabCore:
             content = {'route': h.route}
         else:
             h = GeoCodingHandler(request, self.logger, service)
-            content = {'coordinates' if service == 'coordinates' else 'results': h.results}
+            if service == 'coordinates':
+                content = {'coordinates': h.results, 'hits': h.hits}
+            else:
+                content = {'results': h.results}
 
         if h.status != 'ok':
             raise LogLabCoreException(h.message, h.httpStatus)

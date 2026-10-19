@@ -154,6 +154,12 @@ def isMatrix(m, rows, cols):
 def inGermany(c):
     return 47 < c[0] < 56 and 5 < c[1] < 16
 
+def haversine(a, b):
+    """ great-circle distance in m """
+    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
+    h = math.sin((la2-la1)/2)**2 + math.cos(la1) * math.cos(la2) * math.sin((lo2-lo1)/2)**2
+    return 2 * 6371008.8 * math.asin(math.sqrt(h))
+
 print('== geo services')
 matrix = importlib.import_module('getMatrixServer').payloads
 route = importlib.import_module('getRouteServer').payloads
@@ -171,6 +177,18 @@ else:
         checkGeo(f'routing[{k}]', 'routing', payload, lambda r: len(r['route']) >= 2 and all(inGermany(c) for c in r['route']))
     checkGeo('coordinates', 'coordinates', importlib.import_module('getGeoCodingCoords').payloads[0],
              lambda r: len(r['coordinates']) == 3 and all(inGermany(c) for c in r['coordinates']))
+    checkGeo('coordinates not found', 'coordinates', {"adresses": ["Klosterfelde", "Xyzqwv Nirgendwo 999"]},
+             lambda r: r['coordinates'][1] is None and r['hits'][1] == [] and inGermany(r['coordinates'][0]))
+    checkGeo('coordinates limit', 'coordinates', {"adresses": ["Klosterfelde"], "limit": 3},
+             lambda r: 1 <= len(r['hits'][0]) <= 3 and all({'coordinates', 'name', 'city', 'postcode', 'countrycode', 'server'}
+                                                         <= set(h) for h in r['hits'][0])
+                       and r['coordinates'][0] == r['hits'][0][0]['coordinates'])
+    checkGeo('coordinates countrycodes', 'coordinates', {"adresses": ["Klosterfelde"], "limit": 3, "countrycodes": ["DE"]},
+             lambda r: all(h['countrycode'].upper() == 'DE' for h in r['hits'][0]))
+    checkGeo('coordinates near', 'coordinates', {"adresses": ["Hauptstraße 1"], "limit": 2, "near": [52.32, 13.63]},
+             lambda r: r['coordinates'][0] is not None and haversine(r['coordinates'][0], [52.32, 13.63]) < 30000)
+    checkGeo('coordinates limit 11', 'coordinates', {"adresses": ["Klosterfelde"], "limit": 11}, None, status=422)
+    checkGeo('search not found', 'search', {"adress": "Xyzqwv Nirgendwo 999"}, lambda r: r['results'] == [])
     checkGeo('search', 'search', importlib.import_module('getGeoCodingSearch').payloads[0], lambda r: len(r['results']) > 0)
     checkGeo('reverse', 'reverse', importlib.import_module('getGeoCodingReverse').payloads[0],
              lambda r: r['results'] and 'name' in r['results'][0])
@@ -207,11 +225,6 @@ else:
 
 
 # bee line matrices need no OSM servers
-def haversine(a, b):
-    la1, lo1, la2, lo2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-    h = math.sin((la2-la1)/2)**2 + math.cos(la1) * math.cos(la2) * math.sin((lo2-lo1)/2)**2
-    return 2 * 6371008.8 * math.asin(math.sqrt(h))
-
 coords = matrix[0]['coordinates']
 beeLine = {"coordinates": coords, "matrixSource": "beeline", "detourFactor": 1.25, "averageSpeed": 40, "matrixMode": "both"}
 checkGeo('matrix beeline', 'matrix', beeLine,

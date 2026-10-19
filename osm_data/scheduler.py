@@ -218,14 +218,26 @@ class Scheduler:
                             api_key=self.__conf['servers']['routing'][0]['api_key']
 
                 elif mode=='geoCoords':
+                    # _near: [lat, lon] for hits near a location, _countrycodes: 'de,pl' - mapped per server type
+                    near = tmpParams.pop('_near', None)
+                    countrycodes = tmpParams.pop('_countrycodes', None)
+                    tmpParams.setdefault('limit', '1')
                     if server['type']=='photon':
                         url = server['url']+'/api'
-                        tmpParams['limit'] = '1'
                         tmpParams['osm_tag']='!boundary'
+                        if near:
+                            # zoom 10: bias of a region (some 10 km) - the default zoom 16 prefers only the next streets
+                            tmpParams['lat'], tmpParams['lon'] = near[0], near[1]
+                            tmpParams['zoom'] = '10'
                     elif server['type']=='nominatim':
                         url = server['url']+'/search'
                         tmpParams['format'] = 'jsonv2'
-                        tmpParams['limit'] = '1'
+                        tmpParams['addressdetails']= '1'
+                        if countrycodes:
+                            tmpParams['countrycodes'] = countrycodes
+                        if near:
+                            # preferred area of about 50 km around near - hits outside are still possible
+                            tmpParams['viewbox'] = f'{near[1]-0.4},{near[0]+0.25},{near[1]+0.4},{near[0]-0.25}'
                 
                 elif mode=='geoSearch':
                     if server['type']=='photon':

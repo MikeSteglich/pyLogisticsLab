@@ -16,6 +16,7 @@ class GeoCodingHandler:
         self.__logger.debug('geo','init')
         self.__data=problemData
         self.__results=None
+        self.__hits=None
         self.__httpStatus=200
         self.__message='ok'
         self.__status='ok'
@@ -43,7 +44,8 @@ class GeoCodingHandler:
             self.__message='ok'
             self.__status='ok'
             if self.__modus=='coordinates':
-                status, msg= self.__osmData.loadCoordinates(self.__data.adresses)
+                status, msg= self.__osmData.loadCoordinates(self.__data.adresses, limit=self.__data.limit or 1,
+                                                            countrycodes=self.__data.countrycodes, near=self.__data.near)
             elif self.__modus=='search':
                 status, msg= self.__osmData.search(self.__data.adress)
             elif self.__modus=='reverse':
@@ -55,6 +57,7 @@ class GeoCodingHandler:
             if status==200:
                 if self.__modus=='coordinates':
                     self.__results= self.__osmData.coordinates
+                    self.__hits= self.__osmData.hits
                 elif self.__modus=='search' or self.__modus=='reverse':
                     self.__results= self.__osmData.results
             
@@ -72,6 +75,10 @@ class GeoCodingHandler:
     def getResults(self):
         return self.__results
     results = property(getResults)
+
+    def getHits(self):
+        return self.__hits
+    hits = property(getHits)
   
     def getStatus(self):
         return self.__status

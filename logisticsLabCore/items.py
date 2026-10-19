@@ -214,7 +214,11 @@ class RouteItem(LogLabItem):
     details: Optional[ Literal["simplified", "full"] ] =  "simplified"
 
 class SearchCoordinatesItem(LogLabItem):
+    """ coordinates of addresses - coordinates: first hit or null, hits: up to limit hits per address """
     adresses: list
+    limit: Optional[int] = Field(1, ge=1, le=10)  # hits per address
+    countrycodes: Optional[list[str]] = None      # e.g. ["DE"] - only hits in these countries
+    near: Optional[list] = None                   # [lat, lon] - hits near this location first
 
 class SearchItem(LogLabItem):
     adress: str

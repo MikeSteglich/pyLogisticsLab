@@ -45,6 +45,7 @@ class Geocoding:
 
         self.__addresses=[]
         self.__coordinates=[]
+        self.__hits=[]
 
         self.__results=[]
 
@@ -71,8 +72,14 @@ class Geocoding:
     addresses = property(getaddressList)
 
     def getCoordinates(self):
+        """ (lat, lon) of the first hit of every address, None if there is no hit """
         return self.__coordinates
     coordinates = property(getCoordinates)
+
+    def getHits(self):
+        """ hits of every address (list of results with coordinates, name, city, ...), empty if there is no hit """
+        return self.__hits
+    hits = property(getHits)
         
     def getResults(self):
         return self.__results
@@ -81,17 +88,29 @@ class Geocoding:
 
 
 
-    def loadCoordinates(self,addresses ):
-        
+    def loadCoordinates(self, addresses, limit=1, countrycodes=None, near=None):
+        """ coordinates of the addresses - limit: hits per address, countrycodes: e.g. ['DE'], near: [lat, lon]
+            prefers hits near this location (photon: location bias, nominatim: viewbox) - the relevance stays
+        """
         msg='OK'
         self.__coordinates=[]
+        self.__hits=[]
         adrList=checkStrList(addresses)
-        
+        if near is not None:
+            checkSingleCoordinates(near)
+        countrycodes = [ c.lower() for c in countrycodes ] if countrycodes else None
+        # more hits than needed if they are filtered afterwards
+        fetch = min(10, limit * 3) if countrycodes else limit
+
         try:
             self.__log.logging('getCoordinates',f'number of requests:  {len(adrList)}','start')
             for adr in adrList:
                 
-                params = {'q' : adr }
+                params = {'q' : adr, 'limit': str(fetch) }
+                if countrycodes:
+                    params['_countrycodes'] = ','.join(countrycodes)
+                if near is not None:
+                    params['_near'] = list(near)
                            
                 serverTyp, status, data = self.__osmScheduler.openUrl(params=params, mode='geoCoords')
                 
@@ -103,25 +122,18 @@ class Geocoding:
                         msg=f"Something went wrong while getting OSM routes : {data['error']['code'], data['error']['message'] } "
                     raise OsmException(msg, status_code=status) 
                 else:
-                    if serverTyp=='photon':
-                        if data:
-                            if data['features']:
-                                coords = data['features'][0]['geometry']['coordinates']
-                            else: 
-                                coords=(0,0)
-                        else:
-                            coords=(0,0)
-                    elif serverTyp=='nominatim':
-                        if data:
-                            # nominatim sends strings - (lon, lat) as photon, swapped below
-                            lat = float(data[0]['lat'])
-                            lon = float(data[0]['lon'])
-                            coords =(lon,lat)
-                        else:
-                            coords=(0,0)
-                
-                    self.__coordinates.append((coords[1],coords[0]))
+                    self.__results=[]
+                    self.__parseResults(serverTyp, data)
+                    hits = self.__results
+                    # photon has no country filter - it is done here
+                    if countrycodes:
+                        hits = [ h for h in hits if h['countrycode'].lower() in countrycodes ]
+                    hits = hits[:limit]
+                    self.__hits.append(hits)
+                    # no hit: None - (0, 0) would be a valid location in the Atlantic
+                    self.__coordinates.append(tuple(hits[0]['coordinates']) if hits else None)
 
+            self.__results=[]
             self.__log.logging('getCoordinates',f'number of requests:  {len(adrList)}','done')  
 
             return status,msg
@@ -141,19 +153,19 @@ class Geocoding:
         result['addresstype']=''
         result['country']=''
         result['countrycode'] = ''
+        result['server'] = ''
         return result
     
 
     def __parseResults(self,serverTyp, data):
         if serverTyp=='photon':
             if data:
-                if not data['features']:
-                    self.__results.append(self.__setResultDefault())
-                else:
+                if data['features']:
                     for e in data['features']:
                         result=self.__setResultDefault()
                         coords = e['geometry']['coordinates']
                         result['coordinates'] = ( coords[1],coords[0])
+                        result['server'] = 'photon'
            
                         if 'name' in e['properties']: 
                             result['name'] = e['properties']['name']
@@ -183,19 +195,15 @@ class Geocoding:
                         else:
                             result['addresstype']=''
 
-                        result['country']=e['properties']['country']
-                        result['countrycode'] = e['properties']['countrycode']
+                        result['country']=e['properties'].get('country', '')
+                        result['countrycode'] = e['properties'].get('countrycode', '')
 
                         self.__results.append(result)
-            else:
-                self.__results.append(self.__setResultDefault())
 
         elif serverTyp=='nominatim':
             if data:
 
-                if 'error' in data:
-                    self.__results.append(self.__setResultDefault())
-                else:
+                if 'error' not in data:
                     if isinstance(data,dict):
                         data=[data]
                     for e in data:
@@ -205,6 +213,7 @@ class Geocoding:
                         lat = float(e['lat'])        # nominatim sends strings
                         lon = float(e['lon'])
                         result['coordinates'] = (lat,lon)  
+                        result['server'] = 'nominatim'
                         
                         result['name'] = e['name']
 
@@ -228,14 +237,12 @@ class Geocoding:
                         else: 
                             result['street'] = ''
 
-                        result['country']=e['address']['country']
-                        result['countrycode'] = e['address']['country_code']
+                        result['country']=e['address'].get('country', '')
+                        result['countrycode'] = e['address'].get('country_code', '')
 
                         result['addresstype'] = e['addresstype']
 
                         self.__results.append(result)
-            else:
-                self.__results.append(self.__setResultDefault())
 
     def search(self, address):
         
@@ -306,6 +313,3 @@ class Geocoding:
             raise OsmException(str(e))
         except:
             raise OsmException(f'Something went wrong while reverse searching OSM data: {str(sys.exc_info()[0])}')
-
-  
-   
