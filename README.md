@@ -186,6 +186,7 @@ Alle Probleme mit Koordinaten (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `scp`,
 
 - **Rundung:** Distanzen und Zeiten werden auf ganze Zahlen gerundet, Kosten auf 2 Nachkommastellen. Bei `/v1/matrix` passiert das nur mit `rounded: true`.
 - **Cache:** Die Rohdaten der OSM-Server (Meter und Sekunden) liegen in einer SQLite-Datei. Die Faktoren werden erst danach angewendet. Ein Eintrag gilt also für alle Kostensätze und Zeitfaktoren, und andere Faktoren lösen keine neue OSM-Anfrage aus.
+  - **Datenstand:** Der Schlüssel eines Eintrags enthält den Datenstand der ORS-Server (`graph_build_date` aus `/ors/v2/status`). Ihn fragt jeder Prozess höchstens einmal pro Stunde ab. Nach einem Update der Server werden alte Einträge nicht mehr verwendet und nach und nach verdrängt. Antwortet ein Server nicht, gilt der zuletzt bekannte Stand.
   - **Gemessen:** Bei 200 Punkten 13,6 s über OSM, aus dem Cache 0,01 s.
   - **Größe:** Ein Eintrag mit 200 × 200 belegt etwa 0,34 MB.
   - **Datenschutz:** Der Cache speichert die Koordinaten der Anfragen, als Schlüssel nur in Hash-Form. Eine Matrix bekommt nur, wer genau dieselben Koordinaten schickt.
@@ -193,6 +194,7 @@ Alle Probleme mit Koordinaten (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `scp`,
   - `source`: `osm`, `cache` oder `beeline`.
   - `status`: `exact`, `unexact` oder `beeline`. Bei `unexact` hat der OSM-Server für einige Punktpaare keine Route oder einen unplausiblen Wert geliefert. Diese Werte sind mit Luftlinie × durchschnittlichem Umweg geschätzt, die Faktoren stehen in `fillFactors`.
   - `matrices`: welche Matrizen berechnet wurden, dazu die verwendeten Faktoren.
+  - `osmDate`: Stand der OSM-Daten, auf dem die Matrix beruht.
 
 Wird die Matrix aus Koordinaten berechnet, steht sie zusätzlich im Ergebnis (`varCosts`, `distances` bzw. bei `vrp` `distances` und `times`). Bei `vrp` werden alle Zahlen gerundet, weil OR-Tools ganze Zahlen verlangt. Aus Koordinaten lädt `vrp` die Fahrzeiten nur, wenn `timeWindows` oder `maxTime` gesetzt sind.
 
@@ -249,7 +251,7 @@ python manageKeys.py remove DSS-WS2026
 | `logMaxBytes`, `logBackupCount` | 5 MB, 5 | Rotation von `logisticsLabServer.log` |
 | `matrixCache` | True | Cache der OSM-Matrizen |
 | `matrixCacheFile` | `matrixCache.sqlite` in `logPath` | Cache-Datei, von allen Solver-Prozessen gemeinsam genutzt |
-| `matrixCacheMaxAge` | 7 | Tage, danach wird eine Matrix neu geladen, weil sich die OSM-Daten ändern |
+| `matrixCacheMaxAge` | 180 | Tage, Sicherheitsnetz. Nach einem Update der ORS-Server werden die Einträge ohnehin nicht mehr verwendet. |
 | `matrixCacheMaxEntries` | 500 | Höchstzahl der Einträge, die am längsten unbenutzten werden zuerst gelöscht |
 | `<typ>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre/contpmedian/contpcentre 200, scp/mcp/cpp/multimodal 300, multicommodity 500, mincostflow/maxflow 2000 | maximale Problemgröße: Quellen + Senken, bei den übrigen Typen die Knoten |
 | `<typ>.maxSolvingTime` | 300, vrp 60, mincostflow/maxflow 120 | Obergrenze in Sekunden für die vom Client gewünschte Lösungszeit (bei `vrp` die Suchzeit von OR-Tools) |
@@ -412,6 +414,12 @@ Das Zertifikat bekommt man z. B. mit `certbot --nginx -d logisticslab.example.or
 
 ```bash
 PYTHONPATH=. python tests/pyCmpl/checkLibrary.py
+```
+
+**Kern** (`tests/coreTests/`): `checkMatrixService.py` prüft den Matrix-Cache ohne OSM-Server. Geprüft werden Laden, Wiederverwendung, Neustart, `noCache`, Ablaufzeit, ein simuliertes Update der ORS-Server und die stündliche Statusabfrage, dazu Kostenformel und Luftlinie. Zum Schluss liest er den Datenstand der konfigurierten Server, falls sie erreichbar sind.
+
+```bash
+python tests/coreTests/checkMatrixService.py
 ```
 
 **Server-Beispiele** (`tests/serverExamples/`): ein eigenständiges Skript je Problemtyp und Geo-Dienst, z. B. `wlpExample.py`, `contPCentreExample.py`, `matrixExample.py`. Adresse, Key, Daten, Einreichen, Abfrage der Ergebnisse und Ausgabe stehen direkt im Code, ohne Hilfsmodul. Die Skripte eignen sich als Vorlage für eigene Clients.

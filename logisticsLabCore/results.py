@@ -23,6 +23,7 @@ class MatrixInfo(BaseModel):
     travelmode: str
     matrices: list[Literal['distances', 'times', 'costs']]
     fillFactors: Optional[dict] = None          # detourFactor, timeFactor, nrOfFilledValues
+    osmDate: Optional[str] = None               # data state of the OSM servers (osm_date of /ors/v2/status)
     detourFactor: Optional[float] = None        # beeline
     averageSpeed: Optional[float] = None        # beeline, km/h
     timeFactor: Optional[float] = None

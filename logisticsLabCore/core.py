@@ -24,7 +24,7 @@ DEFAULT_CONF = {
     'workDir': None,                # working directory of the solver processes (files of CMPL and the solvers)
     'matrixCache': True,            # raw OSM matrices in a SQLite file - default: matrixCache.sqlite in workDir
     'matrixCacheFile': None,
-    'matrixCacheMaxAge': 7,         # days - the OSM data change
+    'matrixCacheMaxAge': 180,       # days - safety net, an update of the ORS servers invalidates the entries anyway
     'matrixCacheMaxEntries': 500,   # least recently used entries are deleted
     'tsp': {},
     'tpp': {},

@@ -18,7 +18,7 @@ debugging: True
 
 matrixCache: True               # raw OSM matrices (m, s) in a SQLite file - factors and costs are applied afterwards
 #matrixCacheFile: /var/lib/logisticsLab/matrixCache.sqlite   # default: matrixCache.sqlite in logPath
-matrixCacheMaxAge: 7            # days - afterwards the matrix is loaded again (the OSM data change)
+matrixCacheMaxAge: 180          # days - safety net, an update of the ORS servers (graph_build_date) invalidates anyway
 matrixCacheMaxEntries: 500      # least recently used entries are deleted
 #logMaxBytes: 5000000             # log rotation
 #logBackupCount: 5

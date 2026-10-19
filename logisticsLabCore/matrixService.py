@@ -2,6 +2,8 @@
 
     The raw data of the OSM servers (distances in m, durations in s) are cached in a SQLite file. The factors
     (timeFactor, costPerKm, costPerHour) are applied afterwards, so a cache entry is valid for all factors.
+    The key of an entry contains the data state of the ORS servers (graph_build_date of /ors/v2/status) - after an
+    update of the servers the old entries are not used anymore. matrixCacheMaxAge is only a safety net.
 
         matrix(coordinates, options, kind)   kind: distances (m), times (s) or costs - returns (matrix, info)
 
@@ -12,6 +14,7 @@
 from .exception import *
 
 import osm_data as osm
+from osm_data.tools import readConf
 
 import collections
 import copy
@@ -19,6 +22,7 @@ import hashlib
 import json
 import math
 import os
+import requests
 import sqlite3
 import threading
 import time
@@ -27,6 +31,9 @@ import zlib
 
 DEFAULT_SPEEDS = {'car': 50, 'foot': 5, 'wheelchair': 4}       # km/h - durations of bee line matrices
 EARTH_RADIUS = 6371008.8                                        # m
+
+ORS_PROFILES = {'car': 'driving-car', 'foot': 'foot-walking', 'wheelchair': 'wheelchair'}
+VERSION_CHECK_INTERVAL = 3600                                   # s - the data state of the ORS servers is checked hourly
 
 DEFAULTS = {'travelmode': 'car', 'matrixSource': 'osm', 'detourFactor': 1.3, 'averageSpeed': None, 'timeFactor': 1.0,
             'noCache': False, 'costPerKm': None, 'costPerHour': None}
@@ -41,7 +48,7 @@ class MatrixCache:
         Errors of the cache never stop a request - the matrix is then loaded from the OSM servers.
     """
 
-    def __init__(self, fileName, maxAgeDays=7, maxEntries=500, logger=None):
+    def __init__(self, fileName, maxAgeDays=180, maxEntries=500, logger=None):
         self.fileName = fileName
         self.maxAge = maxAgeDays * 86400
         self.maxEntries = maxEntries
@@ -105,7 +112,7 @@ def configure(conf, logger=None):
     _cache = None
     if conf.get('matrixCache', True) and conf.get('matrixCacheFile'):
         try:
-            _cache = MatrixCache(conf['matrixCacheFile'], conf.get('matrixCacheMaxAge', 7),
+            _cache = MatrixCache(conf['matrixCacheFile'], conf.get('matrixCacheMaxAge', 180),
                                  conf.get('matrixCacheMaxEntries', 500), logger)
         except Exception as e:
             if logger:
@@ -113,15 +120,66 @@ def configure(conf, logger=None):
 #*************** end cache ************************************************
 
 
+#*************** data state of the OSM servers ************************************************
+_versions = {}                  # travelmode -> (time of the next check, data state or None)
+_versionLock = threading.Lock()
+
+
+def dataVersion(travelmode):
+    """ data state {graphDate, osmDate} of the ORS matrix servers for the travel mode - None if unknown
+
+        checked at most once per VERSION_CHECK_INTERVAL - if the servers do not answer, the last known state is used
+    """
+    now = time.time()
+    with _versionLock:
+        entry = _versions.get(travelmode)
+        if entry and entry[0] > now:
+            return entry[1]
+    version = _loadVersion(travelmode)
+    with _versionLock:
+        if version is None and entry:
+            version = entry[1]
+        _versions[travelmode] = (now + VERSION_CHECK_INTERVAL, version)
+    return version
+
+
+def _loadVersion(travelmode):
+    """ graph_build_date and osm_date of all configured ORS matrix servers - a matrix can come from each of them """
+    profile = ORS_PROFILES.get(travelmode)
+    try:
+        conf = readConf()
+    except Exception:
+        return None
+    graphDates, osmDates = set(), set()
+    for server in conf.get('servers', {}).get('matrix', []):
+        if server.get('type') != 'ors' or not profile:
+            continue
+        url = server['url'].rstrip('/').rsplit('/matrix', 1)[0] + '/status'
+        headers = {'Authorization': server['api_key']} if server.get('api_key') else {}
+        try:
+            response = requests.get(url, headers=headers, timeout=(2, 5), proxies=conf.get('proxies') or None)
+            data = response.json()['profiles'][profile]
+        except Exception:
+            continue
+        if data.get('graph_build_date'):
+            graphDates.add(data['graph_build_date'])
+        if data.get('osm_date'):
+            osmDates.add(data['osm_date'])
+    if not graphDates:
+        return None
+    return {'graphDate': ','.join(sorted(graphDates)), 'osmDate': max(osmDates) if osmDates else None}
+#*************** end data state ************************************************
+
+
 def _opt(options, name):
     value = getattr(options, name, None)
     return DEFAULTS[name] if value is None else value
 
 
-def cacheKey(coordinates, travelmode, sources, destinations):
-    """ coordinates rounded to 6 decimal places (about 0.1 m) """
+def cacheKey(coordinates, travelmode, sources, destinations, graphDate=None):
+    """ coordinates rounded to 6 decimal places (about 0.1 m), graphDate: data state of the OSM servers """
     data = {'coordinates': [ [round(c[0], 6), round(c[1], 6)] for c in coordinates ], 'travelmode': travelmode,
-            'sources': sources, 'destinations': destinations}
+            'sources': sources, 'destinations': destinations, 'graphDate': graphDate}
     return hashlib.sha256(json.dumps(data, separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
@@ -151,7 +209,8 @@ def baseMatrix(coordinates, options, sources=None, destinations=None):
         return _beeLine(coordinates, options, sources, destinations)
 
     travelmode = _opt(options, 'travelmode')
-    key = cacheKey(coordinates, travelmode, sources, destinations)
+    version = dataVersion(travelmode)
+    key = cacheKey(coordinates, travelmode, sources, destinations, version['graphDate'] if version else None)
     noCache = _opt(options, 'noCache')
 
     with _recentLock:
@@ -171,7 +230,7 @@ def baseMatrix(coordinates, options, sources=None, destinations=None):
         if status != 200:
             raise LogLabCoreException(msg, status)
         base = {'distances': m.distanceMatrix, 'durations': m.timeMatrix, 'status': m.matrixStatus,
-                'fillFactors': m.fillFactors}
+                'fillFactors': m.fillFactors, 'osmDate': version['osmDate'] if version else None}
         if _cache:
             _cache.put(key, base)
         base = {**base, 'source': 'osm'}
@@ -217,6 +276,8 @@ def matrix(coordinates, options, kind, sources=None, destinations=None, rounded=
             'matrices': [kind]}
     if base.get('fillFactors'):
         info['fillFactors'] = base['fillFactors']
+    if base.get('osmDate'):
+        info['osmDate'] = base['osmDate']           # data state of the OSM servers
     if base['source'] == 'beeline':
         info['detourFactor'] = base['detourFactor']
         if kind != 'distances':
