@@ -46,7 +46,7 @@ pip install -e ".[server]"               # REST-Server: zusätzlich fastapi, uvi
 - **pyCmpl ist keine Abhängigkeit in `pyproject.toml`:** Sonst würde pip ein mit `pip install -e ../pyCmpl` eingebundenes pyCmpl durch die Fassung aus GitHub ersetzen. Wer pyCmpl lokal weiterentwickelt, installiert es zuerst mit `pip install -e ../pyCmpl` und dann `pip install -e . --no-deps`, falls die übrigen Pakete schon da sind.
 - **Der REST-Server** (`logisticsLabServer/`) ist kein Paket, sondern wird aus seinem Verzeichnis gestartet. Den Kern findet er über die Installation.
 
-**pyCmpl** ist ein eigenes Repository ([MikeSteglich/pyCmpl](https://github.com/MikeSteglich/pyCmpl)) und wird über `requirements.txt` in einer festen Version installiert (Git-Tag, z. B. `v2.1.0`). Derselbe Stand wird auch von der CMPL-Distribution und der CMPL-IDE verwendet.
+**pyCmpl** ist ein eigenes Repository ([MikeSteglich/pyCmpl](https://github.com/MikeSteglich/pyCmpl)) und wird über `requirements.txt` in einer festen Version installiert (Git-Tag, z. B. `v3.0.0`). Derselbe Stand wird auch von der CMPL-Distribution und der CMPL-IDE verwendet.
 - **Neue Version übernehmen:** In pyCmpl einen neuen Tag setzen, in `requirements.txt` eintragen und neu installieren.
 - **pyCmpl gleichzeitig weiterentwickeln:** pyCmpl neben pyLogisticsLab klonen und mit `pip install -e ../pyCmpl` einbinden. Änderungen wirken dann sofort.
 - **pyCmpl ändern:** nur in `../pyCmpl`, nicht in einer Kopie. Den ganzen Ablauf (Entwickeln, Version und Tag, Projekte aktualisieren, CMPL-IDE neu bauen) beschreibt der Abschnitt „Changing pyCmpl“ in der README von pyCmpl.
