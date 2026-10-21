@@ -73,7 +73,7 @@ time_start = time.time()
 )'''
 coords = [[52.82319981920678, 13.781145121837762], [52.823005099112216, 13.781353533267977]]
 try:
-    conf = osm.Config(optFile='logisticsLab.yml')
+    conf = osm.Config()                              # confs/logisticsLab.yml
 
     osmData = osm.Matrix(coords)
     status, msg= osmData.loadMatrix(travelmode='foot')

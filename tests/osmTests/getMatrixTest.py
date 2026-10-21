@@ -19,7 +19,7 @@ coords = [
 
 
 try:
-    conf = osm.Config(optFile='logisticsLab.yml')
+    conf = osm.Config()                              # confs/logisticsLab.yml
 
     osmData = osm.Matrix(coords)
     status, msg= osmData.loadMatrix(travelmode='foot')

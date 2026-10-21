@@ -29,7 +29,7 @@ tMode = 'foot'
 routeDetails = 'full'
 
 try:
-    osm.Config(optFile='logisticsLab.yml')
+    osm.Config()                                     # confs/logisticsLab.yml
 
     osmData = osm.Routing(coords)
     status, msg= osmData.loadRoute(travelmode=tMode, details=routeDetails)

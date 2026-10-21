@@ -23,6 +23,7 @@
  #**********************************************************************
 
 from exception import *
+from logisticsLabCore import paths
 
 import yaml
 import sys
@@ -35,7 +36,7 @@ class Config:
         if optFile:
             self.__optFile=optFile
         else:
-            self.__optFile='logisticsLabServer.yml'
+            self.__optFile=paths.confFile('logisticsLabServer.yml')
             
         self.__readOptFile()
 
@@ -84,7 +85,7 @@ class Config:
                 self.__conf['authentication']=True
 
             if not self.__conf.get('apiKeyFile'):
-                self.__conf['apiKeyFile']=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'apiKeys.yml')
+                self.__conf['apiKeyFile']=paths.confFile('apiKeys.yml')
 
             # /docs, /redoc and /openapi.json
             if not 'docs' in self.__conf:
@@ -96,9 +97,9 @@ class Config:
             if not 'debugging' in self.__conf:
                 self.__conf['debugging']=True
 
-            # log files are written to logPath (default: server directory) and not to the working directory
+            # log files are written to logPath (default: <project>/logs) and not to the working directory
             if not self.__conf.get('logPath'):
-                self.__conf['logPath']=os.path.dirname(os.path.abspath(__file__))
+                self.__conf['logPath']=paths.logDir()
             os.makedirs(self.__conf['logPath'], exist_ok=True)
 
             if not 'logMaxBytes' in self.__conf:
@@ -113,7 +114,7 @@ class Config:
 
             # OSM servers - read by the core
             if not self.__conf.get('osmConfigFile'):
-                self.__conf['osmConfigFile']='logisticsLab.yml'
+                self.__conf['osmConfigFile']=paths.osmConfigFile()
 
             # working directory of the solver processes - files of CMPL and the solvers (e.g. HiGHS.log)
             self.__conf['workDir']=self.__conf['logPath']

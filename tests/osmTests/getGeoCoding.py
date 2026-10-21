@@ -13,7 +13,7 @@ addresses = [ 'Gröden,04932']
 
 try:
 
-    conf = osm.Config(optFile='logisticsLab.yml')
+    conf = osm.Config()                              # confs/logisticsLab.yml
 
     print('get coordinates')
     osmData = osm.Geocoding()

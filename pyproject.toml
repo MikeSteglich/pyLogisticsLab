@@ -31,4 +31,3 @@ packages = ["pyLogisticsLab", "logisticsLabCore", "logisticsLabCli", "osm_data"]
 
 [tool.setuptools.package-data]
 pyLogisticsLab = ["*.cmpl"]
-logisticsLabCore = ["logisticsLab.yml"]

@@ -14,13 +14,14 @@ import os
 import sys
 
 from apiKeys import *
+from logisticsLabCore import paths
 
 import argparse
 import datetime
 import yaml
 
 
-defaultKeyFile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'apiKeys.yml')
+defaultKeyFile = paths.confFile('apiKeys.yml')
 
 
 def readKeys(keyFile):
@@ -86,7 +87,7 @@ def remove(args):
 
 
 parser = argparse.ArgumentParser(description='manages the api keys of the LogisticsLab server')
-parser.add_argument('--keyFile', default=defaultKeyFile, help='default: apiKeys.yml in the server directory')
+parser.add_argument('--keyFile', default=defaultKeyFile, help='default: confs/apiKeys.yml (or LOGLAB_CONF_DIR)')
 sub = parser.add_subparsers(dest='command', required=True)
 
 p = sub.add_parser('add', help='creates a new key')

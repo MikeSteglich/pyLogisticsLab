@@ -151,7 +151,7 @@ except LogLabCoreException as e:
 print('== data state of the configured ORS servers')
 try:
     import osm_data as osm
-    osm.Config(optFile=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'logisticsLabServer', 'logisticsLab.yml'))
+    osm.Config()                                     # confs/logisticsLab.yml
     real = realLoadVersion('car')
     if real:
         check('graph_build_date of the servers', bool(real['graphDate']), real)

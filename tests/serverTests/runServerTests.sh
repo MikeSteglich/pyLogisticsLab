@@ -11,20 +11,21 @@ PYTHON=${PYTHON:-python3}
 TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$TESTS_DIR/../.." && pwd)"
 URL=http://127.0.0.1:8000/v1/
+mkdir -p "$PROJECT_DIR/logs"
 
 "$PYTHON" "$TESTS_DIR/createTestKeys.py" --url "$URL" || exit 1
 
 SERVER_PID=
 if ! curl -s -o /dev/null "${URL}results"; then
-    echo "starting the server - log: $TESTS_DIR/server.log"
+    echo "starting the server - log: $PROJECT_DIR/logs/testServer.log"
     (cd "$PROJECT_DIR/logisticsLabServer" && \
-     exec "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 8000) > "$TESTS_DIR/server.log" 2>&1 &
+     exec "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 8000) > "$PROJECT_DIR/logs/testServer.log" 2>&1 &
     SERVER_PID=$!
     trap 'kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null' EXIT
     for i in $(seq 1 60); do
         curl -s -o /dev/null "${URL}results" && break
         if ! kill -0 $SERVER_PID 2>/dev/null; then
-            echo "the server has stopped - see $TESTS_DIR/server.log"; exit 1
+            echo "the server has stopped - see $PROJECT_DIR/logs/testServer.log"; exit 1
         fi
         sleep 0.5
     done

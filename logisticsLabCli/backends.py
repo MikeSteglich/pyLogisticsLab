@@ -1,10 +1,10 @@
 """ backends of the command line tool - matrix(payload) and solve(payload) of scenario.py
 
-    LocalBackend    the core of LogisticsLab in this process (OSM servers of logisticsLabCore/logisticsLab.yml)
+    LocalBackend    the core of LogisticsLab in this process (OSM servers of confs/logisticsLab.yml)
     RemoteBackend   a LogisticsLab server (REST, api key)
 """
 
-import logisticsLabCore
+from logisticsLabCore import paths
 from logisticsLabCore.scenario import ScenarioException
 
 import json
@@ -24,7 +24,7 @@ class LocalBackend:
         from logisticsLabCore.logger import CoreLogger
         os.makedirs(logPath, exist_ok=True)
         conf = {'maxProblems': 1, 'workDir': logPath, 'tpp': {'solverLogFile': os.path.join(logPath, 'HiGHS.log')}}
-        osmConfig = osmConfig or os.path.join(os.path.dirname(os.path.abspath(logisticsLabCore.__file__)), 'logisticsLab.yml')
+        osmConfig = osmConfig or paths.osmConfigFile()
         self.core = LogisticsLabCore(conf, CoreLogger(os.path.join(logPath, 'logisticsLabCli.log')),
                                      osmConfigFile=osmConfig, osmLogFile=os.path.join(logPath, 'logisticsLab.log'))
 

@@ -1,10 +1,12 @@
-# --- secrets: only the *.example.* templates are versioned ---
+# --- secrets and local files: only the *.example.* templates are versioned ---
 .env
-confs/logisticsLab.yml
-tests/osmTests/logisticsLab.yml
+confs/logisticsLab.local.yml
+confs/apiKeys.yml
+confs/apiKeys.yml.tmp
 checkserver/checkServer.opt
-logisticsLabServer/apiKeys.yml
-logisticsLabServer/apiKeys.yml.tmp
+
+# --- logs and the matrix cache ---
+logs/
 
 # --- CMPL binaries: CMPLHOME of this machine and original distributions ---
 cmpl/

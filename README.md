@@ -25,7 +25,8 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 | `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
 | `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
 | `cmpl/` | CMPL-Installation dieses Rechners (`bin/cmpl`, `Thirdparty/…`), nicht versioniert – siehe unten |
-| `confs/` | Konfigurationen für die OSM-Server |
+| `confs/` | alle Konfigurationen: OSM-Server (`logisticsLab.yml`), Server (`logisticsLabServer.yml`), API-Keys (`apiKeys.yml`, nicht versioniert) |
+| `logs/` | Logdateien und Matrix-Cache von Server, Kommandozeilen-Tool und lokaler Schnittstelle, nicht versioniert |
 | `logisticsLabCli/` | Kommandozeilen-Tool `logisticslab`: Szenarien lösen und anzeigen, alte LogisticsLab-Dateien (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) umwandeln |
 | `tests/` | Beispiel- und Testskripte für Bibliothek (`tests/pyCmpl`) und Server (`tests/serverTests`), Beispielszenario (`tests/scenarios`) |
 
@@ -61,14 +62,17 @@ cmpl/
 
 Die Pfade zu den Solvern in `bin/cmpl.opt` sind relativ zu `bin/` (`../Thirdparty/Highs/highs`). Ohne CMPL laufen nur TSP und VRP, die OR-Tools nutzen. Für den Linux-Server wird eine CMPL-Distribution für Linux gebraucht.
 
-**Konfiguration mit Zugangsdaten:** Dateien mit Zugangsdaten sind nicht versioniert. Für sie gibt es Vorlagen:
+**Konfiguration und Logs:** Alle Konfigurationen liegen in `confs/`, alle Logdateien und der Matrix-Cache in `logs/`. Server, Kommandozeilen-Tool, lokale Schnittstelle, `osm_data` und die Tests finden sie dort von selbst, egal aus welchem Verzeichnis sie gestartet werden (`logisticsLabCore/paths.py`).
 
-| Vorlage | kopieren nach | Inhalt |
+| Datei | versioniert | Inhalt |
 |---|---|---|
-| `confs/logisticsLab.example.yml` | `confs/logisticsLab.yml` | OSM-Server, ORS-API-Key |
-| `tests/osmTests/logisticsLab.example.yml` | `tests/osmTests/logisticsLab.yml` | dasselbe für die OSM-Tests |
-| `checkserver/checkServer.example.opt` | `checkserver/checkServer.opt` | Mailzugang der Serverüberwachung |
-| `logisticsLabServer/apiKeys.example.yml` | – | nur zur Ansicht, die echte Datei erzeugt `manageKeys.py` |
+| `confs/logisticsLab.yml` | ja | OSM-Server der TH Wildau (Matrix, Routing, Geocoding), ohne Zugangsdaten |
+| `confs/logisticsLab.local.yml` | nein | optional: eigene OSM-Server oder ein ORS-API-Key. Ist sie vorhanden, ersetzt sie `logisticsLab.yml`. Vorlage: `confs/logisticsLab.local.example.yml` |
+| `confs/logisticsLabServer.yml` | ja | Konfiguration des REST-Servers, siehe unten |
+| `confs/apiKeys.yml` | nein | API-Keys des Servers (nur Hashes), erzeugt von `manageKeys.py`. Vorlage zur Ansicht: `confs/apiKeys.example.yml` |
+| `checkserver/checkServer.opt` | nein | Mailzugang der Serverüberwachung, Vorlage `checkserver/checkServer.example.opt` |
+
+- **Andere Orte:** `LOGLAB_CONF_DIR` legt das Konfigurationsverzeichnis fest, `LOGLAB_LOG_DIR` das Log-Verzeichnis, z. B. `/etc/logisticsLab` und `/var/log/logisticsLab` auf dem Linux-Server. Einzelne Dateien lassen sich in `logisticsLabServer.yml` (`apiKeyFile`, `logPath`, `osmConfigFile`) bzw. mit `--osmConfig` und `--logPath` umstellen.
 
 ## Bibliothek
 
@@ -87,7 +91,7 @@ Weitere Beispiele stehen in `tests/pyCmpl/`. Wer pyCmpl ohne `pyLogisticsLab` di
 
 ## Server
 
-Der Server liegt in `logisticsLabServer/` und muss **aus diesem Verzeichnis** gestartet werden, weil er `logisticsLabServer.yml` und `logisticsLab.yml` dort liest.
+Der Server liegt in `logisticsLabServer/` und wird **aus diesem Verzeichnis** gestartet, weil seine Module sich gegenseitig direkt importieren. Seine Konfiguration liest er aus `confs/logisticsLabServer.yml` und `confs/logisticsLab.yml`, die Logs schreibt er nach `logs/`.
 
 ```bash
 cd logisticsLabServer
@@ -250,7 +254,7 @@ python manageKeys.py remove DSS-WS2026
 | 404 | Problem wurde gelöst, hat aber keine zulässige Lösung (`noSolution`) |
 | 504 | Problem hat die Zeitgrenze des Watchdogs überschritten und wurde beendet |
 
-### Konfiguration (`logisticsLabServer.yml`)
+### Konfiguration (`confs/logisticsLabServer.yml`)
 
 | Option | Standard | Bedeutung |
 |---|---|---|
@@ -263,10 +267,10 @@ python manageKeys.py remove DSS-WS2026
 | `runTimeGrace` | 60 | Puffer in Sekunden auf `maxSolvingTime` für den Watchdog |
 | `defaultMaxRunTime` | 600 | Zeitgrenze des Watchdogs in Sekunden für Probleme ohne `maxSolvingTime` (z. B. TSP), zuzüglich `runTimeGrace` |
 | `authentication` | True | API-Keys erforderlich |
-| `apiKeyFile` | `apiKeys.yml` im Serververzeichnis | Pfad zur Key-Datei |
+| `apiKeyFile` | `confs/apiKeys.yml` | Pfad zur Key-Datei |
 | `docs` | False | `/docs`, `/redoc` und `/openapi.json` anbieten |
 | `logging`, `debugging` | True, True | Log-Stufen INFO/WARNING/ERROR bzw. zusätzlich DEBUG |
-| `logPath` | Serververzeichnis | Verzeichnis für alle Logdateien |
+| `logPath` | `logs/` (`LOGLAB_LOG_DIR`) | Verzeichnis für alle Logdateien |
 | `logMaxBytes`, `logBackupCount` | 5 MB, 5 | Rotation von `logisticsLabServer.log` |
 | `matrixCache` | True | Cache der OSM-Matrizen |
 | `matrixCacheFile` | `matrixCache.sqlite` in `logPath` | Cache-Datei, von allen Solver-Prozessen gemeinsam genutzt |
@@ -297,8 +301,8 @@ Eine Desktop-App (z. B. Flutter unter Windows, macOS oder Linux) kann ohne Serve
 python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProblems N] [--debug] [--noMatrixCache]
 ```
 
-- **`--logPath`:** Verzeichnis für Logdateien und `HiGHS.log`. Standard ist `logisticsLab` im Temp-Verzeichnis. Die App sollte ihr Support-Verzeichnis übergeben.
-- **`--osmConfig`:** OSM-Server. Standard sind die Server der TH Wildau (`logisticsLabCore/logisticsLab.yml`).
+- **`--logPath`:** Verzeichnis für Logdateien und `HiGHS.log`. Standard ist `logs/` bzw. `LOGLAB_LOG_DIR`. Die App sollte ihr Support-Verzeichnis übergeben.
+- **`--osmConfig`:** OSM-Server. Standard ist `confs/logisticsLab.local.yml`, falls vorhanden, sonst die Server der TH Wildau aus `confs/logisticsLab.yml`.
 - **Matrix-Cache:** Der Cache liegt in `--logPath` (`matrixCache.sqlite`), `--noMatrixCache` schaltet ihn ab. Ohne Netz rechnet die App mit `matrixSource: "beeline"`.
 - **Ende:** Der Prozess endet, wenn stdin geschlossen wird oder nach `shutdown`. Laufende Solver werden dabei mit beendet.
 - **Aufräumen:** Der Watchdog für hängende Solver ist auch lokal aktiv. Nicht abgeholte Ergebnisse werden nach 12 Stunden gelöscht. Verlassene Probleme werden lokal nicht abgebrochen, denn wenn die App endet, endet auch der Prozess.
@@ -417,7 +421,7 @@ logisticslab solve SZENARIO.llab --server https://logisticslab.example.org/v1/ -
 logisticslab --help                                                        # ohne Installation: python -m logisticsLabCli ...
 ```
 
-- **Rechnen:** Ohne `--server` rechnet das Tool lokal mit dem Kern und den OSM-Servern aus `logisticsLabCore/logisticsLab.yml`, mit Matrix-Cache in `--logPath`. Mit `--server` schickt es Matrix- und Problemanfragen an einen LogisticsLab-Server. Am Server selbst muss dafür nichts geändert werden, denn das Tool übersetzt die Szenarien in die bestehenden `/v1`-Anfragen.
+- **Rechnen:** Ohne `--server` rechnet das Tool lokal mit dem Kern und den OSM-Servern aus `confs/logisticsLab.yml`, mit Logs und Matrix-Cache in `logs/cli` (`--logPath`). Mit `--server` schickt es Matrix- und Problemanfragen an einen LogisticsLab-Server. Am Server selbst muss dafür nichts geändert werden, denn das Tool übersetzt die Szenarien in die bestehenden `/v1`-Anfragen.
 - **Parameter überschreiben:** `--set NAME=WERT` gilt für die Parameter der Probleme, z. B. `p`, `maxSolvingTime`, `matrixMode`.
 - **Exit-Code:** 1, wenn ein Problem mit einem Fehler endet.
 
@@ -454,6 +458,8 @@ User=loglab
 Group=loglab
 WorkingDirectory=/opt/pyLogisticsLab/logisticsLabServer
 Environment=CMPLHOME=/opt/pyLogisticsLab/cmpl
+Environment=LOGLAB_CONF_DIR=/etc/logisticsLab
+Environment=LOGLAB_LOG_DIR=/var/log/logisticsLab
 ExecStart=/opt/conda/envs/pyLogisticsLab/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=on-failure
 
@@ -545,7 +551,7 @@ python tests/serverExamples/contPCentreExample.py  # in einem zweiten Terminal
   - einen Key ohne die Rechte für `contpcentre` und `matrix`,
   - die Geo-Endpoints und ein TSP mit Matrix aus Koordinaten. Diese Prüfungen brauchen die OSM-Server aus `logisticsLab.yml`. Sind die nicht erreichbar, werden sie übersprungen.
 - Die Server der TH Wildau bieten derzeit nur das Profil `car` an. `foot` und `wheelchair` liefern dort 400.
-- `runServerTests.sh`: erledigt alles in einem Schritt. Es erzeugt neue Test-Keys, startet einen lokalen Server auf Port 8000, falls keiner läuft, führt die Tests aus und stoppt den Server wieder. Das Server-Log steht in `tests/serverTests/server.log`.
+- `runServerTests.sh`: erledigt alles in einem Schritt. Es erzeugt neue Test-Keys, startet einen lokalen Server auf Port 8000, falls keiner läuft, führt die Tests aus und stoppt den Server wieder. Das Log des Testservers steht in `logs/testServer.log`.
 
 ```bash
 PYTHON=/opt/anaconda3/envs/pyLogisticsLab/bin/python tests/serverTests/runServerTests.sh                       # checkServer.py
@@ -553,7 +559,7 @@ PYTHON=/opt/anaconda3/envs/pyLogisticsLab/bin/python tests/serverTests/runServer
 ```
 
 **Test-Keys:** `createTestKeys.py` legt die Keys `serverTests` (alle Dienste) und `serverTestsRestricted` (nur `tsp`) an. Gleichnamige Keys werden bei jedem Lauf ersetzt.
-- **Speicherorte:** In `logisticsLabServer/apiKeys.yml` stehen nur die Hashes. Die Keys selbst stehen in `tests/serverTests/.env` (Rechte `600`). Beide Dateien sind nicht versioniert.
+- **Speicherorte:** In `confs/apiKeys.yml` stehen nur die Hashes. Die Keys selbst stehen in `tests/serverTests/.env` (Rechte `600`). Beide Dateien sind nicht versioniert.
 - **Ohne Export:** `logLabClient.py` und der Dart-Client lesen die `.env` selbst. Variablen aus der Umgebung haben Vorrang. Ist die `.env` einmal angelegt, laufen die Skripte gegen einen laufenden Server also direkt, z. B. `python tests/serverTests/findWlpServer.py`.
 - **Entfernen:** `python tests/serverTests/createTestKeys.py --remove` löscht die Keys und die `.env`.
 - **Entfernter Server:** Das Skript dort mit dessen Key-Datei ausführen und die `.env` auf den Client kopieren:

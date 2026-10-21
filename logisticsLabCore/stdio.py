@@ -29,6 +29,7 @@
 from . import __version__
 from .core import *
 from .logger import *
+from . import paths
 
 import argparse
 import concurrent.futures
@@ -163,10 +164,10 @@ class StdioServer:
 
 def main():
     parser = argparse.ArgumentParser(description='local JSON-RPC interface of LogisticsLab (stdin/stdout)')
-    parser.add_argument('--logPath', default=os.path.join(tempfile.gettempdir(), 'logisticsLab'),
-                        help='directory for the log files (default: logisticsLab in the temp directory)')
-    parser.add_argument('--osmConfig', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logisticsLab.yml'),
-                        help='OSM servers (default: the servers of the TH Wildau)')
+    parser.add_argument('--logPath', default=paths.logDir(),
+                        help='directory for the log files and the matrix cache (default: <project>/logs or LOGLAB_LOG_DIR)')
+    parser.add_argument('--osmConfig', default=paths.osmConfigFile(),
+                        help='OSM servers (default: confs/logisticsLab.local.yml or confs/logisticsLab.yml)')
     parser.add_argument('--maxProblems', type=int, default=2, help='problems solved at the same time')
     parser.add_argument('--debug', action='store_true', help='debug messages in the log file')
     parser.add_argument('--noMatrixCache', action='store_true',

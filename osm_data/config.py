@@ -29,23 +29,40 @@ from .tools import *
 
 import yaml
 import requests
+import os
 import sys
 
 from datetime import datetime
+
+
+# defaults as logisticsLabCore.paths: LOGLAB_CONF_DIR or <project>/confs, LOGLAB_LOG_DIR or <project>/logs
+_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def defaultOptFile():
+    """ logisticsLab.local.yml (own servers, api keys) if it exists, otherwise logisticsLab.yml (TH Wildau) """
+    confDir = os.environ.get('LOGLAB_CONF_DIR') or os.path.join(_PROJECT_DIR, 'confs')
+    local = os.path.join(confDir, 'logisticsLab.local.yml')
+    return local if os.path.isfile(local) else os.path.join(confDir, 'logisticsLab.yml')
+
+def defaultLogFile():
+    logDir = os.environ.get('LOGLAB_LOG_DIR') or os.path.join(_PROJECT_DIR, 'logs')
+    os.makedirs(logDir, exist_ok=True)
+    return os.path.join(logDir, 'logisticsLab.log')
+
 
 class Config:
     def __init__(self, optFile=None, logFile=None):
         self.__conf={}
         self.__optFile=optFile
         if not optFile:
-            self.__optFile='logisticsLab.yml'
+            self.__optFile=defaultOptFile()
             
         self.__readOptFile()
 
         if logFile:
             self.__conf['logFile']=logFile
         elif not self.__conf.get('logFile'):
-            self.__conf['logFile']='logisticsLab.log'
+            self.__conf['logFile']=defaultLogFile()
 
         self.__log = Logging(self.__conf['logFile'],self.__conf['logging'])
         self.__log.logging('config',('loaded from mainConfig' if self.__conf['isMainConfig'] else 'local'),'OK')

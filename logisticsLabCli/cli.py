@@ -13,12 +13,14 @@
             scenario as <name>.llsol, --json prints them as JSON.
             Scenarios are .llab and solutions .llsol files (JSON) - other names are accepted, the field format counts.
             --set overrides a parameter of the problems, e.g. --set p=3 --set maxSolvingTime=30
-            Without --server the problems are solved in this process (local core, OSM servers of logisticsLab.yml).
+            Without --server the problems are solved in this process (local core, OSM servers of confs/logisticsLab.yml,
+            logs and matrix cache in logs/cli).
             With --server they are sent to a LogisticsLab server - the key from --apiKey or LOGLAB_API_KEY.
     show    prints a summary of the scenario
     convert converts old LogisticsLab files (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) into scenario files - see convertX.py
 """
 
+from logisticsLabCore import paths
 from logisticsLabCore.scenario import Scenario, ScenarioSolver, ScenarioException
 from .backends import LocalBackend, RemoteBackend
 from . import convertX
@@ -159,8 +161,8 @@ def main(argv=None):
     p.add_argument('--set', action='append', default=[], metavar='NAME=VALUE', help='parameter of the problems')
     p.add_argument('--server', help='URL of a LogisticsLab server, e.g. http://127.0.0.1:8000/v1/')
     p.add_argument('--apiKey', default=os.environ.get('LOGLAB_API_KEY', ''), help='default: LOGLAB_API_KEY')
-    p.add_argument('--osmConfig', help='OSM servers (default: logisticsLabCore/logisticsLab.yml)')
-    p.add_argument('--logPath', default=os.path.join(tempfile.gettempdir(), 'logisticsLabCli'))
+    p.add_argument('--osmConfig', help='OSM servers (default: confs/logisticsLab.local.yml or confs/logisticsLab.yml)')
+    p.add_argument('--logPath', default=os.path.join(paths.logDir(), 'cli'), help='default: logs/cli')
     p = sub.add_parser('show', help='summary of a scenario')
     p.add_argument('scenario')
     p = sub.add_parser('convert', help='converts old LogisticsLab files into scenario files')

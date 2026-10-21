@@ -39,7 +39,7 @@ def serviceLoop(options):
 
     while True:
         
-        conf = osm.Config(optFile='logisticsLab.yml')
+        conf = osm.Config()                              # confs/logisticsLab.yml
         isMainServer = conf.getConf()['isMainServer']
 
         for m in ['matrix', 'routing', 'geocoding']: 
