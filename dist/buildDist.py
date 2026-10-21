@@ -70,8 +70,8 @@ LAUNCHERS = {
 # msvcp140.dll, die einige Wheels (z.B. ortools) brauchen
 VC_RUNTIME = ["msvcp140.dll", "msvcp140_1.dll", "vcruntime140.dll", "vcruntime140_1.dll"]
 
-# Problemtypen fuer den Test: CMPL (tpp, wlp, mincostflow) und OR-Tools (tsp)
-SMOKE_TYPES = ("tpp", "wlp", "tsp", "mincostflow")
+# Problemtypen fuer den Test: CMPL (tpp, wlp, mincostflow, multistagewlp) und OR-Tools (tsp)
+SMOKE_TYPES = ("tpp", "wlp", "tsp", "mincostflow", "multistagewlp")
 
 
 class BuildError(Exception):
@@ -319,6 +319,10 @@ def clean_env(t, logdir):
 # Probleme fuer den Test der lokalen Schnittstelle: TPP (CMPL/HiGHS) und TSP (OR-Tools)
 STDIO_TPP = {"type": "tpp", "varCosts": [[3, 2], [1, 4]], "supplies": [10, 10], "demands": [8, 8]}
 STDIO_TSP = {"type": "tsp", "distances": [[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]]}
+# mehrstufiges WLP: Quelle 0 -> Lager 1, 2 (Oeffnungskosten 5, 3, Kapazitaet 10) -> Kunden 3, 4 - optimal 28, beide offen
+STDIO_MSWLP = {"type": "multistagewlp", "edges": [[0, 1], [0, 2], [1, 3], [1, 4], [2, 3], [2, 4]],
+               "costs": [1, 1, 1, 4, 4, 1], "supplies": [10, 0, 0, 0, 0], "demands": [0, 0, 0, 4, 6],
+               "nodeFixedCosts": [0, 5, 3, 0, 0], "nodeMaxCaps": [None, 10, 10, None, None], "isSingleSource": True}
 # VRP mit Zeitfenster: Knoten 2 erst ab 60 - die Loesung muss den Zeitplan mit Wartezeit enthalten
 _VRP_D = [[0, 10, 20, 15, 12], [10, 0, 12, 9, 18], [20, 12, 0, 7, 25], [15, 9, 7, 0, 14], [12, 18, 25, 14, 0]]
 STDIO_VRP = {"type": "vrp", "distances": _VRP_D, "times": _VRP_D, "demands": [0, 3, 4, 5, 6], "capacities": [10, 10],
@@ -357,6 +361,10 @@ def stdio_test(cmd, env, cwd, problems):
             print(f"    {name:12} {res['status']}  objVal={res.get('results', {}).get('objVal')}")
             if res["status"] != "solution":
                 raise BuildError(f"Test fehlgeschlagen (stdio, {name}): {res}")
+            if problem["type"] == "multistagewlp":
+                r = res["results"]
+                if abs(r["objVal"] - 28) > 1e-6 or r.get("openNodes") != [None, 1, 1, None, None]:
+                    raise BuildError(f"Test fehlgeschlagen (stdio, multistagewlp): {r}")
             if problem["type"] == "vrp":
                 r = res["results"]
                 wait = sum(map(sum, r.get("routeWaitingTimes") or [[0]]))
@@ -393,12 +401,11 @@ def cli_solve_test(cli, env, tdir):
         sols = json.loads(res.stdout)
     except ValueError:
         raise BuildError("Test fehlgeschlagen: keine Loesungsdokumente\n" + out)
-    found = {s.get("problem", {}).get("type"): s.get("status") for s in sols}
     for typ in SMOKE_TYPES:
-        status = found.get(typ)
-        print(f"    {typ:12} {status}")
-        if status != "solution":
-            raise BuildError(f"Test fehlgeschlagen: {typ} -> {status}\n" + out)
+        statuses = [ s.get("status") for s in sols if s.get("problem", {}).get("type") == typ ]
+        print(f"    {typ:14} {', '.join(map(str, statuses)) or None}")
+        if not statuses or any(st != "solution" for st in statuses):
+            raise BuildError(f"Test fehlgeschlagen: {typ} -> {statuses}\n" + out)
 
 
 def smoke_test(t, stage, work, port):
@@ -419,7 +426,7 @@ def smoke_test(t, stage, work, port):
     log("Test: lokale Schnittstelle (JSON-RPC ueber stdin/stdout)")
     stdio_test([t.python_exe(stage / RUNTIME), "-I", "-m", "logisticsLabCore.stdio", "--logPath", tdir / "stdio"],
                dict(env, LOGLAB_CONF_DIR=str(stage / "confs")), tdir,
-               {"tpp": STDIO_TPP, "tsp": STDIO_TSP, "vrp": STDIO_VRP})
+               {"tpp": STDIO_TPP, "tsp": STDIO_TSP, "vrp": STDIO_VRP, "multistagewlp": STDIO_MSWLP})
 
     smoke_test_server(t, stage, tdir, env, port)
 

@@ -51,7 +51,7 @@ def test_stdio(t, stage, exe, tdir, env):
     log("Test: JSON-RPC ueber stdin/stdout, ohne Python, conda, CMPLHOME und LOGLAB_CONF_DIR")
     # direkt wie aus einer App (confs/ findet das Programm selbst) ...
     bd.stdio_test([exe, "--logPath", tdir / "logs"], env, tdir,
-                  {"tpp": bd.STDIO_TPP, "tsp": bd.STDIO_TSP, "vrp": bd.STDIO_VRP})
+                  {"tpp": bd.STDIO_TPP, "tsp": bd.STDIO_TSP, "vrp": bd.STDIO_VRP, "multistagewlp": bd.STDIO_MSWLP})
     # ... und ueber das Startskript (unter Windows nur direkt, siehe buildDist.py)
     if not t.is_win:
         bd.stdio_test(["/bin/sh", stage / "logisticsLabStdio", "--logPath", tdir / "logs"], env, tdir,
