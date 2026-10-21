@@ -252,7 +252,7 @@ def build_cmpl(t, stage, args):
     return target
 
 
-def versions(t, stage, py):
+def versions(t, stage, py=None):
     cmpl = stage / "cmpl"
     out = subprocess.run([str(cmpl / "bin" / ("cmpl.exe" if t.is_win else "cmpl")), "-v"],
                          capture_output=True, text=True).stdout
@@ -260,8 +260,9 @@ def versions(t, stage, py):
     highs = cmpl / "Thirdparty" / "Highs" / ("highs.exe" if t.is_win else "highs")
     hv = subprocess.run([str(highs), "--version"], capture_output=True, text=True).stdout
     h = re.search(r"HiGHS version\s+(\S+)", hv)
-    pv = subprocess.run([str(py), "-I", "-c", "import platform; print(platform.python_version())"],
-                        capture_output=True, text=True).stdout.strip()
+    pv = "?" if py is None else subprocess.run(
+        [str(py), "-I", "-c", "import platform; print(platform.python_version())"],
+        capture_output=True, text=True).stdout.strip()
     return {"CMPL": m.group(1) if m else "?", "HIGHS": h.group(1) if h else "?", "PYTHON": pv}
 
 

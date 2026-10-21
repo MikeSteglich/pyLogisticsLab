@@ -6,17 +6,19 @@
 #
 #   1. eine venv mit Nuitka, den Abhaengigkeiten aus pyproject.toml und pyCmpl anlegen
 #   2. resources/logisticsLabStdio.py mit Nuitka kompilieren (--standalone)
-#   3. den CMPL-Kern mit HiGHS (cmpl/) und confs/logisticsLab.yml dazulegen
+#   3. den CMPL-Kern mit HiGHS (bin/cmpl/), confs/logisticsLab.yml, ein Startskript und README dazulegen
 #   4. testen, (macOS) signieren und als Archiv packen
 #
 # Ergebnis: dist/build/<os>-<arch>/logisticsLabStdio/
-#             logisticsLabStdio[.exe]   das Programm (+ Bibliotheken daneben)
-#             cmpl/                     CMPL-Kern mit HiGHS
+#             logisticsLabStdio[.bat]   Startskript
+#             README.md
 #             confs/logisticsLab.yml    OSM-Server der TH Wildau
+#             bin/                      das Programm logisticsLabStdio[.exe], seine Bibliotheken,
+#                                       die CMPL-Modelle und cmpl/ (CMPL-Kern mit HiGHS)
 #
-# Nuitka setzt __file__ der kompilierten Module auf ihren Ort in diesem
-# Verzeichnis - pyLogisticsLab findet cmpl/ und logisticsLabCore/paths.py
-# confs/ also wie im Repository.
+# Nuitka setzt __file__ der kompilierten Module auf ihren Ort in bin/ - pyLogisticsLab findet
+# bin/cmpl wie im Repository; confs/ neben bin/ setzt resources/logisticsLabStdio.py als
+# LOGLAB_CONF_DIR, so dass auch ein direkter Start von bin/logisticsLabStdio sie findet.
 #
 # Aufruf:  python3 dist/buildStdio.py [Optionen]      (Optionen: --help)
 #          Das Python, mit dem das Skript laeuft, ist die Basis der venv
@@ -125,6 +127,27 @@ def compile_stdio(t, work, py, args):
     return dist
 
 
+def write_launcher(t, stage):
+    """Startskript neben bin/ - fuer die Kommandozeile; eine App startet bin/logisticsLabStdio direkt."""
+    if t.is_win:
+        text = ("@echo off\r\nrem logisticsLabStdio - eine App startet besser direkt bin\\logisticsLabStdio.exe\r\n"
+                f'"%~dp0{bd.RUNTIME}\\{NAME}.exe" %*\r\nexit /b %ERRORLEVEL%\r\n')
+        (stage / f"{NAME}.bat").write_text(text, newline="")
+    else:
+        text = ("#!/bin/sh\n# logisticsLabStdio - eine App startet besser direkt bin/logisticsLabStdio\n"
+                f'exec "$(cd "$(dirname "$0")" && pwd)/{bd.RUNTIME}/{NAME}" "$@"\n')
+        (stage / NAME).write_text(text)
+        bd.make_executable(stage / NAME)
+
+
+def write_readme(t, stage, runtime, version):
+    vers = bd.versions(t, runtime)
+    text = (bd.RESOURCES / "README.stdio.md").read_text().replace("@VERSION@", version)
+    for k in ("CMPL", "HIGHS"):
+        text = text.replace(f"@{k}@", vers[k])
+    (stage / "README.md").write_text(text)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Baut die lokale Schnittstelle von LogisticsLab mit Nuitka zu einem Programm "
@@ -158,14 +181,17 @@ def main():
     log(f"Zusammenstellen: {stage}")
     if stage.exists():
         shutil.rmtree(stage)
-    shutil.copytree(dist, stage, symlinks=True)
-    bd.build_cmpl(t, stage, args)
+    runtime = stage / bd.RUNTIME
+    shutil.copytree(dist, runtime, symlinks=True)
+    bd.build_cmpl(t, runtime, args)
     (stage / "confs").mkdir()
     shutil.copy2(bd.PROJECT / "confs/logisticsLab.yml", stage / "confs/logisticsLab.yml")
+    write_launcher(t, stage)
+    write_readme(t, stage, runtime, version)
     for junk in stage.rglob(".DS_Store"):
         junk.unlink()
 
-    exe = stage / (NAME + (".exe" if t.is_win else ""))
+    exe = runtime / (NAME + (".exe" if t.is_win else ""))
     if t.is_mac and args.sign:
         bd.codesign(stage, args.sign)
     if not args.no_test:
@@ -177,7 +203,12 @@ def main():
         env = bd.clean_env(t, tdir / "logs")
         env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep)
                                       if "conda" not in p.lower() and "python" not in p.lower())
+        # direkt wie aus einer App (ohne LOGLAB_*: confs/ findet das Programm selbst) ...
+        env = {k: v for k, v in env.items() if not k.startswith("LOGLAB_")}
         bd.stdio_test([exe, "--logPath", tdir / "logs"], env, tdir, {"tpp": bd.STDIO_TPP, "tsp": bd.STDIO_TSP})
+        # ... und ueber das Startskript (unter Windows nur direkt, siehe buildDist.py)
+        if not t.is_win:
+            bd.stdio_test(["/bin/sh", stage / NAME, "--logPath", tdir / "logs"], env, tdir, {"tpp": bd.STDIO_TPP})
 
     if not args.no_archive:
         bd.pack(t, stage, f"{NAME}-{version}-{t}", argparse.Namespace(notarize=None, dmg=False, sign=args.sign))

@@ -72,21 +72,24 @@ Ergebnis: `dist/build/<os>-<arch>/logisticsLabStdio/`, als Archiv in `dist/out/`
 
 ```
 logisticsLabStdio/
-  logisticsLabStdio[.exe]      das Programm, daneben seine Bibliotheken (*.so / *.dylib bzw. *.pyd / *.dll)
-  pyLogisticsLab/*.cmpl        die CMPL-Modelle
-  cmpl/                        CMPL-Kern mit HiGHS
+  logisticsLabStdio[.bat]      Startskript für die Kommandozeile
+  README.md
   confs/logisticsLab.yml       OSM-Server der TH Wildau
+  bin/
+    logisticsLabStdio[.exe]    das Programm, daneben seine Bibliotheken (*.so / *.dylib bzw. *.pyd / *.dll)
+    pyLogisticsLab/*.cmpl      die CMPL-Modelle
+    cmpl/                      CMPL-Kern mit HiGHS
 ```
 
 - **Build-Umgebung:** Das Tool legt unter `dist/build/<os>-<arch>/stdio/` eine eigene Umgebung an, mit Nuitka, den Abhängigkeiten aus `pyproject.toml` (ohne Server) und pyCmpl. Basis ist das Python, mit dem das Tool gestartet wird. Bei conda ist das ein Klon des Envs (`nuitka-env`), denn mit einer venv auf conda findet Nuitka `libpython` nicht. Sonst ist es eine venv. Die Quellen von LogisticsLab kommen direkt aus dem Repository.
-- **Pfade:** Nuitka setzt `__file__` der kompilierten Module auf ihren Ort im Ergebnisverzeichnis. pyLogisticsLab findet `cmpl/`, und `paths.py` findet `confs/` dort wie im Repository. Eigene OSM-Server kommen nach `confs/logisticsLab.local.yml` oder per `--osmConfig`.
+- **Pfade:** Nuitka setzt `__file__` der kompilierten Module auf ihren Ort in `bin/`, pyLogisticsLab findet `bin/cmpl` wie im Repository. Ist `LOGLAB_CONF_DIR` nicht gesetzt, setzt der Einstieg (`resources/logisticsLabStdio.py`) es auf `confs/` neben `bin/`, und `LOGLAB_LOG_DIR` auf ein Verzeichnis des Benutzers. So findet auch ein direkter Start von `bin/logisticsLabStdio` die Konfiguration. Eigene OSM-Server kommen nach `confs/logisticsLab.local.yml` oder per `--osmConfig`.
 - **Solver-Prozesse:** Jedes Problem läuft in einem eigenen Prozess (`multiprocessing`, spawn). Dafür startet das Programm sich selbst noch einmal (`freeze_support()` in `resources/logisticsLabStdio.py`).
-- **Test:** Das Tool startet das Programm in einer Umgebung ohne Python, conda und `CMPLHOME` im `PATH` und löst über JSON-RPC einen TPP (CMPL/HiGHS) und einen TSP (OR-Tools).
+- **Test:** Das Tool startet `bin/logisticsLabStdio` direkt in einer Umgebung ohne Python und conda im `PATH` und ohne `CMPLHOME` und `LOGLAB_*`. Über JSON-RPC löst es einen TPP (CMPL/HiGHS) und einen TSP (OR-Tools). Unter Unix läuft ein TPP zusätzlich über das Startskript.
 - **Nur für das eigene System:** Nuitka kompiliert nicht für andere Systeme. Unter macOS entsteht ein Programm für die Architektur des Basis-Pythons (arm64 mit dem conda-Env auf Apple Silicon). Für Intel-Macs braucht es einen Build auf einem Intel-Mac oder mit einem x86_64-Python.
 
 ## Einbinden in eine Mac-App
 
-- **Ort im Bundle:** Das ganze Verzeichnis nach `MeineApp.app/Contents/Resources/logisticsLabStdio/` kopieren. Die App startet `Contents/Resources/logisticsLabStdio/logisticsLabStdio --logPath <~/Library/Application Support/<App>/logs>` mit `Process.start` und spricht über stdin/stdout mit ihm.
+- **Ort im Bundle:** Das ganze Verzeichnis nach `MeineApp.app/Contents/Resources/logisticsLabStdio/` kopieren. Die App startet `Contents/Resources/logisticsLabStdio/bin/logisticsLabStdio --logPath <~/Library/Application Support/<App>/logs>` mit `Process.start` und spricht über stdin/stdout mit ihm.
 - **Signieren:** Jede Mach-O-Datei im Verzeichnis braucht eine Signatur, von innen nach außen, zuletzt die App. Das gilt auch für `cmpl` und `highs`. `--sign` erledigt das für das Verzeichnis, mit Hardened Runtime und `resources/entitlements.plist`. Danach wird die App selbst signiert (ohne `--deep`) und notarisiert.
 - **Sandbox (App Store):** Die Binaries im Verzeichnis werden dann nicht mit `resources/entitlements.plist` signiert. Sie bekommen genau `com.apple.security.app-sandbox` und `com.apple.security.inherit`, dann erben `logisticsLabStdio`, die Solver-Prozesse, `cmpl` und `highs` die Sandbox der App. Die App braucht `com.apple.security.network.client` für die OSM-Server. Logs und Matrix-Cache gehören in den Container der App (`--logPath`).
 - **Kein Sandbox (Developer ID):** Es reichen Hardened Runtime und Notarisierung.
