@@ -361,24 +361,16 @@ def stdio_test(cmd, env, cwd, problems):
     print("    ok")
 
 
-def smoke_test(t, stage, work, port):
-    tdir = work / "smoketest"
-    if tdir.exists():
-        shutil.rmtree(tdir)
-    tdir.mkdir(parents=True)
-    env = clean_env(t, tdir / "logs")
-
-    # Beispielszenario mit Luftlinie (ohne Netz) und Problemen fuer CMPL und OR-Tools
-    scen = json.loads((stage / "examples/brandenburg.llab").read_text(encoding="utf-8"))
+def smoke_scenario(example, dest):
+    """Beispielszenario mit Luftlinie (ohne Netz) und Problemen fuer CMPL und OR-Tools."""
+    scen = json.loads(Path(example).read_text(encoding="utf-8"))
     scen["matrix"]["matrixSource"] = "beeline"
     scen["problems"] = [p for p in scen["problems"] if p["type"] in SMOKE_TYPES]
-    (tdir / "smoke.llab").write_text(json.dumps(scen), encoding="utf-8")
+    Path(dest).write_text(json.dumps(scen), encoding="utf-8")
 
-    cli = [t.launcher(stage, "logisticslab")]
-    if not t.is_win:
-        cli = ["/bin/sh", *cli]
 
-    log("Test: Szenario mit dem Kommandozeilen-Tool loesen")
+def cli_solve_test(cli, env, tdir):
+    """logisticslab solve smoke.llab --json - jedes Problem aus SMOKE_TYPES muss eine Loesung haben."""
     cmd = cli + ["solve", "smoke.llab", "--json"]
     print("    $ " + " ".join(str(c) for c in cmd), flush=True)
     res = subprocess.run([str(c) for c in cmd], cwd=tdir, env=env, capture_output=True,
@@ -394,6 +386,21 @@ def smoke_test(t, stage, work, port):
         print(f"    {typ:12} {status}")
         if status != "solution":
             raise BuildError(f"Test fehlgeschlagen: {typ} -> {status}\n" + out)
+
+
+def smoke_test(t, stage, work, port):
+    tdir = work / "smoketest"
+    if tdir.exists():
+        shutil.rmtree(tdir)
+    tdir.mkdir(parents=True)
+    env = clean_env(t, tdir / "logs")
+
+    smoke_scenario(stage / "examples/brandenburg.llab", tdir / "smoke.llab")
+    cli = [t.launcher(stage, "logisticslab")]
+    if not t.is_win:
+        cli = ["/bin/sh", *cli]
+    log("Test: Szenario mit dem Kommandozeilen-Tool loesen")
+    cli_solve_test(cli, env, tdir)
 
     # direkt wie aus einer App: python aus bin/, die Konfiguration ueber LOGLAB_CONF_DIR
     log("Test: lokale Schnittstelle (JSON-RPC ueber stdin/stdout)")

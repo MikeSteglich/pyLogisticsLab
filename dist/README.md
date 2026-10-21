@@ -81,11 +81,34 @@ logisticsLabStdio/
     cmpl/                      CMPL-Kern mit HiGHS
 ```
 
-- **Build-Umgebung:** Das Tool legt unter `dist/build/<os>-<arch>/stdio/` eine eigene Umgebung an, mit Nuitka, den Abhängigkeiten aus `pyproject.toml` (ohne Server) und pyCmpl. Basis ist das Python, mit dem das Tool gestartet wird. Bei conda ist das ein Klon des Envs (`nuitka-env`), denn mit einer venv auf conda findet Nuitka `libpython` nicht. Sonst ist es eine venv. Die Quellen von LogisticsLab kommen direkt aus dem Repository.
-- **Pfade:** Nuitka setzt `__file__` der kompilierten Module auf ihren Ort in `bin/`, pyLogisticsLab findet `bin/cmpl` wie im Repository. Ist `LOGLAB_CONF_DIR` nicht gesetzt, setzt der Einstieg (`resources/logisticsLabStdio.py`) es auf `confs/` neben `bin/`, und `LOGLAB_LOG_DIR` auf ein Verzeichnis des Benutzers. So findet auch ein direkter Start von `bin/logisticsLabStdio` die Konfiguration. Eigene OSM-Server kommen nach `confs/logisticsLab.local.yml` oder per `--osmConfig`.
+- **Build-Umgebung:** Das Tool legt unter `dist/build/<os>-<arch>/` eine eigene Umgebung an, gemeinsam für `buildStdio.py` und `buildCli.py`, mit Nuitka, den Abhängigkeiten aus `pyproject.toml` (ohne Server) und pyCmpl. Basis ist das Python, mit dem das Tool gestartet wird. Bei conda ist das ein Klon des Envs (`nuitka-env`), denn mit einer venv auf conda findet Nuitka `libpython` nicht. Sonst ist es eine venv. Die Quellen von LogisticsLab kommen direkt aus dem Repository.
+- **Pfade:** Nuitka setzt `__file__` der kompilierten Module auf ihren Ort in `bin/`, pyLogisticsLab findet `bin/cmpl` wie im Repository. Ist `LOGLAB_CONF_DIR` nicht gesetzt, setzt der Einstieg (`resources/logisticsLabStdio.py` mit `resources/distEnv.py`) es auf `confs/` neben `bin/`, und `LOGLAB_LOG_DIR` auf ein Verzeichnis des Benutzers. So findet auch ein direkter Start von `bin/logisticsLabStdio` die Konfiguration. Eigene OSM-Server kommen nach `confs/logisticsLab.local.yml` oder per `--osmConfig`.
 - **Solver-Prozesse:** Jedes Problem läuft in einem eigenen Prozess (`multiprocessing`, spawn). Dafür startet das Programm sich selbst noch einmal (`freeze_support()` in `resources/logisticsLabStdio.py`).
 - **Test:** Das Tool startet `bin/logisticsLabStdio` direkt in einer Umgebung ohne Python und conda im `PATH` und ohne `CMPLHOME` und `LOGLAB_*`. Über JSON-RPC löst es einen TPP (CMPL/HiGHS) und einen TSP (OR-Tools). Unter Unix läuft ein TPP zusätzlich über das Startskript.
 - **Nur für das eigene System:** Nuitka kompiliert nicht für andere Systeme. Unter macOS entsteht ein Programm für die Architektur des Basis-Pythons (arm64 mit dem conda-Env auf Apple Silicon). Für Intel-Macs braucht es einen Build auf einem Intel-Mac oder mit einem x86_64-Python.
+
+## Kommandozeilen-Tool ohne Python (`buildCli.py`)
+
+`buildCli.py` baut das Kommandozeilen-Tool `logisticslab` (`logisticsLabCli`) auf dieselbe Weise zu einer eigenen Distribution. Dafür nutzt es `buildStdio.py` mit der Beschreibung `PROGRAMS["cli"]`.
+
+```bash
+/opt/anaconda3/envs/nuitka/bin/python dist/buildCli.py [--sign "Developer ID Application: …"] [--notarize PROFIL]
+```
+
+Ergebnis: `dist/out/logisticslab-cli-<version>-<os>-<arch>.zip`, ausgepackt `dist/build/<os>-<arch>/logisticslab-cli/`. Der Name ist nicht einfach `logisticslab`, weil macOS und Windows Groß- und Kleinschreibung nicht unterscheiden, sonst wäre es dasselbe Verzeichnis wie `LogisticsLab`:
+
+```
+logisticslab-cli/
+  logisticslab[.bat]           Startskript
+  README.md
+  confs/                       logisticsLab.yml, logisticsLab.local.example.yml
+  examples/brandenburg.llab
+  bin/                         das Programm logisticslab[.exe], seine Bibliotheken, die CMPL-Modelle und cmpl/
+```
+
+- **Test:** `bin/logisticslab solve` löst das Beispielszenario mit Luftlinie (TPP, WLP, Min-Cost-Flow, TSP), ohne Python und conda und ohne `CMPLHOME` und `LOGLAB_CONF_DIR`. `logisticslab show` läuft über das Startskript.
+- **Unterschied zur LogisticsLab-Distribution** (`buildDist.py`): Python ist nicht dabei, der Code ist kompiliert, es gibt nur das CLI. Lokale Schnittstelle, REST-Server und API-Keys fehlen.
+- **`--dmg` und `--notarize`** gibt es auch hier und bei `buildStdio.py`, wie bei `buildDist.py`.
 
 ## Einbinden in eine Mac-App
 
