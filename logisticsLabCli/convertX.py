@@ -281,16 +281,18 @@ def convertClpx(data, id, source):
     units = {'distance': 'km', 'time': 'h'}
     matrix, _ = matrixSettings(data, units)
     nodes = NodeList()
-    for r in data['tables']['SOURCES']:
-        nodes.add(r, ['facility'], idColumn='Name', capacity=unlimitedOrNumber(r.get('Capacity')),
-                  fixed=isTrue(r.get('Fixed')) or None)
+    # the sources are no nodes - their positions are the result; their number is p, their capacities a parameter
+    # (fixed sources and customers fixed to a source are not supported by the continuous problems)
+    sources = data['tables']['SOURCES']
     for r in data['tables']['DESTINATIONS']:
-        source_ = str(r.get('Source') or '').strip()
         nodes.add(r, ['customer'], idColumn='Name', demand=number(r.get('Demand')),
-                  costFactor=number(r.get('CostFactor')) if r.get('CostFactor') not in (None, '', 1, 1.0) else None,
-                  assignedTo=source_ if isTrue(r.get('Fixed')) and source_ else None)
+                  costFactor=number(r.get('CostFactor')) if r.get('CostFactor') not in (None, '', 1, 1.0) else None)
     type = {'P-Median': 'contpmedian', 'P-Centre': 'contpcentre'}[option(data, 'Type')]
-    par = {'isCapacitated': isTrue(option(data, 'Capacitated')), 'isDemandWeighted': isTrue(option(data, 'DemandWeighted'))}
+    par = {'p': len(sources), 'isCapacitated': isTrue(option(data, 'Capacitated')),
+           'isDemandWeighted': isTrue(option(data, 'DemandWeighted'))}
+    if par['isCapacitated']:
+        caps = [ unlimitedOrNumber(r.get('Capacity')) for r in sources ]
+        par['capacities'] = caps[0] if len(set(caps)) == 1 else caps
     return scenario(data, id, source, units, matrix, nodes, [{'name': id, 'type': type, 'parameters': par}])
 
 

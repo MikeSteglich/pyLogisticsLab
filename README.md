@@ -390,7 +390,7 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
 - **Rollen:** bestimmen, was ein Problem liest.
   - `supplier` → `customer`: TPP.
   - `candidate` → `customer`: WLP, P-Median, P-Center, SCP, MCP.
-  - `facility`: kontinuierliche Standorte, ihre Anzahl ist `p` und ihre Kapazitäten gelten.
+  - `customer` allein: kontinuierliche Standorte (`contpmedian`, `contpcentre`). Die Standorte sind das Ergebnis und keine Knoten. Ihre Anzahl ist der Parameter `p` (Pflicht), ihre Kapazitäten der Parameter `capacities`: ein Wert für alle oder eine Liste mit `p` Werten, nur mit `isCapacitated` (Standard: `true`, wenn `capacities` angegeben ist). In der Lösung heißen sie `F1` … `Fp`. Die frühere Rolle `facility` gibt es nicht mehr, eine Datei damit wird mit einem Hinweis abgelehnt.
   - `depot`: VRP.
 - **Netze** (`networks`): legen die erlaubten Verbindungen fest, mit Kapazität, Mindestfluss, Fixkosten und Richtung je Kante. Ihre Länge und Fahrzeit kommt von OSM.
   - `networkMode: edges`: nur diese Kanten sind erlaubt. Bei TPP und Standortproblemen sind die übrigen Paare dann gesperrt.
@@ -436,6 +436,7 @@ logisticslab convert --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-
 ```
 
 - **Formate:** TPPX → `tpp`, DLPX → `wlp`/`pmedian`/`pcentre`/`mcp`, CLPX → `contpmedian`/`contpcentre`, NWFX → `mincostflow`, TSPX → `tsp`/`cpp`, VRPX → `vrp`. Die Optionen der Datei werden zu den Parametern des Problems.
+- **CLPX:** Die Quellen werden keine Knoten. Ihre Anzahl wird `p`, bei `Capacitated` ihre Kapazitäten `capacities`: ein Wert, wenn alle gleich sind. Feste Quellen und Kunden mit fester Zuordnung zu einer Quelle unterstützen die kontinuierlichen Probleme nicht, sie werden nicht übernommen.
 - **Übersprungen:** Dateien mit eigenen Matrizen (`DistFunc OwnDef`) oder ebenen Koordinaten (`Map SimpleMap`).
 - **Gespeicherte Matrizen** werden nicht übernommen. Ausnahmen: `M` in `COSTS` (gesperrte Verbindung), `CAPACITIES` und `FIXEDCOSTS` werden zu einem Netz `connections`.
 - **Reihenfolge:** In den alten Dateien steht `x` = Länge, `y` = Breite. Die Umwandlung schreibt `[lat, lon]`.

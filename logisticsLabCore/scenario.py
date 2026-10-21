@@ -15,7 +15,7 @@
 
 from .items import MatrixOptions, CostOptions
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, Literal, Union
 
 import datetime
@@ -59,7 +59,7 @@ class Node(Item):
     coordinates: list[float]                     # [lat, lon]
     address: Optional[str] = None                # free text, e.g. for geocoding
     addressDetails: Optional[AddressDetails] = None
-    roles: list[Literal['supplier', 'customer', 'candidate', 'facility', 'depot', 'transit']] = []
+    roles: list[Literal['supplier', 'customer', 'candidate', 'depot', 'transit']] = []
     active: bool = True                          # False: the node is ignored
     supply: Unlimited = None
     minSupply: Unlimited = None
@@ -67,7 +67,7 @@ class Node(Item):
     demand: Unlimited = None
     minDemand: Unlimited = None
     maxDemand: Unlimited = None
-    capacity: Unlimited = None                   # candidate, facility
+    capacity: Unlimited = None                   # candidate
     fixedCost: Optional[float] = None            # candidate
     fixed: bool = False                          # candidate: must be open
     assignedTo: Optional[str] = None             # customer: fixed assignment to a candidate
@@ -81,6 +81,15 @@ class Node(Item):
     demands: Optional[dict[str, float]] = None   # multicommodity: demand per commodity
     capacityFactors: Optional[dict[str, float]] = None   # multicommodity: capacity of the node (minCap, maxCap)
                                                  # used by one unit of a commodity - default 1
+
+    @field_validator('roles', mode='before')
+    @classmethod
+    def noFacility(cls, roles):
+        # continuous location problems had nodes with role facility - their position is a result, not data
+        if isinstance(roles, list) and 'facility' in roles:
+            raise ValueError("role facility is not used anymore - contpmedian and contpcentre get the number of "
+                             "facilities as parameter p and their capacities as parameter capacities")
+        return roles
 
     @model_validator(mode='after')
     def check(self):
@@ -489,26 +498,30 @@ class ScenarioSolver:
     #*********** continuous location ************
     def _continuous(self, type):
         D = self._role('destinations', 'customer')
-        F = [ n for n in self.nodes.values() if 'facility' in n.roles ]
         par = self.par
-        p = par.get('p', len(F))
-        if not p:
-            raise ScenarioException(f'problem {self.problem.name}: p or nodes with role facility are needed')
-        isCap = par.get('isCapacitated', False)
+        # the facilities are a result - their number p and their capacities are parameters, not nodes
+        p = par.get('p')
+        if not isinstance(p, int) or isinstance(p, bool) or p < 1:
+            raise ScenarioException(f'problem {self.problem.name}: parameter p (number of facilities) is needed')
+        caps = par.get('capacities')
+        isCap = par.get('isCapacitated', caps is not None)
         weighted = par.get('isDemandWeighted', True)
         demands = [ n.demand if n.demand is not None else 1 for n in D ]
         payload = {'type': type, 'p': p, 'coordinates': [ n.coordinates for n in D ],
                    'isSingleSource': par.get('isSingleSource', True), 'nrOfStarts': par.get('nrOfStarts'),
                    **self._common()}
         if isCap:
-            if len(F) != p or any(unlimited(f.capacity) for f in F):
-                raise ScenarioException(f'problem {self.problem.name}: capacitated - {p} facilities with a capacity needed')
-            payload['capacities'] = [ f.capacity for f in F ]
+            if caps is None or (isinstance(caps, list) and len(caps) != p):
+                raise ScenarioException(f'problem {self.problem.name}: capacitated - parameter capacities needed, '
+                                        f'one value for all facilities or a list of {p} values')
+            payload['capacities'] = caps
             payload['demands'] = demands
             if not weighted:
                 self.warnings.append('isDemandWeighted false with capacities: the costs are weighted with the demands')
         elif weighted or type == 'contpcentre':
             payload['demands'] = demands
+        if caps is not None and not isCap:
+            self.warnings.append('capacities are ignored with isCapacitated false')
         if type == 'contpmedian' and any(n.costFactor != 1 for n in D):
             payload['costFactors'] = [ n.costFactor for n in D ]
         elif type == 'contpcentre':
@@ -517,7 +530,7 @@ class ScenarioSolver:
             self.warnings.append('continuous location problems use great-circle distances, not the road network')
         scale = 1000 / TO_M[self.s.units.distance]                  # results in km
         self.valueUnit = self.s.units.distance
-        ids = [ f.id for f in F ] if len(F) == p else [ f'F{k+1}' for k in range(p) ]
+        ids = [ f'F{k+1}' for k in range(p) ]
 
         def results(r):
             flows = r.get('flows')
