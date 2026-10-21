@@ -50,8 +50,8 @@ class CppResults(ResultFields):
 
 class VrpResults(ResultFields):
     routes: list[list[int]]                     # node sequence of every vehicle, [depot, depot] if unused
-    routeLoads: Matrix                          # load after every node of a route
-    routeDistances: Matrix                      # distance after every node of a route
+    routeLoads: Matrix                          # demand delivered at every node of a route
+    routeDistances: Matrix                      # distance driven up to every node of a route (0 at the start)
     # with times (given or calculated from coordinates) - per node of a route, see vrpSchedule in routingHandlers.py
     routeTimes: Optional[Matrix] = None         # start of the service
     routeArrivals: Optional[Matrix] = None      # arrival

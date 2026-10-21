@@ -124,10 +124,10 @@ class Vrp(object):
             rDists = []
             
             route_distance = 0
+            rDists.append(0)            # distance at the start - one value per node of the route, also without times
             if self.__isTimeWindow or self.__isMaxTime:
                 time_var = time_dimension.CumulVar(index)
                 rTimes.append(self.__solution.Min(time_var))
-                rDists.append(0)
 
             while not self.__routing.IsEnd(index):
                 node_index = self.__manager.IndexToNode(index)
