@@ -360,7 +360,7 @@ Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den 
 
 ## Szenario-Format und Kommandozeilen-Tool
 
-Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebig viele Probleme rechnen, z. B. TPP, WLP, VRP und Min-Cost-Flow auf denselben Knoten. Ein Beispiel ist `tests/scenarios/brandenburg.llab`. Die Datenmodelle stehen in `logisticsLabCore/scenario.py`. Sie sind Teil des JSON Schemas (`python -m logisticsLabCore.schema`).
+Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebig viele Probleme rechnen, z. B. TPP, WLP, VRP und Min-Cost-Flow auf denselben Knoten. Ein Beispiel ist `tests/scenarios/brandenburg.llab`. Die Datenmodelle stehen in `logisticsLabCore/scenario.py`. Sie sind Teil des JSON Schemas (`python -m logisticsLabCore.schema`). Die vollständige Beschreibung beider Formate, `.llab` und `.llsol`, mit allen Feldern und Parametern je Problemtyp steht in [docs/dateiformate.md](docs/dateiformate.md).
 
 ```json
 { "format": "logisticsLab", "version": 1, "id": "brandenburg",
