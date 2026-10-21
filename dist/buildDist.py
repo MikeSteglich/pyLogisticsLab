@@ -319,6 +319,11 @@ def clean_env(t, logdir):
 # Probleme fuer den Test der lokalen Schnittstelle: TPP (CMPL/HiGHS) und TSP (OR-Tools)
 STDIO_TPP = {"type": "tpp", "varCosts": [[3, 2], [1, 4]], "supplies": [10, 10], "demands": [8, 8]}
 STDIO_TSP = {"type": "tsp", "distances": [[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]]}
+# VRP mit Zeitfenster: Knoten 2 erst ab 60 - die Loesung muss den Zeitplan mit Wartezeit enthalten
+_VRP_D = [[0, 10, 20, 15, 12], [10, 0, 12, 9, 18], [20, 12, 0, 7, 25], [15, 9, 7, 0, 14], [12, 18, 25, 14, 0]]
+STDIO_VRP = {"type": "vrp", "distances": _VRP_D, "times": _VRP_D, "demands": [0, 3, 4, 5, 6], "capacities": [10, 10],
+             "serviceTimes": [0, 5, 5, 5, 5], "timeWindows": [[0, 480], [0, 480], [60, 120], [0, 480], [30, 90]],
+             "maxWaitingTime": 60, "maxSolvingTime": 2}
 
 
 def stdio_test(cmd, env, cwd, problems):
@@ -352,6 +357,14 @@ def stdio_test(cmd, env, cwd, problems):
             print(f"    {name:12} {res['status']}  objVal={res.get('results', {}).get('objVal')}")
             if res["status"] != "solution":
                 raise BuildError(f"Test fehlgeschlagen (stdio, {name}): {res}")
+            if problem["type"] == "vrp":
+                r = res["results"]
+                wait = sum(map(sum, r.get("routeWaitingTimes") or [[0]]))
+                lengths = all(len(r[k][v]) == len(r["routes"][v]) for v in range(len(r["routes"]))
+                              for k in ("routeDistances", "routeTimes", "routeArrivals", "routeWaitingTimes"))
+                print(f"    {'':12} Zeitplan: Wartezeit gesamt {wait}, eine Zeile je Halt {lengths}")
+                if not lengths or wait <= 0:
+                    raise BuildError(f"Test fehlgeschlagen (stdio, vrp): Zeitplan fehlt oder falsch: {r}")
         send("shutdown", {})
         proc.stdin.close()
         proc.wait(timeout=30)
@@ -405,7 +418,8 @@ def smoke_test(t, stage, work, port):
     # direkt wie aus einer App: python aus bin/, die Konfiguration ueber LOGLAB_CONF_DIR
     log("Test: lokale Schnittstelle (JSON-RPC ueber stdin/stdout)")
     stdio_test([t.python_exe(stage / RUNTIME), "-I", "-m", "logisticsLabCore.stdio", "--logPath", tdir / "stdio"],
-               dict(env, LOGLAB_CONF_DIR=str(stage / "confs")), tdir, {"tpp": STDIO_TPP, "tsp": STDIO_TSP})
+               dict(env, LOGLAB_CONF_DIR=str(stage / "confs")), tdir,
+               {"tpp": STDIO_TPP, "tsp": STDIO_TSP, "vrp": STDIO_VRP})
 
     smoke_test_server(t, stage, tdir, env, port)
 
