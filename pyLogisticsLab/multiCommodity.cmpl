@@ -7,9 +7,12 @@
 #   c[i,j,k]        cost rate of commodity k on arc (i,j)
 #   cf[i,j,k]       capacity used by one unit of commodity k on arc (i,j)
 #   minKap, maxKap  joint capacity of arc (i,j)
+#   isInteger       1: integer flows (MIP) - with several commodities or capacity factors <> 1 the LP
+#                   solution is in general not integral, even for integral supplies and demands
 
 var:
-    { [i,j] in A, k in K: x[i,j,k] : real[0..];  }
+    { isInteger = 1:  { [i,j] in A, k in K: x[i,j,k] : integer[0..];  } |
+      default:        { [i,j] in A, k in K: x[i,j,k] : real[0..];  } }
 
 obj:
     sum { [i,j] in A, k in K: c[i,j,k] * x[i,j,k] } ->min;

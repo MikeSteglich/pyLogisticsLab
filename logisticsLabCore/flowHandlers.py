@@ -99,7 +99,9 @@ class MultiCommodityHandler(FlowHandler):
     def _createProblem(self, d):
         return ll.MultiCommodityFlow(d.edges, d.costs, d.supplies, d.demands, d.minCaps, d.maxCaps, d.capacityFactors,
                                      maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime), nodeMinCaps=d.nodeMinCaps,
-                                     nodeMaxCaps=d.nodeMaxCaps, balance=d.balance, shortageCosts=d.shortageCosts)
+                                     nodeMaxCaps=d.nodeMaxCaps, balance=d.balance, shortageCosts=d.shortageCosts,
+                                     nodeCapacityFactors=d.nodeCapacityFactors, isInteger=d.isInteger,
+                                     mipGap=d.mipGap)
 
 
 class MultiModalHandler(FlowHandler):

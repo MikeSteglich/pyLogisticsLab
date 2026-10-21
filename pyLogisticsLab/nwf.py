@@ -320,18 +320,20 @@ class _MultiCommodityModel(_CmplFlow):
         supplies         [nodes x commodities], demands: [nodes x commodities] (default 0) - totals per commodity must be equal
         minCaps          joint minimal capacity of every edge (default 0), maxCaps: joint maximal capacity (default unlimited)
         capacityFactors  [edges x commodities] capacity used by one unit of a commodity (default 1)
+        isInteger        integer flows (MIP with mipGap) instead of the LP
     """
 
     #*********** constructor **********
     def __init__(self, edges, costs, supplies, demands=None, minCaps=None, maxCaps=None, capacityFactors=None,
-                 maxSolvingTime=60):
+                 maxSolvingTime=60, isInteger=False, mipGap=0.001):
         if not isinstance(supplies, (list, tuple)) or not supplies or not isinstance(supplies[0], (list, tuple)):
             raise LogLabException('LogisticsLab error: Wrong supplies - matrix [nodes x commodities] expected')
         n = len(supplies)
         self._nrOfCommodities = len(supplies[0])
         k = self._nrOfCommodities
 
-        super().__init__(edges, n, 'multiCommodity.cmpl', 0.0, maxSolvingTime)
+        self._isInteger = bool(isInteger)
+        super().__init__(edges, n, 'multiCommodity.cmpl', mipGap if self._isInteger else 0.0, maxSolvingTime)
 
         self._supplies = _matrix(supplies, n, k, 'supplies', 0)
         self._demands = _matrix(demands, n, k, 'demands', 0)
@@ -360,7 +362,8 @@ class _MultiCommodityModel(_CmplFlow):
         nodes, arcs, commodities = self._sets(self._nrOfCommodities, 'K')
         par = self._parameters((('c', (arcs, commodities), self._costs), ('cf', (arcs, commodities), self._capacityFactors),
                                 ('a', (nodes, commodities), self._supplies), ('b', (nodes, commodities), self._demands),
-                                ('minKap', (arcs,), self._minCaps), ('maxKap', (arcs,), self._maxCaps)))
+                                ('minKap', (arcs,), self._minCaps), ('maxKap', (arcs,), self._maxCaps),
+                                ('isInteger', (), int(self._isInteger))))
 
         if self._run((nodes, arcs, commodities), par):
             self._flows = [ [ self._activity(self._model.x, (i, j, c)) for c in range(self._nrOfCommodities) ]
@@ -690,15 +693,19 @@ class MultiCommodityFlow(_Extended):
         supplies         [nodes x commodities], demands: [nodes x commodities] (default 0)
         minCaps          joint minimal capacity of every edge (default 0), maxCaps: joint maximal capacity (default unlimited)
         capacityFactors  [edges x commodities] capacity used by one unit of a commodity (default 1)
-        nodeMinCaps, nodeMaxCaps   joint capacities of the nodes (one unit of every commodity uses 1)
+        nodeMinCaps, nodeMaxCaps   joint capacities of the nodes
+        nodeCapacityFactors        [nodes x commodities] capacity of a node used by one unit of a commodity (default 1)
         balance, shortageCosts     per commodity - shortageCosts [nodes] or [nodes x commodities]
+        isInteger, mipGap          integer flows (MIP) - with several commodities or capacity factors <> 1 the LP
+                                   solution is in general not integral, even for integral supplies and demands
         results [edges x commodities] or [nodes x commodities]
     """
 
     _isSingle = False
 
     def __init__(self, edges, costs, supplies, demands=None, minCaps=None, maxCaps=None, capacityFactors=None,
-                 maxSolvingTime=60, nodeMinCaps=None, nodeMaxCaps=None, balance='auto', shortageCosts=None):
+                 maxSolvingTime=60, nodeMinCaps=None, nodeMaxCaps=None, balance='auto', shortageCosts=None,
+                 nodeCapacityFactors=None, isInteger=False, mipGap=0.001):
         if not isinstance(supplies, (list, tuple)) or not supplies or not isinstance(supplies[0], (list, tuple)):
             raise LogLabException('LogisticsLab error: Wrong supplies - matrix [nodes x commodities] expected')
         n, K = len(supplies), len(supplies[0])
@@ -710,14 +717,19 @@ class MultiCommodityFlow(_Extended):
         x = self._x = _Extension(edges, n, supplies, demands, nodeMinCaps, nodeMaxCaps, balance, shortageCosts)
         costs = _matrix(costs, x.E, K, 'costs', None)
         factors = _matrix(capacityFactors, x.E, K, 'capacity factors', 1)
+        nodeFactors = _matrix(nodeCapacityFactors, n, K, 'capacity factors of the nodes', 1)
+        for row in nodeFactors:
+            _numbers(row, 'capacity factor of a node')
         minCaps = _vector(minCaps, x.E, 'minimal capacities', 0)
         maxCaps = _vector(maxCaps, x.E, 'maximal capacities', None)
         for kind, v in x.kinds:
             costs.append(x.shortage[v] if kind == 'shortage' else [0] * K)
-            factors.append([1] * K)
+            # the edge v -> out of a split node carries the joint capacity of the node
+            factors.append(list(nodeFactors[v]) if kind == 'node' else [1] * K)
             minCaps.append(x.nodeMin[v] if kind == 'node' else 0)
             maxCaps.append(x.nodeMax[v] if kind == 'node' else None)
-        self._model = _MultiCommodityModel(x.edges, costs, x.S, x.D, minCaps, maxCaps, factors, maxSolvingTime)
+        self._model = _MultiCommodityModel(x.edges, costs, x.S, x.D, minCaps, maxCaps, factors, maxSolvingTime,
+                                           isInteger, mipGap)
 #*************** end MultiCommodityFlow ********************************************
 
 

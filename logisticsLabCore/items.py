@@ -186,6 +186,10 @@ class MultiCommodityItem(FlowOptions, BalanceOptions):
     minCaps: Optional[list] = None              # joint minimal capacity of every edge
     maxCaps: Optional[list] = None              # joint maximal capacity of every edge
     capacityFactors: Optional[list] = None      # [edges x commodities] capacity used by one unit - default 1
+    nodeCapacityFactors: Optional[list] = None  # [nodes x commodities] capacity of a node (nodeMinCaps/nodeMaxCaps)
+                                                # used by one unit - default 1
+    isInteger: Optional[bool] = False           # integer flows (MIP) instead of the LP
+    mipGap: Optional[float] = 0.001             # only with isInteger
 
 class MultiModalItem(FlowOptions, BalanceOptions):
     type: Literal["multimodal"] = "multimodal"

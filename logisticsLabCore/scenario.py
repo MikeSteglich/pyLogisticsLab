@@ -79,6 +79,8 @@ class Node(Item):
     shortageCost: float = 0                      # networks with balance auto: costs per unit of unmet demand
     supplies: Optional[dict[str, float]] = None  # multicommodity: supply per commodity
     demands: Optional[dict[str, float]] = None   # multicommodity: demand per commodity
+    capacityFactors: Optional[dict[str, float]] = None   # multicommodity: capacity of the node (minCap, maxCap)
+                                                 # used by one unit of a commodity - default 1
 
     @model_validator(mode='after')
     def check(self):
@@ -179,7 +181,7 @@ class Scenario(Item):
         for n in self.nodes:
             if n.assignedTo and n.assignedTo not in known:
                 raise ValueError(f'node {n.id}: unknown assignedTo {n.assignedTo}')
-            for k in list(n.supplies or {}) + list(n.demands or {}):
+            for k in list(n.supplies or {}) + list(n.demands or {}) + list(n.capacityFactors or {}):
                 if k not in commodities:
                     raise ValueError(f'node {n.id}: unknown commodity {k}')
         for name, net in self.networks.items():
@@ -758,7 +760,12 @@ class ScenarioSolver:
                    'demands': [ [ (n.demands or {}).get(k, 0) for k in ids ] for n in nodes ],
                    'minCaps': [ e.minFlow for e, *_ in arcs ],
                    'maxCaps': [ 'M' if unlimited(e.capacity) else e.capacity for e, *_ in arcs ],
-                   'capacityFactors': factors, **self._nodeOptions(nodes), 'maxSolvingTime': self.par.get('maxSolvingTime')}
+                   'capacityFactors': factors, **self._nodeOptions(nodes), 'maxSolvingTime': self.par.get('maxSolvingTime'),
+                   'isInteger': bool(self.par.get('isInteger', False))}
+        if self.par.get('mipGap') is not None:
+            payload['mipGap'] = self.par['mipGap']
+        if any(n.capacityFactors for n in nodes):
+            payload['nodeCapacityFactors'] = [ [ (n.capacityFactors or {}).get(k, 1) for k in ids ] for n in nodes ]
         perCommodity = lambda v: { k: x for k, x in zip(ids, v) if x > 1e-9 }
 
         def results(r):

@@ -115,6 +115,27 @@ check('multicommodity balance auto per commodity',
 check('mincostflow unbalanced, default balance auto', ll.MinCostFlow(edges, [4, 4, 2, 2, 1], [25, 0, 0, 0], demands,
                                                                      maxCaps=maxCaps), 114)
 check('maxflow node capacity', ll.MaxFlow(edges, 0, 3, maxCaps, nodeMaxCaps=[None, None, 6, None]), 11)
+# node capacity with capacity factors per commodity (one unit of commodity 0 uses 2) = the node 2 split by hand
+# into 2 (in) and 4 (out), the edge 2 -> 4 with the capacity and the factors; with factor 1 the value is 62
+mcCosts = [[4, 1], [4, 1], [2, 1], [2, 1], [1, 1]]
+mcSupplies, mcDemands = [[10, 5], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [10, 5]]
+check('multicommodity node capacity with capacity factors',
+      ll.MultiCommodityFlow(edges, mcCosts, mcSupplies, mcDemands, maxCaps=[15, 8, 20, 'M', 10],
+                            nodeMaxCaps=[None, None, 10, None], nodeCapacityFactors=[[1, 1], [1, 1], [2, 1], [1, 1]]),
+      65)
+# the LP of a multi-commodity flow is not integral (2.5 / 7.5 units), isInteger gives integer flows (MIP)
+check('multicommodity LP not integral',
+      ll.MultiCommodityFlow(edges, mcCosts, mcSupplies, mcDemands, maxCaps=[15, 8, 20, 'M', 10],
+                            nodeMaxCaps=[None, None, 15, None], nodeCapacityFactors=[[1, 1], [1, 1], [2, 1], [1, 1]]),
+      62.5)
+check('multicommodity isInteger',
+      ll.MultiCommodityFlow(edges, mcCosts, mcSupplies, mcDemands, maxCaps=[15, 8, 20, 'M', 10],
+                            nodeMaxCaps=[None, None, 15, None], nodeCapacityFactors=[[1, 1], [1, 1], [2, 1], [1, 1]],
+                            isInteger=True), 63)
+check('multicommodity node capacity with capacity factors = split by hand',
+      ll.MultiCommodityFlow([[0, 1], [0, 2], [1, 2], [1, 3], [4, 3], [2, 4]], mcCosts + [[0, 0]],
+                            mcSupplies + [[0, 0]], mcDemands + [[0, 0]], maxCaps=[15, 8, 20, 'M', 10, 10],
+                            capacityFactors=[[1, 1]] * 5 + [[2, 1]]), 65)
 
 print('== continuous location')
 check('contpmedian', ll.ContPMedian(3, coordinates, contDemands), 4968.608, heuristic=True)
