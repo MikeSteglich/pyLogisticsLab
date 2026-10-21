@@ -36,3 +36,7 @@ matrixCache.sqlite*
 # --- packaging (pip install -e .) ---
 *.egg-info/
 build/
+
+# --- distribution (dist/buildDist.py) ---
+dist/cache/
+dist/out/
