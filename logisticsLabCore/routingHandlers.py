@@ -62,6 +62,30 @@ class CppHandler(ProblemHandler):
             self._results['edgeUsages'] = self.__problem.getEdgeUsages()
 
 
+def vrpSchedule(routes, times, serviceTimes, starts=None):
+    """ schedule of every route - lists per node of the route:
+        routeTimes        start of the service (the time of the solver if given - it may include waiting)
+        routeArrivals     arrival = start of the service at the previous node + its service time + travel time
+        routeTravelTimes  travel time from the previous node (0 at the start)
+        routeWaitingTimes waiting time before the service (time windows)
+        routeServiceTimes service time
+        Without starts (no time windows, no maxTime) every route starts at 0 and nothing waits.
+    """
+    out = {k: [] for k in ('routeTimes', 'routeArrivals', 'routeTravelTimes', 'routeWaitingTimes', 'routeServiceTimes')}
+    for k, route in enumerate(routes):
+        given = starts[k] if starts and len(starts[k]) == len(route) else None
+        start = given[0] if given else 0
+        st, arr, tr, wt = [start], [start], [0], [0]
+        for pos, (a, b) in enumerate(zip(route, route[1:]), 1):
+            travel = times[a][b]
+            arrival = st[-1] + serviceTimes[a] + travel
+            begin = max(arrival, given[pos]) if given else arrival
+            st.append(begin); arr.append(arrival); tr.append(travel); wt.append(begin - arrival)
+        for key, v in zip(out, (st, arr, tr, wt, [ serviceTimes[i] for i in route ])):
+            out[key].append(v)
+    return out
+
+
 class VrpHandler(ProblemHandler):
     """ capacitated vehicle routing problem, optionally with time windows, maximal route duration and distance """
 
@@ -79,8 +103,9 @@ class VrpHandler(ProblemHandler):
         elif d.coordinates:
             self._logger.debug('vrp', 'load distances')
             distances = self._loadMatrix(d.coordinates, d, 'distances')
-            times = self._loadMatrix(d.coordinates, d, 'times') if usesTimes else d.times
-            self.__calculated = {'distances': distances, **({'times': times} if usesTimes else {})}
+            # the times always - for the travel and waiting times of the routes (the matrix cache holds both)
+            times = self._loadMatrix(d.coordinates, d, 'times')
+            self.__calculated = {'distances': distances, 'times': times}
         else:
             raise LogLabCoreException('no distances and coordinates are available')
 
@@ -114,8 +139,10 @@ class VrpHandler(ProblemHandler):
         except ll.LogLabException as e:
             raise LogLabCoreException(e)
 
-        # route times with time windows or a maximal route duration - otherwise there are no times
+        # times of the solver with time windows or a maximal route duration, otherwise only the schedule
         self.__routeTimes = timeWindows is not None or d.maxTime is not None
+        self.__times = toInt(times) if times else None
+        self.__serviceTimes = toInt(serviceTimes) if times else None
 
     def solve(self):
         try:
@@ -133,6 +160,7 @@ class VrpHandler(ProblemHandler):
             self._results['routes'] = p.getRouteIndices()
             self._results['routeLoads'] = p.getRouteLoads()
             self._results['routeDistances'] = p.getRouteDistances()
-            if self.__routeTimes:
-                self._results['routeTimes'] = p.getRouteTimes()
+            if self.__times:
+                self._results.update(vrpSchedule(self._results['routes'], self.__times, self.__serviceTimes,
+                                                 p.getRouteTimes() if self.__routeTimes else None))
             self._results.update(self.__calculated)

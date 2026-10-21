@@ -624,10 +624,9 @@ class ScenarioSolver:
         payload = {'type': 'vrp', 'distances': [ [ round(v) for v in row ] for row in D ],
                    'demands': [0] + [ n.demand or 0 for n in customers ], 'capacities': capacities, 'depot': 0,
                    'maxSolvingTime': par.get('maxSolvingTime')}
-        usesTimes = useTW or par.get('maxTime') is not None
-        if usesTimes:
-            payload['times'] = [ [ round(v) for v in row ] for row in T ]
-            payload['serviceTimes'] = [ round(n.serviceTime * ts) for n in nodes ]
+        # the times always - the solution contains the travel and waiting times of the routes
+        payload['times'] = [ [ round(v) for v in row ] for row in T ]
+        payload['serviceTimes'] = [ round(n.serviceTime * ts) for n in nodes ]
         if useTW:
             big = 10**9
             payload['timeWindows'] = [ [ round((n.timeWindow or [0, None])[0] * ts),
@@ -648,7 +647,16 @@ class ScenarioSolver:
                 entry = {'vehicle': vehicleIds[k], 'nodes': [ nodes[i].id for i in route ],
                          'load': sum(r['routeLoads'][k]), 'distance': r['routeDistances'][k][-1] / dm}
                 if r.get('routeTimes'):
-                    entry['times'] = [ t / tm for t in r['routeTimes'][k] ]
+                    # schedule per node of the route and the totals of the route, in units.time
+                    for key, name in (('routeArrivals', 'arrivals'), ('routeTimes', 'times'),
+                                      ('routeWaitingTimes', 'waitingTimes'), ('routeServiceTimes', 'serviceTimes'),
+                                      ('routeTravelTimes', 'travelTimes')):
+                        if r.get(key):
+                            entry[name] = [ t / tm for t in r[key][k] ]
+                    entry['travelTime'] = sum(entry.get('travelTimes', []))
+                    entry['waitingTime'] = sum(entry.get('waitingTimes', []))
+                    entry['serviceTime'] = sum(entry.get('serviceTimes', []))
+                    entry['duration'] = entry['times'][-1] - entry['times'][0]
                 routes.append(entry)
             return {'objVal': r['objVal'] / dm, 'routes': routes, 'summary': {'nrOfRoutes': len(routes)}}
         return payload, results

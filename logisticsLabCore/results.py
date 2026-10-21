@@ -52,7 +52,12 @@ class VrpResults(ResultFields):
     routes: list[list[int]]                     # node sequence of every vehicle, [depot, depot] if unused
     routeLoads: Matrix                          # load after every node of a route
     routeDistances: Matrix                      # distance after every node of a route
-    routeTimes: Optional[Matrix] = None         # only with time windows or maxTime
+    # with times (given or calculated from coordinates) - per node of a route, see vrpSchedule in routingHandlers.py
+    routeTimes: Optional[Matrix] = None         # start of the service
+    routeArrivals: Optional[Matrix] = None      # arrival
+    routeTravelTimes: Optional[Matrix] = None   # travel time from the previous node
+    routeWaitingTimes: Optional[Matrix] = None  # waiting time before the service (time windows)
+    routeServiceTimes: Optional[Matrix] = None  # service time
     distances: Optional[Matrix] = None          # only if calculated from coordinates
     times: Optional[Matrix] = None
 

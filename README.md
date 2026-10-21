@@ -162,7 +162,7 @@ Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach fo
 | `contpmedian`, `contpcentre` | `locations` (`[lat, lon]` je Standort), `assignments` (Standort mit dem größten Fluss je Kunde), `customerDistances` (km, bei Aufteilung zum entferntesten liefernden Standort), mit `isSingleSource: false` auch `flows` [Standorte × Kunden] |
 | `scp`, `mcp` | `activeSources`, `coveringSources` (alle geöffneten Quellen im Radius je Senke), `assignments` (nächste davon; bei `mcp` `-1` für nicht überdeckte Senken) |
 | `cpp` | `eulerTour` (Knotenfolge), `edgeUsages` (Nutzungen je übergebener Kante) |
-| `vrp` | `routes`, `routeLoads`, `routeDistances` je Fahrzeug, mit Zeitfenstern auch `routeTimes`; unbenutzte Fahrzeuge haben die Route `[depot, depot]` |
+| `vrp` | `routes`, `routeLoads`, `routeDistances` je Fahrzeug; mit Zeiten (`times` oder aus `coordinates`) der Ablauf je Halt: `routeArrivals` (Ankunft), `routeWaitingTimes` (Warten wegen Zeitfenster), `routeTimes` (Beginn der Bedienung), `routeServiceTimes`, `routeTravelTimes` (Fahrzeit vom vorigen Halt). Ohne Zeitfenster und `maxTime` beginnt jede Route bei 0 und wartet nicht. Unbenutzte Fahrzeuge haben die Route `[depot, depot]` |
 | `mincostflow`, `maxflow` | `flows` je Kante; bei `maxflow` ist `objVal` der maximale Fluss; `mincostflow` mit `fixedCosts` zusätzlich `usages` (0/1 je Kante), `totalVarCosts`, `totalFixedCosts` |
 | `multicommodity` | `flows` [Kanten × Güter] |
 | `multimodal` | `flows` und `usages` (0/1) [Kanten × Verkehrsträger], `totalVarCosts`, `totalFixedCosts` |
@@ -409,6 +409,7 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
 **Ergebnisse** sind eigene Dokumente (`logisticsLabSolution`). Sie stehen nicht im Szenario.
 - **Bezug:** Jedes Dokument verweist mit `scenario.hash` auf genau einen Datenstand des Szenarios und enthält das Problem mit seinen Parametern.
 - **Inhalt:** `matrixInfo`, `valueUnit` (Einheit der Matrixwerte) und Warnungen. Dazu `results` mit `objVal`, `summary`, `nodes`, `assignments`, `routes` oder `edges`, jeweils über Knoten-IDs, und die bisherigen Felder unter `native`.
+- **VRP-Routen:** Jede Route hat `vehicle`, `nodes`, `load` und `distance`. Dazu kommen je Halt `arrivals`, `waitingTimes`, `times` (Beginn der Bedienung), `serviceTimes` und `travelTimes`. Die Summen stehen in `travelTime`, `waitingTime`, `serviceTime` und `duration`, alles in `units.time`. Die Zeiten berechnet der Server aus der Zeitmatrix, eine App braucht die Matrix dafür nicht.
 
 **Kommandozeilen-Tool:**
 
