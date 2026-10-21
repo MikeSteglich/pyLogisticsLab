@@ -114,7 +114,8 @@ class VrpHandler(ProblemHandler):
         except ll.LogLabException as e:
             raise LogLabCoreException(e)
 
-        self.__timeWindows = timeWindows is not None
+        # route times with time windows or a maximal route duration - otherwise there are no times
+        self.__routeTimes = timeWindows is not None or d.maxTime is not None
 
     def solve(self):
         try:
@@ -132,6 +133,6 @@ class VrpHandler(ProblemHandler):
             self._results['routes'] = p.getRouteIndices()
             self._results['routeLoads'] = p.getRouteLoads()
             self._results['routeDistances'] = p.getRouteDistances()
-            if self.__timeWindows:
+            if self.__routeTimes:
                 self._results['routeTimes'] = p.getRouteTimes()
             self._results.update(self.__calculated)

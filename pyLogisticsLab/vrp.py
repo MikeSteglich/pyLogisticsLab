@@ -287,7 +287,7 @@ class Vrp(object):
         return self.__routeLoads
 
     def getRouteTimes(self):
-        if self.__isTimeWindow:
+        if self.__isTimeWindow or self.__isMaxTime:
             return self.__routeTimes
         else:
             return None
