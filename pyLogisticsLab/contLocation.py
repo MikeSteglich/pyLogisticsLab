@@ -8,7 +8,9 @@
         2. alternating location-allocation (Cooper) until no improvement
              location     ContPMedian: spherical Weiszfeld algorithm, ContPCentre: smallest enclosing spherical cap (Welzl)
              allocation   without capacities: nearest facility
-                          with capacities:    transportation problem (Tpp.cmpl) - min or minimax, single or multi-source
+                          with capacities:    the nearest facility if the capacities are not exceeded, otherwise
+                                              transportation problem (Tpp.cmpl) - min or minimax, single or multi-source;
+                                              minimax: then the smallest sum of the distances with this bottleneck
         3. further starts with random start locations (k-means++) as long as nrOfStarts and maxSolvingTime allow
 
     Coordinates are [lat, lon] in degrees, distances in km. Facilities are 0-based indices 0..p-1.
@@ -304,17 +306,36 @@ class _ContLocation(object):
     def __allocate(self, X):
         """ flows [p x n] of the demands from the facilities X to the customers """
         dist = _angles(X, self._A) * EARTH_RADIUS
-        if not self._isCapacitated:
-            flows = np.zeros((self._p, self._n))
-            flows[dist.argmin(axis=0), np.arange(self._n)] = self._demands
+        flows = np.zeros((self._p, self._n))
+        flows[dist.argmin(axis=0), np.arange(self._n)] = self._demands
+        # the nearest facility is optimal for both objectives - also with capacities if they are not exceeded
+        if not self._isCapacitated or (flows.sum(axis=1) <= np.asarray(self._capacities) + 1e-9).all():
             return flows
+        costs = dist * self._costFactors
+        flows = self.__tpp(costs.tolist(), 'minimax' if self._isMinimax else 'min')
+        if flows is None or not self._isMinimax:
+            return flows
+        # many allocations have the same bottleneck - the one with the smallest sum of the distances, otherwise
+        # customers away from the bottleneck are allocated to farther facilities and pull them away
+        z = costs[flows > 1e-9].max()
+        tol = 1e-9 * max(1, z)
+        restricted = [ [ c if c <= z + tol else 'M' for c in row ] for row in costs.tolist() ]
+        second = self.__tpp(restricted, 'min', quiet=True)
+        return flows if second is None else second
+
+    def __tpp(self, costs, objSense, quiet=False):
+        """ flows of the transportation problem with the capacities - None if there is no solution """
         try:
-            tpp = Tpp((dist * self._costFactors).tolist(), self._capacities, self._demands.tolist(),
-                      objSense='minimax' if self._isMinimax else 'min', isSingleSource=self._isSingleSource,
-                      mipGap=self._mipGap, maxSolvingTime=self.__remaining())
+            tpp = Tpp(costs, self._capacities, self._demands.tolist(), objSense=objSense,
+                      isSingleSource=self._isSingleSource, mipGap=self._mipGap, maxSolvingTime=self.__remaining())
             tpp.solve()
         except LogLabException as e:
-            self._message = f'no allocation has been found ({str(e).strip()})'
+            if not quiet:
+                self._message = f'no allocation has been found ({str(e).strip()})'
+            return None
+        if not tpp.isSolution():
+            if not quiet:
+                self._message = 'no allocation has been found'
             return None
         return np.asarray(tpp.getFlows(), dtype=float)
 
