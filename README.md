@@ -20,7 +20,7 @@ Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
 
 | Verzeichnis | Inhalt |
 |---|---|
-| `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, die kontinuierlichen `ContPMedian`, `ContPCentre` (`contLocation.py`), `Scp`, `Mcp`, `Cpp`, `Vrp` und den Netzwerkflüssen `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` (`nwf.py`) |
+| `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, die kontinuierlichen `ContPMedian`, `ContPCentre` (`contLocation.py`), `Scp`, `Mcp`, `Cpp`, `Vrp` und den Netzwerkflüssen `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` und dem mehrstufigen WLP `MultiStageWlp` (`nwf.py`) |
 | `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle, Szenario-Format (`scenario.py`) |
 | `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
 | `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
@@ -143,8 +143,9 @@ Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 a
 | `/v1/mincostflow` | Min-Cost-Flow: `edges`, `costs` je Kante, `supplies`, optional `demands`, `minCaps`, `maxCaps`, `fixedCosts` je Kante (fallen an, wenn die Kante Fluss trägt; macht das Problem zum MIP, mit `mipGap`) | `mincostflow` |
 | `/v1/maxflow` | maximaler Fluss: `edges`, `source`, `sink`, `maxCaps`, optional `minCaps`, `nrOfNodes` | `maxflow` |
 | `/v1/multicommodity` | Multi-Commodity-Flow: `edges`, `costs` [Kanten × Güter], `supplies`/`demands` [Knoten × Güter], optional gemeinsame `minCaps`/`maxCaps` je Kante, `capacityFactors` [Kanten × Güter] | `multicommodity` |
+| `/v1/multistagewlp` | mehrstufiges WLP (Fixkosten-Umladeproblem): Quellen → Lager in einer oder mehreren Stufen → Kunden. `edges`, `costs`, `supplies`, optional `demands`, `nodeFixedCosts` (Öffnungskosten, Knoten mit Kosten > 0 sind Lager), `nodeMaxCaps` (Kapazität eines Lagers), `nodeMinCaps` (Mindestdurchsatz eines offenen Lagers), `minCaps`, `maxCaps`, `fixedCosts` je Kante, `isSingleSource` (Standard `false`: wer von Lagern beliefert wird, bekommt die Ware aus genau einem Lager), `balance`, `shortageCosts`, `mipGap` | `multistagewlp` |
 | `/v1/multimodal` | multimodaler Fluss: `edges`, `costs` [Kanten × Verkehrsträger] (`null`: Verkehrsträger auf dieser Kante nicht verfügbar), `supplies`, optional `demands`, `fixedCosts`, `minCaps` (Mindestmenge, wenn genutzt), `maxCaps` | `multimodal` |
-| `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`, `"wlp"`, `"pmedian"`, `"pcentre"`, `"contpmedian"`, `"contpcentre"`, `"scp"`, `"mcp"`, `"cpp"`, `"vrp"`, `"mincostflow"`, `"maxflow"`, `"multicommodity"`, `"multimodal"`) | je nach `type` |
+| `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`, `"wlp"`, `"pmedian"`, `"pcentre"`, `"contpmedian"`, `"contpcentre"`, `"scp"`, `"mcp"`, `"cpp"`, `"vrp"`, `"mincostflow"`, `"maxflow"`, `"multicommodity"`, `"multimodal"`, `"multistagewlp"`) | je nach `type` |
 | `/v1/results` | Status bzw. Ergebnis zu einer `id` | – |
 | `/v1/cancel` | wartendes oder laufendes Problem abbrechen (`{"id": ...}`); der Status wechselt kurz danach zu `cancelled` | – |
 | `/v1/matrix` | Matrix aus Koordinaten: `matrixMode` `distances` (m), `durations` (s), `costs`, `both` (Distanzen und Zeiten) oder `all`, optional `sources`, `destinations`, `rounded` und die Matrix-Optionen (siehe unten) | `matrix` |
@@ -166,6 +167,7 @@ Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach fo
 | `mincostflow`, `maxflow` | `flows` je Kante; bei `maxflow` ist `objVal` der maximale Fluss; `mincostflow` mit `fixedCosts` zusätzlich `usages` (0/1 je Kante), `totalVarCosts`, `totalFixedCosts` |
 | `multicommodity` | `flows` [Kanten × Güter] |
 | `multimodal` | `flows` und `usages` (0/1) [Kanten × Verkehrsträger], `totalVarCosts`, `totalFixedCosts` |
+| `multistagewlp` | `flows`, `usages` (0/1) je Kante, `openNodes` (1 offen, 0 geschlossen je Lager, sonst `null`), `nodeFlows`, `totalVarCosts`, `totalFixedCosts` (Kanten), `totalOpeningCosts` |
 
 Für die Netzwerkflüsse gilt:
 - **Knoten und Kanten:** Knoten sind Indizes ab 0, Kanten Paare `[i, j]`.
@@ -238,7 +240,7 @@ python manageKeys.py remove DSS-WS2026
 - `add` zeigt den Key **nur einmal** an. In `apiKeys.yml` steht nur sein SHA-256-Hash. Die Datei wird mit den Rechten `600` angelegt und ist nicht versioniert.
 - Der Server lädt `apiKeys.yml` automatisch neu, wenn sie sich ändert. Sperren und neue Keys wirken also ohne Neustart.
 - Ein Key gehört zu einem Namen, z. B. Kurs oder Person. Der Name steht im Log, und nur der Key, der ein Problem eingereicht hat, kann dessen Ergebnis abholen.
-- Ohne `--allowed` darf ein Key alle Dienste nutzen: die Problemtypen (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `contpmedian`, `contpcentre`, `scp`, `mcp`, `cpp`, `vrp`, `mincostflow`, `maxflow`, `multicommodity`, `multimodal`) und `matrix`, `routing`, `geocoding`. Keys mit eigener `--allowed`-Liste bekommen neue Dienste nicht automatisch.
+- Ohne `--allowed` darf ein Key alle Dienste nutzen: die Problemtypen (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `contpmedian`, `contpcentre`, `scp`, `mcp`, `cpp`, `vrp`, `mincostflow`, `maxflow`, `multicommodity`, `multimodal`, `multistagewlp`) und `matrix`, `routing`, `geocoding`. Keys mit eigener `--allowed`-Liste bekommen neue Dienste nicht automatisch.
 - Mit `authentication: False` ist der Server ohne Key offen. Das ist nur für die lokale Entwicklung gedacht.
 
 ### Antworten bei Ablehnung
@@ -276,7 +278,7 @@ python manageKeys.py remove DSS-WS2026
 | `matrixCacheFile` | `matrixCache.sqlite` in `logPath` | Cache-Datei, von allen Solver-Prozessen gemeinsam genutzt |
 | `matrixCacheMaxAge` | 180 | Tage, Sicherheitsnetz. Nach einem Update der ORS-Server werden die Einträge ohnehin nicht mehr verwendet. |
 | `matrixCacheMaxEntries` | 500 | Höchstzahl der Einträge, die am längsten unbenutzten werden zuerst gelöscht |
-| `<typ>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre/contpmedian/contpcentre 200, scp/mcp/cpp/multimodal 300, multicommodity 500, mincostflow/maxflow 2000 | maximale Problemgröße: Quellen + Senken, bei den übrigen Typen die Knoten |
+| `<typ>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre/contpmedian/contpcentre 200, scp/mcp/cpp/multimodal/multistagewlp 300, multicommodity 500, mincostflow/maxflow 2000 | maximale Problemgröße: Quellen + Senken, bei den übrigen Typen die Knoten |
 | `<typ>.maxSolvingTime` | 300, vrp 60, mincostflow/maxflow 120 | Obergrenze in Sekunden für die vom Client gewünschte Lösungszeit (bei `vrp` die Suchzeit von OR-Tools) |
 | `<typ>.maxRunTime` | – | feste Zeitgrenze des Watchdogs für diesen Problemtyp (ersetzt die Berechnung oben) |
 
@@ -390,6 +392,7 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
 - **Rollen:** bestimmen, was ein Problem liest.
   - `supplier` → `customer`: TPP.
   - `candidate` → `customer`: WLP, P-Median, P-Center, SCP, MCP.
+  - `supplier` → `candidate` → … → `customer` über ein Netz: mehrstufiges WLP (`multistagewlp`). Die Lager sind `candidate` mit `capacity` (Durchsatz, sonst `maxCap`), `fixedCost` (Öffnungskosten) und optional `minCap`. Die Kanten haben `capacity`, `minFlow` (nur, wenn genutzt) und `fixedCost`. Mit `isSingleSource: true` bekommt jeder Kunde und jedes Lager einer späteren Stufe die Ware aus genau einem Lager. Die Lager sind Knoten und werden nicht von Hand in Ein- und Ausgang gesplittet. Die Kosten kommen wie bei allen Szenarien aus OSM-Distanz und -Fahrzeit.
   - `customer` allein: kontinuierliche Standorte (`contpmedian`, `contpcentre`). Die Standorte sind das Ergebnis und keine Knoten. Ihre Anzahl ist der Parameter `p` (Pflicht), ihre Kapazitäten der Parameter `capacities`: ein Wert für alle oder eine Liste mit `p` Werten, nur mit `isCapacitated` (Standard: `true`, wenn `capacities` angegeben ist). In der Lösung heißen sie `F1` … `Fp`. Die frühere Rolle `facility` gibt es nicht mehr, eine Datei damit wird mit einem Hinweis abgelehnt.
   - `depot`: VRP.
 - **Netze** (`networks`): legen die erlaubten Verbindungen fest, mit Kapazität, Mindestfluss, Fixkosten und Richtung je Kante. Ihre Länge und Fahrzeit kommt von OSM.

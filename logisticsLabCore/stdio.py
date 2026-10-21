@@ -8,7 +8,8 @@
     requests (app -> process)        result
       solve      {type, ...problem}    {id, status, message}   type: tsp, tpp, wlp, pmedian, pcentre, contpmedian,
                                                                   contpcentre, scp, mcp, cpp, vrp,
-                                                                  mincostflow, maxflow, multicommodity, multimodal
+                                                                  mincostflow, maxflow, multicommodity, multimodal,
+                                                                  multistagewlp
       status     {id}                  {id, status, message}
       result     {id}                  {id, status, message, results?}   finished problems are deleted afterwards
       cancel     {id}                  {id, status, message}

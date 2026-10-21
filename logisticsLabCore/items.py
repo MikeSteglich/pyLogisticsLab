@@ -201,10 +201,25 @@ class MultiModalItem(FlowOptions, BalanceOptions):
     maxCaps: Optional[list] = None              # [edges x modes]
     mipGap: Optional[float] = 0.001
 
+class MultiStageWlpItem(FlowOptions, BalanceOptions):
+    """ multi-stage warehouse location problem - sources -> warehouses (one or more stages) -> customers;
+        a warehouse is a node with opening costs and a capacity, nodeMaxCaps / nodeMinCaps of FlowOptions """
+    type: Literal["multistagewlp"] = "multistagewlp"
+    costs: list                                 # cost rate of every edge
+    supplies: list                              # supply of every node
+    demands: Optional[list] = None              # demand of every node - default 0
+    nodeFixedCosts: Optional[list] = None       # opening costs of every node - nodes with costs > 0 are warehouses
+    minCaps: Optional[list] = None              # minimal flow of every used edge - default 0
+    maxCaps: Optional[list] = None              # maximal flow of every edge - default unlimited
+    fixedCosts: Optional[list] = None           # fixed costs of every used edge - default 0
+    isSingleSource: Optional[bool] = False      # a node supplied by warehouses gets its goods from one warehouse
+    maxSolvingTime: Optional[int] = 60
+    mipGap: Optional[float] = 0.001
+
 # all problems for the generic endpoint - the field type selects the item
 ProblemItem = Annotated[Union[TspItem, TppItem, WlpItem, PMedianItem, PCentreItem, ContPMedianItem, ContPCentreItem,
                               ScpItem, McpItem, CppItem, VrpItem,
-                              MinCostFlowItem, MaxFlowItem, MultiCommodityItem, MultiModalItem],
+                              MinCostFlowItem, MaxFlowItem, MultiCommodityItem, MultiModalItem, MultiStageWlpItem],
                         Field(discriminator='type')]
 
 
@@ -245,6 +260,6 @@ PROBLEM_ITEMS = {'tsp': TspItem, 'tpp': TppItem, 'wlp': WlpItem, 'pmedian': PMed
                  'contpmedian': ContPMedianItem, 'contpcentre': ContPCentreItem,
                  'scp': ScpItem, 'mcp': McpItem, 'cpp': CppItem, 'vrp': VrpItem,
                  'mincostflow': MinCostFlowItem, 'maxflow': MaxFlowItem, 'multicommodity': MultiCommodityItem,
-                 'multimodal': MultiModalItem}
+                 'multimodal': MultiModalItem, 'multistagewlp': MultiStageWlpItem}
 GEO_ITEMS = {'matrix': MatrixItem, 'routing': RouteItem, 'coordinates': SearchCoordinatesItem,
              'search': SearchItem, 'reverse': ReverseItem}

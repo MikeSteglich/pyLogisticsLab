@@ -133,9 +133,19 @@ class ProblemAnswer(BaseModel):
     results: Optional[dict] = None              # with status solution - see RESULT_ITEMS for the fields per type
 
 
+class MultiStageWlpResults(NodeFlowResults):
+    """ objVal = totalVarCosts + totalFixedCosts + totalOpeningCosts (+ totalShortageCosts) """
+    flows: Vector                               # flow of every edge
+    usages: list[int]                           # 0/1 for every edge
+    openNodes: list[Optional[int]]              # 1 open, 0 closed for every warehouse (nodeFixedCosts > 0), else null
+    totalVarCosts: Number
+    totalFixedCosts: Number                     # fixed costs of the used edges
+    totalOpeningCosts: Number                   # opening costs of the open warehouses
+
+
 # problem type -> results
 RESULT_ITEMS = {'tsp': TspResults, 'tpp': TppResults, 'wlp': LocationResults, 'pmedian': LocationResults,
                 'pcentre': LocationResults, 'contpmedian': ContLocationResults, 'contpcentre': ContLocationResults,
                 'scp': CoveringResults, 'mcp': CoveringResults, 'cpp': CppResults, 'vrp': VrpResults,
                 'mincostflow': FlowResults, 'maxflow': FlowResults, 'multicommodity': MultiCommodityResults,
-                'multimodal': MultiModalResults}
+                'multimodal': MultiModalResults, 'multistagewlp': MultiStageWlpResults}

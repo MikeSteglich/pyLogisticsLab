@@ -68,6 +68,9 @@
       "parameters": { "matrixMode": "costs", "useFixedCosts": true } },
     { "name": "Freie Standorte", "type": "contpmedian", "parameters": { "p": 2 } },
     { "name": "Zwei Güter", "type": "multicommodity", "network": "supply" },
-    { "name": "Lkw oder Bahn", "type": "multimodal", "network": "supply" }
+    { "name": "Lkw oder Bahn", "type": "multimodal", "network": "supply" },
+    { "name": "Lager mehrstufig", "type": "multistagewlp", "network": "supply" },
+    { "name": "Lager mehrstufig, single source", "type": "multistagewlp", "network": "supply",
+      "parameters": { "isSingleSource": true } }
   ]
 }

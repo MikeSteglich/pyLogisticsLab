@@ -82,6 +82,10 @@ multicommodity:
 multimodal:
   maxNodes: 300
   maxSolvingTime: 300
+
+multistagewlp:
+  maxNodes: 300                 # nodes incl. the warehouses
+  maxSolvingTime: 300
   
 
     

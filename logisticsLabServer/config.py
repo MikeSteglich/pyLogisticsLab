@@ -120,7 +120,7 @@ class Config:
             self.__conf['workDir']=self.__conf['logPath']
 
             for problemType in ['tsp', 'tpp', 'wlp', 'pmedian', 'pcentre', 'contpmedian', 'contpcentre', 'scp', 'mcp', 'cpp', 'vrp',
-                                'mincostflow', 'maxflow', 'multicommodity', 'multimodal']:
+                                'mincostflow', 'maxflow', 'multicommodity', 'multimodal', 'multistagewlp']:
                 if not self.__conf.get(problemType):
                     self.__conf[problemType]={}
                 self.__conf[problemType]['solverLogFile']=self.__conf['solverLogFile']

@@ -1,0 +1,30 @@
+%data
+
+# multi-stage warehouse location problem - min cost flow with fixed costs (fixed charge transshipment problem)
+#   N nodes, A arcs - a warehouse is split into an in and an out node, the arc in -> out carries its capacity
+#                     and its fixed costs (opening costs)
+#   a[i], b[i]      supply and demand of node i
+#   c[i,j]          cost rate of arc (i,j)
+#   F[i,j]          fixed costs if arc (i,j) is used
+#   minKap, maxKap  minimal and maximal flow of arc (i,j)
+#   ss              1: single source - every node of Ns gets its flow over at most one arc of As
+#                   (As: the arcs of the original network into the nodes of Ns)
+
+var:
+	{ [i,j] in A: x[i,j] : real[0..maxKap[i,j]]; }
+	{ [i,j] in A: y[i,j] : binary; }
+
+obj:
+	sum { [i,j] in A: c[i,j] * x[i,j] + F[i,j] * y[i,j] } ->min;
+
+con:
+	{ i in N :
+		sum{[i,j] in A  : x[i,j] } -  sum{[j,i] in A  : x[j,i] } = a[i] - b[i];
+	}
+
+	# flow only on used arcs - the minimal flow only if the arc is used (a closed warehouse has no flow)
+	{ [i,j] in A: minKap[i,j] * y[i,j] <= x[i,j] <= maxKap[i,j] * y[i,j]; }
+
+	{ ss = 1:
+		{ j in Ns: sum{ [i,j] in As : y[i,j] } <= 1; }
+	}

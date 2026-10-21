@@ -34,7 +34,7 @@ TO_S = {'s': 1, 'min': 60, 'h': 3600}
 Unlimited = Union[float, Literal['M'], None]
 
 PROBLEM_TYPES = ('tpp', 'wlp', 'pmedian', 'pcentre', 'scp', 'mcp', 'contpmedian', 'contpcentre', 'tsp', 'cpp', 'vrp',
-                 'mincostflow', 'maxflow', 'multicommodity', 'multimodal')
+                 'mincostflow', 'maxflow', 'multicommodity', 'multimodal', 'multistagewlp')
 
 
 class ScenarioException(Exception):
@@ -757,6 +757,48 @@ class ScenarioSolver:
                 out['nodes'] = nodeResults
             if self._summary(r):
                 out['summary'] = self._summary(r)
+            return out
+        return payload, results
+
+    def _multistagewlp(self):
+        """ sources (supplier) -> warehouses (candidate, one or more stages) -> customers over the network -
+            a warehouse has opening costs (fixedCost) and a capacity (capacity, otherwise maxCap) """
+        nodes, pos, arcs = self._network('multistagewlp')
+        if not any('candidate' in n.roles for n in nodes):
+            raise ScenarioException(f'problem {self.problem.name}: multistagewlp needs nodes with role candidate (warehouses)')
+        kind = self._kind('costs' if (self.opts.costPerKm or self.opts.costPerHour) else 'distances')
+        par = self.par
+        costs = [ self._value(kind, d, t) for _, _, _, d, t in arcs ]
+        isWh = [ 'candidate' in n.roles for n in nodes ]
+        options = self._nodeOptions(nodes)
+        caps = [ (n.capacity if w and not unlimited(n.capacity) else (None if unlimited(n.maxCap) else n.maxCap))
+                 for n, w in zip(nodes, isWh) ]
+        payload = {'type': 'multistagewlp', 'edges': [ [pos[a], pos[b]] for _, a, b, _, _ in arcs ], 'costs': costs,
+                   'supplies': [ 0 if unlimited(n.supply) else n.supply for n in nodes ],
+                   'demands': [ 0 if unlimited(n.demand) else n.demand for n in nodes ],
+                   'nodeFixedCosts': [ (n.fixedCost or 0) if w else 0 for n, w in zip(nodes, isWh) ],
+                   'nodeMaxCaps': caps if any(c is not None for c in caps) else None,
+                   'nodeMinCaps': options['nodeMinCaps'],
+                   'minCaps': [ e.minFlow for e, *_ in arcs ],
+                   'maxCaps': [ 'M' if unlimited(e.capacity) else e.capacity for e, *_ in arcs ],
+                   'fixedCosts': [ e.fixedCost or 0 for e, *_ in arcs ],
+                   'isSingleSource': bool(par.get('isSingleSource', False)),
+                   **{ k: options[k] for k in ('balance', 'shortageCosts') if k in options }, **self._common()}
+
+        def results(r):
+            out = {'edges': []}
+            for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
+                if f > 1e-9:
+                    out['edges'].append({'from': a, 'to': b, 'flow': f, 'rate': costs[k], 'used': r['usages'][k]})
+            nodeResults = self._nodeResults(nodes, r)
+            for n, o in zip(nodes, r['openNodes']):
+                if o is not None:
+                    nodeResults.setdefault(n.id, {})['open'] = o
+            out['nodes'] = nodeResults
+            summary = self._summary(r)
+            summary['totalOpeningCosts'] = r['totalOpeningCosts']
+            summary['nrOfOpen'] = sum(1 for o in r['openNodes'] if o)
+            out['summary'] = summary
             return out
         return payload, results
 

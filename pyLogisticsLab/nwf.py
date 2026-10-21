@@ -5,6 +5,8 @@
     MaxFlow              maximal flow from source to sink                                - LP, maxFlow.cmpl
     MultiCommodityFlow   min cost flow of several commodities with joint arc capacities  - LP, multiCommodity.cmpl
     MultiModalFlow       min cost flow with several modes (e.g. truck, train) and fixed costs - MIP, multimodal.cmpl
+    MultiStageWlp        multi-stage warehouse location: fixed charge transshipment with warehouses as nodes
+                         (capacity, opening costs), optionally single source                - MIP, wlpMultiStage.cmpl
 
     All models are solved with CMPL and HiGHS.
 
@@ -469,7 +471,8 @@ class _Extension:
         The added edges follow the original ones - kinds[k] = (kind, node) of the added edge E + k.
     """
 
-    def __init__(self, edges, n, supplies, demands, nodeMinCaps, nodeMaxCaps, balance, shortageCosts):
+    def __init__(self, edges, n, supplies, demands, nodeMinCaps, nodeMaxCaps, balance, shortageCosts, splitNodes=()):
+        """ splitNodes: nodes that are split without a capacity (e.g. because of fixed costs) """
         self.orig = [ tuple(e) for e in setEdges(edges, n) ]
         self.n, self.E, self.K = n, len(self.orig), len(supplies[0])
         self.supplies, self.demands = supplies, demands
@@ -489,7 +492,8 @@ class _Extension:
         for row in self.shortage:
             _numbers(row, 'shortage cost')
 
-        self.split = [ v for v in range(n) if not _isUnlimited(self.nodeMax[v]) or self.nodeMin[v] > 0 ]
+        self.split = [ v for v in range(n) if not _isUnlimited(self.nodeMax[v]) or self.nodeMin[v] > 0
+                       or v in splitNodes ]
         self.outOf = list(range(n))
         for k, v in enumerate(self.split):
             self.outOf[v] = n + k
@@ -554,6 +558,7 @@ class _Extended:
     """ common part of the public flow classes - the model of the extended network is self._model """
 
     _isSingle = True
+    _flows = _through = _unused = _unmet = ()      # without a solution
 
     def solve(self):
         self._model.solve()
@@ -796,3 +801,121 @@ class MultiModalFlow(_Extended):
     def getFixedCosts(self):
         return self._model.getFixedCosts()
 #*************** end MultiModalFlow ********************************************
+
+
+
+#*************** MultiStageWlp ************************************************
+class _MultiStageModel(_MinCostFlowModel):
+    """ fixed charge transshipment problem with single source (wlpMultiStage.cmpl)
+        ssNodes: nodes that get their flow over at most one of the arcs ssArcs (with isSingleSource) """
+
+    def __init__(self, edges, costs, supplies, demands, minCaps, maxCaps, fixedCosts, isSingleSource, ssNodes, ssArcs,
+                 maxSolvingTime, mipGap):
+        super().__init__(edges, costs, supplies, demands, minCaps, maxCaps, maxSolvingTime, fixedCosts, mipGap)
+        self._cmplFile = 'wlpMultiStage.cmpl'
+        self._modelName = str(pathlib.Path(__file__).parent.absolute()) + os.sep + self._cmplFile
+        self._isSingleSource = bool(isSingleSource)
+        # CMPL needs non-empty sets - without single source the constraint is not generated (ss = 0)
+        self._ssNodes = ssNodes or [0]
+        self._ssArcs = ssArcs or [self._edges[0]]
+
+    def solve(self):
+        logger.info('    ... solving multi-stage warehouse location problem' +
+                    (' with single source' if self._isSingleSource else ''))
+        nodes, arcs = self._sets()
+        ssNodes = CmplSet('Ns')
+        ssNodes.setValues(self._ssNodes)
+        ssArcs = CmplSet('As', 2)
+        ssArcs.setValues(self._ssArcs)
+        maxCaps = self._capacities(sum(self._supplies) + sum(self._minCaps))
+        par = self._parameters((('c', (arcs,), self._costs), ('F', (arcs,), self._fixedCosts),
+                                ('minKap', (arcs,), self._minCaps), ('maxKap', (arcs,), maxCaps),
+                                ('a', (nodes,), self._supplies), ('b', (nodes,), self._demands),
+                                ('ss', (), int(self._isSingleSource))))
+        if self._run((nodes, arcs, ssNodes, ssArcs), par):
+            self._readFlows()
+            self._usages = [ 1 if self._flows[e] > 1e-9 or (self._fixedCosts[e] > 0
+                                                             and round(self._activity(self._model.y, (i, j))) == 1) else 0
+                             for e, (i, j) in enumerate(self._edges) ]
+
+
+class MultiStageWlp(_Extended):
+    """ multi-stage warehouse location problem - fixed charge transshipment problem (wlpMultiStage.cmpl)
+
+        The goods flow from the sources (supplies) over one or more stages of warehouses (e.g. central and regional
+        warehouses) to the customers (demands). A warehouse is a node with opening costs nodeFixedCosts and a
+        capacity nodeMaxCaps (maximal throughput, unlimited by default) - it is open if goods flow through it.
+        Internally it is split into an in and an out node, the edge in -> out carries the capacity and the fixed costs.
+
+        edges           [[i, j], ...], nodes 0..len(supplies)-1, no parallel edges
+        costs           cost rate of every edge
+        supplies        supply of every node, demands: demand of every node (default 0)
+        minCaps         minimal flow of every used edge (default 0), maxCaps: maximal flow (default unlimited)
+        fixedCosts      optional fixed costs of every edge - paid if the edge carries flow
+        nodeFixedCosts  opening costs of every node (default 0) - nodes with costs > 0 are warehouses
+        nodeMinCaps     minimal throughput of an open warehouse (default 0), nodeMaxCaps: capacity
+        isSingleSource  True: a node supplied by warehouses gets its goods from one warehouse - every customer and
+                        every warehouse of a later stage; warehouses supplied by the sources may have several sources
+        balance, shortageCosts - see the description of the module
+        objective value: variable costs + fixed costs of the edges + opening costs (+ shortage costs)
+    """
+
+    def __init__(self, edges, costs, supplies, demands=None, nodeFixedCosts=None, nodeMaxCaps=None, nodeMinCaps=None,
+                 minCaps=None, maxCaps=None, fixedCosts=None, isSingleSource=False, maxSolvingTime=60, mipGap=0.001,
+                 balance='auto', shortageCosts=None):
+        supplies = setNumVector(supplies)
+        n = len(supplies)
+        demands = _vector(demands, n, 'demands', 0)
+        _numbers(demands, 'demand')
+        self._nodeFixedCosts = _vector(nodeFixedCosts, n, 'fixed costs of the nodes', 0)
+        _numbers(self._nodeFixedCosts, 'fixed cost of a node')
+        warehouses = [ v for v in range(n) if self._nodeFixedCosts[v] > 0 ]
+        x = self._x = _Extension(edges, n, [ [s] for s in supplies ], [ [d] for d in demands ],
+                                 nodeMinCaps, nodeMaxCaps, balance, shortageCosts, splitNodes=warehouses)
+        costs = _vector(costs, x.E, 'costs', None)
+        minCaps = _vector(minCaps, x.E, 'minimal capacities', 0)
+        maxCaps = _vector(maxCaps, x.E, 'maximal capacities', None)
+        fixed = _vector(fixedCosts, x.E, 'fixed costs', 0)
+        for kind, v in x.kinds:
+            costs.append(x.addedRow(kind, v, lambda v: 0, lambda v: 0, lambda v: x.shortage[v][0]))
+            minCaps.append(x.nodeMin[v] if kind == 'node' else 0)
+            maxCaps.append(x.nodeMax[v] if kind == 'node' else None)
+            fixed.append(self._nodeFixedCosts[v] if kind == 'node' else 0)
+        self._costs, self._fixed = costs, fixed
+
+        # single source: a node supplied by warehouses gets its goods from one warehouse - the original edges
+        # leaving a warehouse (they start at its out node), the customers and the warehouses of the next stage
+        # (the warehouses supplied by the sources may get goods from several sources)
+        ssArcs = [ tuple(x.edges[e]) for e, (i, _) in enumerate(x.orig) if self._nodeFixedCosts[i] > 0 ]
+        ssNodes = sorted({ j for _, j in ssArcs })
+        self._isSingleSource = bool(isSingleSource)
+        self._model = _MultiStageModel(x.edges, costs, [ r[0] for r in x.S ], [ r[0] for r in x.D ], minCaps, maxCaps,
+                                       fixed, isSingleSource, ssNodes, ssArcs, maxSolvingTime, mipGap)
+
+    def __nodeEdge(self):
+        """ node -> index of its edge in -> out in the extended network """
+        return { v: self._x.E + k for k, (kind, v) in enumerate(self._x.kinds) if kind == 'node' }
+
+    def getUsages(self):
+        """ 1 if the edge is used """
+        return self._model.getUsages()[:self._x.E] if self.isSolution() else []
+
+    def getOpenNodes(self):
+        """ 1 if the warehouse (node with fixed costs) is open, 0 if closed, None for the other nodes """
+        if not self.isSolution():
+            return []
+        used, idx = self._model.getUsages(), self.__nodeEdge()
+        return [ used[idx[v]] if self._nodeFixedCosts[v] > 0 else None for v in range(self._x.n) ]
+
+    def getVarCosts(self):
+        return sum(c * f for c, f in zip(self._costs, self._model.getFlows())) - self.getShortageCosts() \
+               if self.isSolution() else 0
+
+    def getFixedCosts(self):
+        """ fixed costs of the used edges (without the opening costs) """
+        return sum(f * u for f, u in zip(self._fixed[:self._x.E], self.getUsages())) if self.isSolution() else 0
+
+    def getOpeningCosts(self):
+        """ opening costs of the open warehouses """
+        return sum(self._nodeFixedCosts[v] for v, o in enumerate(self.getOpenNodes()) if o) if self.isSolution() else 0
+#*************** end MultiStageWlp ********************************************

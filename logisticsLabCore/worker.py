@@ -41,6 +41,7 @@ HANDLERS = {
     'maxflow': MaxFlowHandler,
     'multicommodity': MultiCommodityHandler,
     'multimodal': MultiModalHandler,
+    'multistagewlp': MultiStageWlpHandler,
 }
 
 

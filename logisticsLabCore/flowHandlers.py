@@ -1,4 +1,4 @@
-""" handlers of the network flow problems: mincostflow, maxflow, multicommodity, multimodal
+""" handlers of the network flow problems: mincostflow, maxflow, multicommodity, multimodal, multistagewlp
 
     flows are lists in the order of the edges ([edges x commodities] or [edges x modes] for the multi problems)
 """
@@ -102,6 +102,24 @@ class MultiCommodityHandler(FlowHandler):
                                      nodeMaxCaps=d.nodeMaxCaps, balance=d.balance, shortageCosts=d.shortageCosts,
                                      nodeCapacityFactors=d.nodeCapacityFactors, isInteger=d.isInteger,
                                      mipGap=d.mipGap)
+
+
+class MultiStageWlpHandler(FlowHandler):
+    def _createProblem(self, d):
+        return ll.MultiStageWlp(d.edges, d.costs, d.supplies, d.demands, nodeFixedCosts=d.nodeFixedCosts,
+                                nodeMaxCaps=d.nodeMaxCaps, nodeMinCaps=d.nodeMinCaps, minCaps=d.minCaps,
+                                maxCaps=d.maxCaps, fixedCosts=d.fixedCosts, isSingleSource=d.isSingleSource,
+                                maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime), mipGap=d.mipGap,
+                                balance=d.balance, shortageCosts=d.shortageCosts)
+
+    def _setResults(self, p):
+        self._results['flows'] = p.getFlows()
+        self._results['usages'] = p.getUsages()
+        self._results['openNodes'] = p.getOpenNodes()
+        self._results['nodeFlows'] = p.getNodeFlows()
+        self._results['totalVarCosts'] = p.getVarCosts()
+        self._results['totalFixedCosts'] = p.getFixedCosts()
+        self._results['totalOpeningCosts'] = p.getOpeningCosts()
 
 
 class MultiModalHandler(FlowHandler):

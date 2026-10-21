@@ -200,6 +200,11 @@ async def multiModalApi(multiModalItem: MultiModalItem, apiKey: ApiKey = Securit
     return submitProblem(multiModalItem, apiKey)
 
 
+@app.post(f'/{version}/multistagewlp')
+async def multiStageWlpApi(multiStageWlpItem: MultiStageWlpItem, apiKey: ApiKey = Security(requireService('multistagewlp'))):
+    return submitProblem(multiStageWlpItem, apiKey)
+
+
 @app.post(f'/{version}/results')
 async def resultsApi(resultItem: ResultItem, apiKey: ApiKey = Security(requireService())):
     """ status of a problem and its results if it is finished - finished problems are deleted afterwards """

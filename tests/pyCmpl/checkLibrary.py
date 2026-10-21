@@ -137,6 +137,35 @@ check('multicommodity node capacity with capacity factors = split by hand',
                             mcSupplies + [[0, 0]], mcDemands + [[0, 0]], maxCaps=[15, 8, 20, 'M', 10, 10],
                             capacityFactors=[[1, 1]] * 5 + [[2, 1]]), 65)
 
+print('== multi-stage warehouse location (book example WLP-Mehrstufig: plants -> central -> regional warehouses -> customers)')
+# edges from-to:cost rate:capacity, warehouses node:opening costs:capacity, sources and sinks node:supply:demand
+msNodes = ['H', 'W1', 'W2', 'W3', 'Z1', 'Z2', 'Z3', 'R1', 'R2', 'R3', 'R4', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']
+msEdges = [ (msNodes.index(a), msNodes.index(b), float(c), float(k)) for e in """H-Z1:25:340 H-Z2:45:340 H-Z3:60:340 W1-Z1:12:340 W1-Z2:50:340 W1-Z3:36:340 W2-Z1:110:340 W2-Z2:62:340 W2-Z3:54:340 W3-Z1:30:340 W3-Z2:24:340 W3-Z3:28:340 Z1-R1:15:600 Z1-R2:18:600 Z1-R3:24:600 Z1-R4:20:600 Z2-R1:28:600 Z2-R2:30:600 Z2-R3:22:600 Z2-R4:12:600 Z3-R1:22:600 Z3-R2:14:600 Z3-R3:16:600 Z3-R4:8:600 R1-D1:60:340 R1-D2:52:340 R1-D3:70:340 R1-D4:60:340 R1-D5:40:340 R2-D2:84:340 R2-D3:15:340 R2-D4:28:340 R2-D6:42:340 R2-D7:120:340 R3-D2:72:340 R3-D3:42:340 R3-D4:18:340 R3-D5:30:340 R3-D6:50:340 R3-D7:60:340 R4-D2:74:340 R4-D4:45:340 R4-D5:20:340 R4-D7:110:340""".split()
+            for (a, b), c, k in [ (e.split(':')[0].split('-'), *e.split(':')[1:]) ] ]
+msWh = { n: (float(f), float(k)) for n, f, k in (w.split(':') for w in "Z1:25000:600 Z2:20000:600 Z3:20000:600 R1:25000:450 R2:20000:450 R3:15000:450 R4:20000:450".split()) }
+msSD = { n: (float(s), float(dd)) for n, s, dd in (x.split(':') for x in "H:320:0 W1:500:0 W2:260:0 W3:120:0 D1:0:120 D2:0:240 D3:0:80 D4:0:280 D5:0:160 D6:0:180 D7:0:140".split()) }
+
+def multiStage(isSingleSource=False):
+    return ll.MultiStageWlp([ [a, b] for a, b, _, _ in msEdges ], [ c for _, _, c, _ in msEdges ],
+                            [ msSD.get(n, (0, 0))[0] for n in msNodes ], [ msSD.get(n, (0, 0))[1] for n in msNodes ],
+                            nodeFixedCosts=[ msWh.get(n, (0, None))[0] for n in msNodes ],
+                            nodeMaxCaps=[ msWh.get(n, (0, None))[1] for n in msNodes ],
+                            maxCaps=[ k for _, _, _, k in msEdges ], isSingleSource=isSingleSource, balance='exact')
+
+def multiStageSplit():
+    """ the warehouses split by hand into in and out node with the fixed costs on the edge in -> out (as in Excel) """
+    names = msNodes + [ n + "'" for n in msWh ]
+    out = { n: names.index(n + "'") for n in msWh }
+    edges = [ [out.get(msNodes[a], a), b] for a, b, _, _ in msEdges ] + [ [msNodes.index(n), out[n]] for n in msWh ]
+    return ll.MinCostFlow(edges, [ c for _, _, c, _ in msEdges ] + [0] * len(msWh),
+                          [ msSD.get(n, (0, 0))[0] for n in names ], [ msSD.get(n, (0, 0))[1] for n in names ],
+                          maxCaps=[ k for _, _, _, k in msEdges ] + [ msWh[n][1] for n in msWh ],
+                          fixedCosts=[0] * len(msEdges) + [ msWh[n][0] for n in msWh ], balance='exact')
+
+check('multistagewlp = book example (Excel)', multiStage(), 208410)
+check('multistagewlp = min cost flow with the warehouses split by hand', multiStageSplit(), 208410)
+check('multistagewlp single source', multiStage(True), 230200)
+
 print('== continuous location')
 check('contpmedian', ll.ContPMedian(3, coordinates, contDemands), 4968.608, heuristic=True)
 check('contpmedian capacitated, split', ll.ContPMedian(3, coordinates, contDemands, capacities=100, isSingleSource=False),
