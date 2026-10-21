@@ -24,7 +24,7 @@ Wer das Verzeichnis in den `PATH` aufnimmt, kann `logisticslab` von überall auf
 logisticslab-stdio --logPath <Support-Verzeichnis der App>
 ```
 
-Unter Windows sollte eine App direkt `python\python.exe -I -m logisticsLabCore.stdio …` starten, nicht `logisticslab-stdio.bat`. Dann beendet ein Abbruch der App auch den Prozess sicher. Unter Linux und macOS entspricht das `python/bin/python3 -I -m logisticsLabCore.stdio …`.
+Unter Windows sollte eine App direkt `bin\python\python.exe -I -m logisticsLabCore.stdio --osmConfig confs\logisticsLab.yml …` starten, nicht `logisticslab-stdio.bat`. Dann beendet ein Abbruch der App auch den Prozess sicher. Unter Linux und macOS entspricht das `bin/python/bin/python3 -I -m logisticsLabCore.stdio …`. Ohne Startskript ist `LOGLAB_CONF_DIR` nicht gesetzt, deshalb gibt die App `--osmConfig` an oder setzt die Variable selbst auf `confs/`.
 
 ## REST-Server
 
@@ -46,7 +46,7 @@ Im Internet gehört der Server hinter einen Reverse-Proxy (z. B. nginx) für TLS
   - Windows: `%LOCALAPPDATA%\LogisticsLab\logs`
   - macOS: `~/Library/Logs/LogisticsLab`
   - Linux: `~/.local/state/logisticsLab`
-- **Andere Konfiguration:** `LOGLAB_CONF_DIR` legt ein anderes Konfigurationsverzeichnis fest.
+- **Andere Konfiguration:** `LOGLAB_CONF_DIR` legt ein anderes Konfigurationsverzeichnis fest. Ohne die Variable setzen die Startskripte sie auf `confs/` neben sich.
 
 ## macOS
 
@@ -61,10 +61,10 @@ xattr -dr com.apple.quarantine <Pfad zu LogisticsLab>
 | | |
 |---|---|
 | `logisticslab`, `logisticslab-stdio`, `logisticslab-server`, `logisticslab-keys` (`.bat` unter Windows) | Startskripte |
-| `python/` | Python @PYTHON@ mit numpy, OR-Tools, pydantic, pyCmpl, FastAPI, uvicorn … |
-| `pyLogisticsLab/`, `logisticsLabCore/`, `logisticsLabCli/`, `osm_data/`, `logisticsLabServer/` | LogisticsLab |
-| `cmpl/` | CMPL @CMPL@ mit HiGHS @HIGHS@ |
 | `confs/` | Konfiguration |
 | `examples/` | Beispielszenario |
+| `bin/python/` | Python @PYTHON@ mit numpy, OR-Tools, pydantic, pyCmpl, FastAPI, uvicorn … |
+| `bin/pyLogisticsLab/`, `bin/logisticsLabCore/`, `bin/logisticsLabCli/`, `bin/osm_data/`, `bin/logisticsLabServer/` | LogisticsLab |
+| `bin/cmpl/` | CMPL @CMPL@ mit HiGHS @HIGHS@ |
 
 LogisticsLab ist ein Projekt der Technischen Hochschule Wildau (LGPL-3.0). CMPL steht unter der GPL-3.0, HiGHS unter der MIT-Lizenz, Python unter der PSF-Lizenz.

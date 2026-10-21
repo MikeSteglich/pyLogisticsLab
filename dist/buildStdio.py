@@ -180,7 +180,7 @@ def main():
         bd.stdio_test([exe, "--logPath", tdir / "logs"], env, tdir, {"tpp": bd.STDIO_TPP, "tsp": bd.STDIO_TSP})
 
     if not args.no_archive:
-        bd.pack(t, stage, f"{NAME}-{version}-{t}", argparse.Namespace(notarize=None))
+        bd.pack(t, stage, f"{NAME}-{version}-{t}", argparse.Namespace(notarize=None, dmg=False, sign=args.sign))
     size = sum(f.stat().st_size for f in stage.rglob("*") if f.is_file()) / 1e6
     log(f"Fertig: {stage}  ({size:.0f} MB)")
 

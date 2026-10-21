@@ -9,8 +9,12 @@
 #   4. den CMPL-Kern mit HiGHS bauen (Cmpl2/dist/buildDist.py --core)
 #   5. Startskripte anlegen, testen, (macOS) signieren und als Archiv packen
 #
-# Das Layout entspricht dem des Repositorys, so dass pyLogisticsLab CMPL unter
-# cmpl/ und logisticsLabCore/paths.py die Konfiguration unter confs/ findet.
+# Layout:  LogisticsLab/
+#            logisticslab, logisticslab-stdio, logisticslab-server, logisticslab-keys (.bat)
+#            README.md, confs/, examples/
+#            bin/        python/, die Pakete, logisticsLabServer/, cmpl/
+# In bin/ entspricht das Layout dem des Repositorys - pyLogisticsLab findet CMPL unter
+# bin/cmpl; die Konfiguration in confs/ setzen die Startskripte als LOGLAB_CONF_DIR.
 #
 # Aufruf:  python3 dist/buildDist.py [Optionen]      (Optionen: --help)
 
@@ -45,9 +49,10 @@ PACKAGE_FILES = ("*.py", "*.cmpl")
 SERVER_DIR = "logisticsLabServer"      # kein Paket - die Module importieren sich direkt
 CONF_FILES = ["logisticsLab.yml", "logisticsLab.local.example.yml", "logisticsLabServer.yml"]
 EXAMPLES = ["tests/scenarios/brandenburg.llab"]
+RUNTIME = "bin"                         # Python, Pakete und CMPL - oben stehen nur Startskripte, confs/, examples/
 SERVER_EXTRA_SKIP = {"httpx"}           # nur fuer die Tests des Servers
 
-# Startskripte: Name -> (Beschreibung, Python-Argumente; {D} = Verzeichnis der Distribution)
+# Startskripte: Name -> (Beschreibung, Python-Argumente; {D} = bin/ der Distribution)
 # -I fuer python -m (auch das aktuelle Verzeichnis kommt nicht in sys.path),
 # -E -s fuer manageKeys.py, das sein eigenes Verzeichnis in sys.path braucht
 LAUNCHERS = {
@@ -200,13 +205,13 @@ def install_packages(t, py, deps, args):
     run(pip + ["check"])
 
 
-def copy_project(t, stage, py):
+def copy_project(t, stage, runtime, py):
     log("LogisticsLab-Pakete, Konfiguration und Beispiele kopieren")
     for pkg in PACKAGES + [SERVER_DIR]:
         for pattern in PACKAGE_FILES:
             for f in (PROJECT / pkg).glob(pattern):
-                (stage / pkg).mkdir(exist_ok=True)
-                shutil.copy2(f, stage / pkg / f.name)
+                (runtime / pkg).mkdir(exist_ok=True)
+                shutil.copy2(f, runtime / pkg / f.name)
 
     (stage / "confs").mkdir()
     for f in CONF_FILES:
@@ -218,9 +223,9 @@ def copy_project(t, stage, py):
 
     # die Pakete liegen neben python/ - ein .pth macht sie importierbar, auch mit -I
     site = site_packages(py)
-    (site / "logisticsLab.pth").write_text(os.path.relpath(stage, site) + "\n")
+    (site / "logisticsLab.pth").write_text(os.path.relpath(runtime, site) + "\n")
 
-    run([py, "-I", "-m", "compileall", "-q", *[stage / p for p in PACKAGES + [SERVER_DIR]]])
+    run([py, "-I", "-m", "compileall", "-q", *[runtime / p for p in PACKAGES + [SERVER_DIR]]])
 
 
 # ---------------------------------------------------------------- 4. CMPL
@@ -265,15 +270,16 @@ def versions(t, stage, py):
 def write_launchers(t, stage):
     log("Startskripte anlegen")
     template = (RESOURCES / ("launcher.bat" if t.is_win else "launcher.sh")).read_text()
-    here = "%~dp0" if t.is_win else "$HERE/"
+    here = ("%~dp0" if t.is_win else "$HERE/") + RUNTIME + "/"
+
+    def quote(path):
+        return '"' + (path.replace("/", "\\") if t.is_win else path) + '"'
+
+    python = quote(here + ("python/python.exe" if t.is_win else "python/bin/python3"))
     for name, (what, pyargs) in LAUNCHERS.items():
-        quoted = []
-        for a in pyargs:
-            if "{D}" in a:
-                a = a.replace("{D}", here)
-                a = '"' + (a.replace("/", "\\") if t.is_win else a) + '"'
-            quoted.append(a)
-        text = template.replace("@NAME@", name).replace("@WHAT@", what).replace("@PYARGS@", " ".join(quoted))
+        args = [quote(a.replace("{D}", here)) if "{D}" in a else a for a in pyargs]
+        text = (template.replace("@NAME@", name).replace("@WHAT@", what)
+                .replace("@PYTHON@", python).replace("@PYARGS@", " ".join(args)))
         dest = t.launcher(stage, name)
         if t.is_win:
             dest.write_text(text.replace("\r\n", "\n"), newline="\r\n")
@@ -388,9 +394,10 @@ def smoke_test(t, stage, work, port):
         if status != "solution":
             raise BuildError(f"Test fehlgeschlagen: {typ} -> {status}\n" + out)
 
+    # direkt wie aus einer App: python aus bin/, die Konfiguration ueber LOGLAB_CONF_DIR
     log("Test: lokale Schnittstelle (JSON-RPC ueber stdin/stdout)")
-    stdio_test([t.python_exe(stage), "-I", "-m", "logisticsLabCore.stdio", "--logPath", tdir / "stdio"],
-               env, tdir, {"tpp": STDIO_TPP, "tsp": STDIO_TSP})
+    stdio_test([t.python_exe(stage / RUNTIME), "-I", "-m", "logisticsLabCore.stdio", "--logPath", tdir / "stdio"],
+               dict(env, LOGLAB_CONF_DIR=str(stage / "confs")), tdir, {"tpp": STDIO_TPP, "tsp": STDIO_TSP})
 
     smoke_test_server(t, stage, tdir, env, port)
 
@@ -411,7 +418,8 @@ def smoke_test_server(t, stage, tdir, env, port):
     # unter Unix ueber das Startskript (exec - beendet wird also uvicorn selbst),
     # unter Windows direkt, denn ein beendetes .bat liesse Python weiterlaufen
     if t.is_win:
-        cmd = [t.python_exe(stage), "-I", "-m", "uvicorn", "--app-dir", stage / SERVER_DIR, "main:app"]
+        cmd = [t.python_exe(stage / RUNTIME), "-I", "-m", "uvicorn", "--app-dir", stage / RUNTIME / SERVER_DIR,
+               "main:app"]
     else:
         cmd = ["/bin/sh", t.launcher(stage, "logisticslab-server")]
     cmd += ["--host", "127.0.0.1", "--port", str(port)]
@@ -469,43 +477,89 @@ def is_macho(path):
                      b"\xfe\xed\xfa\xcf", b"\xfe\xed\xfa\xce")
 
 
+def codesign_file(opts, f):
+    # codesign meldet gelegentlich "internal error in Code Signing subsystem" - ein zweiter Versuch klappt
+    for attempt in range(3):
+        try:
+            return run(["codesign", *opts, f], capture=True)
+        except BuildError:
+            if attempt == 2:
+                raise
+
+
 def codesign(stage, identity):
+    """Signiert jede Mach-O-Datei (Programme, *.so, *.dylib) mit Hardened Runtime und Zeitstempel -
+    Voraussetzung fuer die Notarisierung."""
     log(f"Signieren (Identitaet: {identity})")
     files = [f for f in sorted(stage.rglob("*")) if f.is_file() and not f.is_symlink() and is_macho(f)]
     opts = ["--force", "--options", "runtime", "--timestamp",
             "--entitlements", RESOURCES / "entitlements.plist", "--sign", identity]
     for f in files:
-        # codesign meldet gelegentlich "internal error in Code Signing subsystem" - ein zweiter Versuch klappt
-        for attempt in range(3):
-            try:
-                run(["codesign", *opts, f], capture=True)
-                break
-            except BuildError:
-                if attempt == 2:
-                    raise
+        codesign_file(opts, f)
     print(f"    {len(files)} Dateien signiert")
+
+
+def notarize(path, profile):
+    """Schickt path (.zip, .dmg) an den Notarisierungsdienst von Apple und wartet auf das Ergebnis."""
+    log(f"Notarisieren: {path.name} (Profil {profile})")
+    out = run(["xcrun", "notarytool", "submit", path, "--keychain-profile", profile, "--wait"], capture=True)
+    print("    " + "\n    ".join(out.strip().splitlines()[-4:]))
+    if not re.search(r"status:\s*Accepted", out):
+        m = re.search(r"id:\s*([0-9a-f-]{36})", out)
+        details = ""
+        if m:
+            details = subprocess.run(["xcrun", "notarytool", "log", m.group(1), "--keychain-profile", profile],
+                                     capture_output=True, text=True).stdout
+        raise BuildError(f"Notarisierung abgelehnt: {path.name}\n{out}\n{details}")
+
+
+def staple(path):
+    """Heftet das Ticket an (.app, .dmg, .pkg) - Gatekeeper braucht dann kein Netz."""
+    run(["xcrun", "stapler", "staple", path], capture=True)
+    run(["xcrun", "stapler", "validate", path], capture=True)
+    print(f"    Ticket angeheftet: {path.name}")
+
+
+def make_dmg(stage, dmg, identity):
+    """Disk-Image (LZMA, ab macOS 10.15) mit dem Verzeichnis der Distribution, signiert mit identity."""
+    if dmg.exists():
+        dmg.unlink()
+    run(["hdiutil", "create", "-volname", stage.name, "-srcfolder", stage, "-ov", "-format", "ULMO", dmg],
+        capture=True)
+    if identity:
+        codesign_file(["--force", "--timestamp", "--sign", identity], dmg)
+    return dmg
 
 
 def pack(t, stage, name, args):
     outdir = DISTDIR / "out"
     outdir.mkdir(exist_ok=True)
     log("Archiv packen")
+    archives = []
     if t.os == "linux":
         archive = outdir / f"{name}.tar.gz"
         with tarfile.open(archive, "w:gz") as tf:
             tf.add(stage, arcname=stage.name)
+        archives.append(archive)
     elif t.is_mac:
+        # Zip: ditto erhaelt Rechte und Signaturen; ein Ticket laesst sich an ein Zip nicht anheften,
+        # Gatekeeper prueft dann online - die Notarisierung des .dmg gilt auch fuer seinen Inhalt
         archive = outdir / f"{name}.zip"
         if archive.exists():
             archive.unlink()
         run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", stage, archive])
-        if args.notarize:
-            log(f"Notarisieren (Profil {args.notarize})")
-            run(["xcrun", "notarytool", "submit", archive, "--keychain-profile", args.notarize, "--wait"])
+        archives.append(archive)
+        if args.dmg:
+            dmg = make_dmg(stage, outdir / f"{name}.dmg", args.sign)
+            if args.notarize:
+                notarize(dmg, args.notarize)
+                staple(dmg)
+            archives.append(dmg)
     else:
-        archive = Path(shutil.make_archive(str(outdir / name), "zip", stage.parent, stage.name))
-    print(f"    {archive}  ({archive.stat().st_size / 1e6:.1f} MB)")
-    return archive
+        archives.append(Path(shutil.make_archive(str(outdir / name), "zip", stage.parent, stage.name)))
+    for a in archives:
+        print(f"    {a}  ({a.stat().st_size / 1e6:.1f} MB)")
+    return archives
 
 
 # ---------------------------------------------------------------- main
@@ -528,8 +582,11 @@ def main():
     ap.add_argument("--highs-version", default="1.15.1", help="HiGHS-Release (Default: %(default)s)")
     ap.add_argument("--sign", metavar="IDENTITY",
                     help="macOS: alle Binaries mit dieser Identitaet signieren (Developer ID Application: ...)")
+    ap.add_argument("--dmg", action="store_true",
+                    help="macOS: zusaetzlich ein .dmg (mit --sign signiert)")
     ap.add_argument("--notarize", metavar="PROFILE",
-                    help="macOS: Archiv mit notarytool notarisieren (Keychain-Profil von notarytool store-credentials)")
+                    help="macOS: .dmg mit notarytool notarisieren und das Ticket anheften "
+                         "(Keychain-Profil von notarytool store-credentials, braucht --sign, setzt --dmg)")
     ap.add_argument("--test-port", type=int, default=8124,
                     help="Port fuer den Test des REST-Servers (Default: %(default)s)")
     ap.add_argument("--no-test", action="store_true", help="keinen Test")
@@ -539,6 +596,8 @@ def main():
         args.pycmpl = pycmpl_requirement()
     if args.notarize and not args.sign:
         ap.error("--notarize braucht --sign")
+    if args.notarize:
+        args.dmg = True             # notarisiert und angeheftet wird das .dmg
 
     t = Target()
     version, deps = project_info()
@@ -549,14 +608,16 @@ def main():
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
 
-    py = install_python(t, stage, args)
+    runtime = stage / RUNTIME
+    runtime.mkdir()
+    py = install_python(t, runtime, args)
     install_packages(t, py, deps, args)
-    copy_project(t, stage, py)
-    build_cmpl(t, stage, args)
+    copy_project(t, stage, runtime, py)
+    build_cmpl(t, runtime, args)
     write_launchers(t, stage)
     if t.is_win:
-        copy_vc_runtime(stage)
-    write_docs(stage, version, versions(t, stage, py))
+        copy_vc_runtime(runtime)
+    write_docs(stage, version, versions(t, runtime, py))
     for junk in stage.rglob(".DS_Store"):
         junk.unlink()
 

@@ -8,7 +8,16 @@ python3 dist/buildDist.py --clean              # CMPL-Kern neu bauen
 python3 dist/buildDist.py --help
 ```
 
-Ergebnis: `dist/out/LogisticsLab-<version>-<os>-<arch>.zip` (Linux: `.tar.gz`). Ausgepackt liegt sie unter `dist/build/<os>-<arch>/LogisticsLab/`.
+Ergebnis: `dist/out/LogisticsLab-<version>-<os>-<arch>.zip` (Linux: `.tar.gz`, macOS mit `--dmg`/`--notarize` zusätzlich `.dmg`). Ausgepackt liegt sie unter `dist/build/<os>-<arch>/LogisticsLab/`:
+
+```
+LogisticsLab/
+  logisticslab, logisticslab-stdio, logisticslab-server, logisticslab-keys   (Windows: .bat)
+  README.md, confs/, examples/
+  bin/   python/, pyLogisticsLab/, logisticsLabCore/, logisticsLabCli/, osm_data/, logisticsLabServer/, cmpl/
+```
+
+In `bin/` ist das Layout wie im Repository. pyLogisticsLab findet CMPL dort unter `bin/cmpl`. Die Startskripte setzen `LOGLAB_CONF_DIR` auf `confs/` neben sich, wenn die Variable noch nicht gesetzt ist.
 
 ## Ablauf
 
@@ -44,6 +53,11 @@ python3 dist/buildDist.py --sign "Developer ID Application: ... (TEAMID)" --nota
 ```
 
 `--sign` signiert alle Mach-O-Dateien (Python, Erweiterungsmodule, cmpl, HiGHS) mit Hardened Runtime und den Entitlements aus `resources/entitlements.plist`. Danach läuft der Test noch einmal mit den signierten Dateien.
+
+- **`--notarize`:** baut zusätzlich `LogisticsLab-….dmg` (signiert), schickt es an Apple (`notarytool submit --wait`) und heftet das Ticket an (`stapler staple`). Wird es abgelehnt, zeigt das Tool das Protokoll von `notarytool log`.
+- **`.dmg` mit angeheftetem Ticket:** Gatekeeper braucht kein Netz.
+- **Zip:** An ein Zip lässt sich kein Ticket heften, Gatekeeper fragt dann beim ersten Start online bei Apple nach. Die Notarisierung des `.dmg` gilt auch für die gleichen Dateien im Zip.
+- **`--dmg` ohne `--notarize`:** baut nur das Image.
 
 # Programm für Desktop-Apps (`buildStdio.py`)
 

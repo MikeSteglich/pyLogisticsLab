@@ -15,5 +15,11 @@ if [ -z "$LOGLAB_LOG_DIR" ]; then
 	export LOGLAB_LOG_DIR
 fi
 
+# Konfiguration in confs/ neben diesem Skript (die Programme liegen in bin/)
+if [ -z "$LOGLAB_CONF_DIR" ]; then
+	LOGLAB_CONF_DIR="$HERE/confs"
+	export LOGLAB_CONF_DIR
+fi
+
 # -I bzw. -E -s: keine PYTHON*-Variablen, kein User-site-packages - nur das, was in der Distribution liegt
-exec "$HERE/python/bin/python3" @PYARGS@ "$@"
+exec @PYTHON@ @PYARGS@ "$@"
