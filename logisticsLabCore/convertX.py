@@ -355,6 +355,10 @@ def convertTspx(data, id, source):
         par['endNode'] = None if dest in (None, '_Open') else dest
         if ptype == 'OpenTsp' and par['endNode'] == par['startNode'] and par['startNode'] is not None:
             par['endNode'] = None
+        # kind of the tour for the app - an open start has none (startNode null)
+        if par['startNode'] is not None:
+            par['tourType'] = ('open' if par['endNode'] is None
+                               else 'round' if par['endNode'] == par['startNode'] else 'path')
         problem = {'name': id, 'type': 'tsp', 'parameters': par}
         # edges: the route uses the shortest paths of the network, entireNetwork: the complete OSM matrix
         if option(data, 'DistMatrixMode') == 'edges' and edges:

@@ -257,7 +257,9 @@ class ScenarioSolver:
         self.valueUnit = None
         handler = getattr(self, '_' + problem.type)
         payload, self._mapResults = handler()
-        return {k: v for k, v in payload.items() if v is not None}
+        # None means a default of the core - except an open start or end of a tsp (default 0: the first node)
+        keep = ('startNode', 'endNode') if problem.type == 'tsp' else ()
+        return {k: v for k, v in payload.items() if v is not None or k in keep}
 
     def finish(self, answer):
         """ solution document from the answer of the solver {status, message, results?} """
@@ -634,13 +636,25 @@ class ScenarioSolver:
     def _tsp(self):
         nodes = list(self.nodes.values())
         kind = self._kind('distances')
-        # startNode / endNode None: open start / open end
+        # startNode / endNode None: open start / open end - tourType: round trip (back to the start), path (from the
+        # start to endNode, "Durchfahrt") or open (open end)
         start = self.par['startNode'] if 'startNode' in self.par else nodes[0].id
         end = self.par['endNode'] if 'endNode' in self.par else start
+        tourType = self.par.get('tourType')
+        if tourType == 'round':
+            end = start
+        elif tourType == 'open':
+            end = None
+        elif tourType == 'path':
+            if self.par.get('endNode') is None:
+                raise ScenarioException(f'problem {self.problem.name}: tourType path needs the parameter endNode')
+            if end == start:
+                raise ScenarioException(f'problem {self.problem.name}: tourType path needs an endNode other than startNode')
         pos = { n.id: i for i, n in enumerate(nodes) }
         # OR-Tools needs integers - m, s or 1/100 of the costs, without a connection a very long one
         scale = {'distances': TO_M[self.s.units.distance], 'times': TO_S[self.s.units.time], 'costs': 100}[kind]
-        M = [ [ 10**12 if v == 'M' else round(v * scale) for v in row ] for row in self._matrix(nodes, nodes, kind) ]
+        values = self._matrix(nodes, nodes, kind)
+        M = [ [ 10**12 if v == 'M' else round(v * scale) for v in row ] for row in values ]
         payload = {'type': 'tsp', 'distances': M,
                    'startNode': None if start is None else pos[self._node(start, 'startNode').id],
                    'endNode': None if end is None else pos[self._node(end, 'endNode').id],
@@ -656,7 +670,12 @@ class ScenarioSolver:
 
         def results(r):
             route = [ nodes[i].id for i in r['route'] ]
-            out = {'objVal': r['objVal'] / scale, 'routes': [ {'nodes': route} ]}
+            # the sections of the tour with their length (distance, time or costs as the objective)
+            legs = [ {'from': nodes[a].id, 'to': nodes[b].id, 'value': values[a][b]}
+                     for a, b in zip(r['route'], r['route'][1:]) ]
+            out = {'objVal': r['objVal'] / scale, 'routes': [ {'nodes': route, 'legs': legs} ],
+                   'summary': {'tourLength': r['objVal'] / scale, 'nrOfNodes': len(set(route)),
+                               'longestLeg': max((l['value'] for l in legs if l['value'] != 'M'), default=0)}}
             if self.problem.network and self.problem.networkMode == 'shortestPaths':
                 path = [route[0]]
                 for a, b in zip(route, route[1:]):
