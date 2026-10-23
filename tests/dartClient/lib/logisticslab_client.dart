@@ -2,4 +2,6 @@
 library;
 
 export 'src/backend.dart';
+export 'src/modules.dart';
 export 'src/results.dart';
+export 'src/strings.dart';
