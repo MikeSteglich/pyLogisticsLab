@@ -230,6 +230,15 @@ class ScenarioSolver:
     #*********** common ************
     def solve(self, problem, parameters=None):
         """ solution document of a problem - parameters override the parameters of the problem """
+        payload = self.prepare(problem, parameters)
+        return self.finish(self.backend.solve(payload))
+
+    def prepare(self, problem, parameters=None):
+        """ item of the problem for /v1/solve (as dict) - needs only backend.matrix
+
+            The answer of the solver goes to finish. prepare and finish allow to solve the item as a job of the core
+            (status, cancel), see LogisticsLabCore.submitScenario.
+        """
         self.problem = problem
         self.par = {**problem.parameters, **(parameters or {})}
         self.opts = self.s.matrix.model_copy(update=problem.matrix.model_dump(exclude_unset=True)) if problem.matrix \
@@ -238,15 +247,16 @@ class ScenarioSolver:
         self.matrixInfo = None
         self.valueUnit = None
         handler = getattr(self, '_' + problem.type)
-        payload, mapResults = handler()
-        payload = {k: v for k, v in payload.items() if v is not None}
-        answer = self.backend.solve(payload)
+        payload, self._mapResults = handler()
+        return {k: v for k, v in payload.items() if v is not None}
 
+    def finish(self, answer):
+        """ solution document from the answer of the solver {status, message, results?} """
         solution = {
             'format': SOLUTION_FORMAT, 'version': VERSION,
             'created': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
             'scenario': {'id': self.s.id, 'hash': self.s.dataHash()},
-            'problem': {**problem.model_dump(exclude_none=True), 'parameters': self.par},
+            'problem': {**self.problem.model_dump(exclude_none=True), 'parameters': self.par},
             'status': answer.get('status'), 'message': answer.get('message'),
             'units': self.s.units.model_dump(),
         }
@@ -257,7 +267,7 @@ class ScenarioSolver:
         if answer.get('status') == 'solution':
             native = answer['results']
             results = {'objVal': native['objVal']}
-            results.update(mapResults(native))
+            results.update(self._mapResults(native))
             results['solvingTime'] = native.get('solvingTime')
             results['native'] = native
             solution['results'] = results

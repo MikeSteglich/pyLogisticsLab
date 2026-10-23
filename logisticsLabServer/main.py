@@ -31,6 +31,7 @@ from logisticsLabCore import *
 from fastapi import FastAPI, Request, Security
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
@@ -48,6 +49,11 @@ if conf['docs']:
     app = FastAPI()
 else:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+# web apps in the browser (e.g. the web version of LogisticsLabApp) need CORS - only for the configured origins
+if conf['corsOrigins']:
+    app.add_middleware(CORSMiddleware, allow_origins=conf['corsOrigins'], allow_methods=['POST', 'GET'],
+                       allow_headers=['Content-Type', 'X-API-Key'])
 
 core = LogisticsLabCore(conf, logger, osmConfigFile=conf['osmConfigFile'], osmLogFile=conf['osmLogFile'])
 
@@ -203,6 +209,29 @@ async def multiModalApi(multiModalItem: MultiModalItem, apiKey: ApiKey = Securit
 @app.post(f'/{version}/multistagewlp')
 async def multiStageWlpApi(multiStageWlpItem: MultiStageWlpItem, apiKey: ApiKey = Security(requireService('multistagewlp'))):
     return submitProblem(multiStageWlpItem, apiKey)
+
+
+@app.post(f'/{version}/scenario')
+async def scenarioApi(request: Request, apiKey: ApiKey = Security(requireService())):
+    """ problem of a scenario (llab): {scenario, problem?, parameters?} - /results returns the solution document
+        (llsol) additionally as field solution """
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse(content={'status': 'error', 'message': 'invalid JSON'}, status_code=400)
+    scenario = body.get('scenario') if isinstance(body, dict) else None
+    problems = [ p for p in (scenario or {}).get('problems', []) if isinstance(p, dict)
+                 and (body.get('problem') is None or p.get('name') == body.get('problem')) ]
+    if problems:
+        checkAllowed(apiKey, problems[0].get('type'))
+    try:
+        id = core.submitScenario(body, owner=apiKey.name, maxOpenProblems=apiKey.maxOpenProblems)
+    except LogLabCoreException as e:
+        logger.warning('main', f'scenario rejected - {e.httpStatus} - {e} - key {apiKey.name}')
+        return JSONResponse(content={'status': 'error', 'message': str(e)}, status_code=e.httpStatus)
+    job = core.jobs.get(id)
+    logger.info('main', f'problem {id} - {job.type} - scenario {scenario.get("id")} - received by server - key {apiKey.name}')
+    return JSONResponse(content=job.toDict(), status_code=job.httpStatus)
 
 
 @app.post(f'/{version}/results')

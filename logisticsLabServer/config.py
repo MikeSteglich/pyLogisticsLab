@@ -91,6 +91,10 @@ class Config:
             if not 'docs' in self.__conf:
                 self.__conf['docs']=False
 
+            # origins of web apps that may call the server from the browser (CORS), e.g. the web version of the app
+            if not self.__conf.get('corsOrigins'):
+                self.__conf['corsOrigins']=[]
+
             if not 'logging' in self.__conf:
                 self.__conf['logging']=True
 

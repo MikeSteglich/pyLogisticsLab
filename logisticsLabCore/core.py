@@ -6,9 +6,11 @@ from .matrixHandler import *
 from .routeHandler import *
 from .geoCodingHandler import *
 from . import matrixService
+from .scenario import Scenario, ScenarioSolver, ScenarioException
 
 import osm_data as osm
 import os
+import threading
 import time
 from pydantic import TypeAdapter
 
@@ -58,6 +60,8 @@ class LogisticsLabCore:
                                      f"{self.conf['matrixCacheMaxAge']} days, {self.conf['matrixCacheMaxEntries']} entries")
 
         self.jobs = JobManager(self.conf, self.logger, onStatusChange)
+        self.__scenarioSolvers = {}        # job id -> ScenarioSolver of the problems of submitScenario
+        self.__lock = threading.Lock()
 
     #*********** optimisation problems ************
 
@@ -73,6 +77,36 @@ class LogisticsLabCore:
                 problem = problemAdapter.validate_python(problem)
         return self.jobs.submit(problem.type, problem, owner=owner, maxOpenProblems=maxOpenProblems)
 
+    def submitScenario(self, request, owner=None, maxOpenProblems=None):
+        """ adds a problem of a scenario (llab) to the queue and returns its id
+
+            request: {scenario: {...llab}, problem: name (default: the first problem), parameters: {...} (optional)}
+            The matrix of the problem is calculated before (OSM servers or cache). fetch returns the solution document
+            (llsol) of the problem additionally as field solution.
+        """
+        if not isinstance(request, dict) or not isinstance(request.get('scenario'), dict):
+            raise LogLabCoreException('scenario is missing', 422)
+        try:
+            scenario = Scenario.model_validate(request['scenario'])
+        except ValueError as e:
+            raise LogLabCoreException(f'invalid scenario: {e}', 422)
+        name = request.get('problem')
+        problems = [ p for p in scenario.problems if name is None or p.name == name ]
+        if not problems:
+            raise LogLabCoreException(f'problem {name} not found in the scenario' if name else
+                                      'the scenario has no problems', 400)
+        solver = ScenarioSolver(scenario, _CoreBackend(self))
+        try:
+            payload = solver.prepare(problems[0], request.get('parameters'))
+        except ScenarioException as e:
+            raise LogLabCoreException(str(e), 400)
+        id = self.submit(payload, owner=owner, maxOpenProblems=maxOpenProblems)
+        with self.__lock:
+            # solvers of problems deleted without fetch (maxInactivityTime) are removed here
+            self.__scenarioSolvers = { k: v for k, v in self.__scenarioSolvers.items() if self.jobs.get(k) }
+            self.__scenarioSolvers[id] = solver
+        return id
+
     def fetch(self, id, owner=None):
         """ status of a problem and its results if it is finished - a finished problem is deleted afterwards
 
@@ -86,6 +120,10 @@ class LogisticsLabCore:
         ret = job.toDict(withResults=True)
         if job.status in FINISHED:
             self.jobs.delete(id)
+            with self.__lock:
+                solver = self.__scenarioSolvers.pop(id, None)
+            if solver:
+                ret['solution'] = solver.finish(ret)
         return ret, job.httpStatus, job
 
     def cancel(self, id, owner=None):
@@ -126,3 +164,16 @@ class LogisticsLabCore:
         if h.status != 'ok':
             raise LogLabCoreException(h.message, h.httpStatus)
         return {'message': h.message, **content}
+
+
+class _CoreBackend:
+    """ matrix of ScenarioSolver.prepare from the geo services of the core """
+
+    def __init__(self, core):
+        self.core = core
+
+    def matrix(self, payload):
+        try:
+            return self.core.geo('matrix', payload)
+        except LogLabCoreException as e:
+            raise ScenarioException(f'matrix: {e}')

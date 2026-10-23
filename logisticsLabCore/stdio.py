@@ -10,6 +10,8 @@
                                                                   contpcentre, scp, mcp, cpp, vrp,
                                                                   mincostflow, maxflow, multicommodity, multimodal,
                                                                   multistagewlp
+      solveScenario {scenario, problem?, parameters?}   {id, status, message}   problem of a scenario (llab) -
+                                                                  result has the solution document (llsol) as solution
       status     {id}                  {id, status, message}
       result     {id}                  {id, status, message, results?}   finished problems are deleted afterwards
       cancel     {id}                  {id, status, message}
@@ -129,6 +131,10 @@ class StdioServer:
 
         if method == 'solve':
             id = self.core.submit(params)
+            return self.core.jobs.get(id).toDict()
+
+        if method == 'solveScenario':
+            id = self.core.submitScenario(params)
             return self.core.jobs.get(id).toDict()
 
         if method == 'status':

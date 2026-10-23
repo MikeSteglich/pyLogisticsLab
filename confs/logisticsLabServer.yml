@@ -11,6 +11,7 @@ maxOpenProblemsPerKey: 3        # default for keys without maxOpenProblems
 authentication: True            # api keys via header X-API-Key - see manageKeys.py
 #apiKeyFile: /etc/logisticsLab/apiKeys.yml   # default: confs/apiKeys.yml (LOGLAB_CONF_DIR)
 docs: False                     # /docs, /redoc and /openapi.json
+#corsOrigins: ["https://app.example.org", "http://localhost:8080"]   # web apps that may call the server (CORS)
 
 logging:  True
 debugging: True
