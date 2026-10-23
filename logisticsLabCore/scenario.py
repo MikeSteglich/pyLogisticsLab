@@ -950,12 +950,22 @@ class ScenarioSolver:
             edges = []
             for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
                 if sum(f) > 1e-9:
-                    edges.append({'from': a, 'to': b, 'flow': sum(f), 'flows': perCommodity(f),
-                                  **_utilization(sum(x * c for x, c in zip(f, factors[k])), payload['maxCaps'][k])})
+                    cap = payload['maxCaps'][k]
+                    entry = {'from': a, 'to': b, 'flow': sum(f), 'flows': perCommodity(f),
+                             **_utilization(sum(x * c for x, c in zip(f, factors[k])), cap)}
+                    if 'utilization' in entry:
+                        # share of the capacity used by each commodity
+                        entry['utilizations'] = { i: x * c / cap for i, x, c in zip(ids, f, factors[k]) if x > 1e-9 }
+                    edges.append(entry)
             out = {'edges': edges}
             nodeFactors = payload.get('nodeCapacityFactors')
             nodeLoad = lambda k, v: sum(x * c for x, c in zip(v, nodeFactors[k] if nodeFactors else [1] * len(v)))
             nodeResults = self._nodeResults(nodes, r, perCommodity, load=nodeLoad)
+            for k, (n, v) in enumerate(zip(nodes, r.get('nodeFlows') or [])):
+                res = nodeResults.get(n.id)
+                if res and 'capacity' in res:
+                    fs = nodeFactors[k] if nodeFactors else [1] * len(v)
+                    res['utilizations'] = { i: x * c / res['capacity'] for i, x, c in zip(ids, v, fs) if x > 1e-9 }
             if nodeResults:
                 out['nodes'] = nodeResults
             if self._summary(r):
@@ -999,7 +1009,10 @@ class ScenarioSolver:
                     shares = [ x / c for x, c in zip(f, maxCaps[k]) if c is not None and c > 0 ]
                     edges.append({'from': a, 'to': b, 'flow': sum(f),
                                   'modes': { m.id: x for m, x in zip(modes, f) if x > 1e-9 },
-                                  **({'utilization': max(shares)} if shares else {})})
+                                  **({'utilization': max(shares)} if shares else {}),
+                                  # utilization of the capacity of each mode
+                                  **({'utilizations': { m.id: x / c for m, x, c in zip(modes, f, maxCaps[k])
+                                                        if c is not None and c > 0 and x > 1e-9 }} if shares else {})})
             out = {'edges': edges}
             nodeResults = self._nodeResults(nodes, r)
             if nodeResults:
