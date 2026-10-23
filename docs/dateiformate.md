@@ -197,7 +197,7 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 | `mcp` | Maximal Covering | `candidate` → `customer` | `radius`, `maxSrcCost` (Budget, Pflicht), `useFixedCosts` (Standard `true`) |
 | `contpmedian` | kontinuierlicher p-Median | `customer` | `p` (Pflicht), `capacities` (ein Wert oder `p` Werte), `isCapacitated`, `isDemandWeighted`, `isSingleSource`, `nrOfStarts` |
 | `contpcentre` | kontinuierliches p-Center | `customer` | wie `contpmedian` |
-| `tsp` | Rundreise oder Durchfahrt | alle Knoten, optional Netz | `tourType`: `round` (zurück zum Start), `path` (Durchfahrt von `startNode` nach `endNode`), `open` (offenes Ende); ohne `tourType` `startNode`, `endNode` (Knoten-ID; `null` = offener Start bzw. offenes Ende); `matrixMode` |
+| `tsp` | Rundreise oder Durchfahrt | alle Knoten, optional Netz | `tourType`: `round` (zurück zum Start), `path` (Durchfahrt von `startNode` nach `endNode`), `open` (offenes Ende), `openStart` (offener Anfang, nur `endNode`), `free` (komplett offen); ohne `tourType` `startNode`, `endNode` (Knoten-ID; `null` = offener Start bzw. offenes Ende); `matrixMode` |
 | `cpp` | Briefträgerproblem | Netz (Pflicht) | `startNode` |
 | `vrp` | Tourenplanung | `depot` + `customer`, `vehicles` | `depot`, `useTimeWindows`, `maxTime`, `maxDist` (je Route, in `units`), `capacities` (statt `vehicles`) |
 | `mincostflow` | Min-Cost-Flow | Netz (Pflicht) | `useFixedCosts`, `balance` |

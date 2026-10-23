@@ -649,6 +649,13 @@ class ScenarioSolver:
             end = start
         elif tourType == 'open':
             end = None
+        elif tourType == 'openStart':
+            # open start, fixed end
+            start = None
+            if self.par.get('endNode') is None:
+                raise ScenarioException(f'problem {self.problem.name}: tourType openStart needs the parameter endNode')
+        elif tourType == 'free':
+            start = end = None
         elif tourType == 'path':
             if self.par.get('endNode') is None:
                 raise ScenarioException(f'problem {self.problem.name}: tourType path needs the parameter endNode')
@@ -705,7 +712,12 @@ class ScenarioSolver:
             into = any(values[i][k] != 'M' for i in range(n) if i != k)
             needsOut = not (end is not None and end != start and node.id == end)
             needsIn = not (node.id == start and (end is None or end != start))
-            if needsOut and not out and tourType != 'open':
+            # an open start or end: the first or last node is not known before - no check of that side
+            if start is None:
+                needsIn = False
+            if end is None:
+                needsOut = False
+            if needsOut and not out:
                 raise ScenarioException(f'problem {self.problem.name}: no way from {name(node)} to another node '
                                         f'in the network - check the direction of its edges')
             if needsIn and not into:
