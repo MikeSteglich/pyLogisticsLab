@@ -445,7 +445,7 @@ logisticslab convert --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-
 - **Reihenfolge:** In den alten Dateien steht `x` = Länge, `y` = Breite. Die Umwandlung schreibt `[lat, lon]`.
 - **`DistFunc` entscheidet über die Matrix:** `GreatCircle…` ergibt Luftlinie, `OSM/…` Straßennetz, auch bei `TravelMode Bird`. `DistFactor` wird zu `costPerKm` bzw. `costPerHour`.
 - **Bezeichner:** Gleichnamige Quellen und Ziele am selben Ort werden ein Knoten mit beiden Rollen. Gleiche Namen an verschiedenen Orten bekommen `#2`, `#3` …
-- **Nur Dateien schreiben:** `logisticslab convert` (`logisticsLabCli/convertX.py`) erzeugt nur Szenarien (`.llab`) und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
+- **Nur Dateien schreiben:** `logisticslab convert` (`logisticsLabCore/convertX.py`) erzeugt nur Szenarien (`.llab`) und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
 
 ## Betrieb unter Linux mit nginx
 

@@ -10,6 +10,7 @@
                                                                   contpcentre, scp, mcp, cpp, vrp,
                                                                   mincostflow, maxflow, multicommodity, multimodal,
                                                                   multistagewlp
+      convert    {fileName, content}   {scenario, fileName}   old LogisticsLab file (TPPX, ...) -> scenario (llab)
       solveScenario {scenario, problem?, parameters?}   {id, status, message}   problem of a scenario (llab) -
                                                                   result has the solution document (llsol) as solution
       status     {id}                  {id, status, message}
@@ -132,6 +133,9 @@ class StdioServer:
         if method == 'solve':
             id = self.core.submit(params)
             return self.core.jobs.get(id).toDict()
+
+        if method == 'convert':
+            return self.core.convert(params)
 
         if method == 'solveScenario':
             id = self.core.submitScenario(params)

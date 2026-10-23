@@ -3,6 +3,9 @@
     logisticslab convert FILE.TPPX [-o FILE.json]
     logisticslab convert --dir SOURCE_DIR --target TARGET_DIR      all X files, the folders are kept
 
+    Used by the command line tool and by the core (LogisticsLabCore.convert: stdio method convert, REST /v1/convert),
+    so that the app imports old files - convertText converts the content of a file without a path.
+
     Only OSM distances and travel times (or bee line) with geographic coordinates are converted - files with own
     matrices (DistFunc OwnDef) or planar coordinates (Map SimpleMap) are skipped. Matrices stored in the files
     (COSTS, DISTANCES, TIMES) are not taken over - the scenario computes them from the coordinates. Exceptions:
@@ -13,7 +16,7 @@ import json
 import os
 import re
 
-from logisticsLabCore.scenario import Scenario
+from .scenario import Scenario
 
 FORMATS = ('TPPX', 'TSPX', 'CLPX', 'DLPX', 'NWFX', 'VRPX')
 SCENARIO_EXTENSION = '.llab'
@@ -70,12 +73,19 @@ def rowTokens(line, nrOfColumns, where):
 
 
 def read(path):
-    """ {'type', 'version', 'description', 'options': {name: [values]}, 'tables': {...}, 'matrices': {...}} """
+    """ content of an X file - see parse """
     try:
         text = open(path, encoding='utf-8').read()
     except UnicodeDecodeError:
         text = open(path, encoding='latin-1').read()
+    return parse(text, os.path.basename(path))
+
+
+def parse(text, name):
+    """ {'type', 'version', 'description', 'options': {name: [values]}, 'tables': {...}, 'matrices': {...}} """
     lines = text.splitlines()
+    if not lines:
+        raise SkipFile(f'{name}: empty file')
     head = lines[0].split('\t')[0].split()
     data = {'type': head[0], 'version': head[1] if len(head) > 1 else '', 'description': '',
             'options': {}, 'tables': {}, 'matrices': {}}
@@ -98,7 +108,7 @@ def read(path):
                 columns = headerTokens(lines[i + 1])
                 rows = []
                 for k in range(count):
-                    tokens = rowTokens(lines[i + 2 + k], len(columns), f'{os.path.basename(path)} {section} row {k+1}')
+                    tokens = rowTokens(lines[i + 2 + k], len(columns), f'{name} {section} row {k+1}')
                     rows.append(dict(zip(columns, tokens)))
                 data['tables'][section] = rows
                 i += 2 + count
@@ -382,10 +392,25 @@ CONVERTERS = {'TPPX': convertTppx, 'DLPX': convertDlpx, 'CLPX': convertClpx, 'NW
 
 def convert(path, source=None):
     """ scenario dict of an X file - raises SkipFile for files that are not converted """
-    ext = path.rsplit('.', 1)[-1].upper()
-    data = read(path)
-    stem = os.path.basename(path).rsplit('.', 1)[0]
-    s = CONVERTERS[ext](data, stem, source or os.path.basename(path))
+    return _convert(read(path), os.path.basename(path), source)
+
+
+def convertText(text, fileName):
+    """ scenario dict of the content of an X file - the format comes from the extension of fileName """
+    _checkFormat(fileName)
+    return _convert(parse(text, fileName), fileName, None)
+
+
+def _checkFormat(fileName):
+    if '.' not in fileName or fileName.rsplit('.', 1)[-1].upper() not in CONVERTERS:
+        raise SkipFile(f'{fileName}: unknown format - known are {", ".join(FORMATS)}')
+
+
+def _convert(data, fileName, source):
+    _checkFormat(fileName)
+    ext = fileName.rsplit('.', 1)[-1].upper()
+    stem = fileName.rsplit('.', 1)[0]
+    s = CONVERTERS[ext](data, stem, source or fileName)
     Scenario.model_validate(s)                       # the result must be a valid scenario
     return s
 

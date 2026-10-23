@@ -17,13 +17,13 @@
             logs and matrix cache in logs/cli).
             With --server they are sent to a LogisticsLab server - the key from --apiKey or LOGLAB_API_KEY.
     show    prints a summary of the scenario
-    convert converts old LogisticsLab files (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) into scenario files - see convertX.py
+    convert converts old LogisticsLab files (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) into scenario files - see logisticsLabCore/convertX.py
 """
 
 from logisticsLabCore import paths
 from logisticsLabCore.scenario import Scenario, ScenarioSolver, ScenarioException
 from .backends import LocalBackend, RemoteBackend
-from . import convertX
+from logisticsLabCore import convertX
 
 import argparse
 import json

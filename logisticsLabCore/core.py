@@ -7,6 +7,7 @@ from .routeHandler import *
 from .geoCodingHandler import *
 from . import matrixService
 from .scenario import Scenario, ScenarioSolver, ScenarioException
+from . import convertX
 
 import osm_data as osm
 import os
@@ -106,6 +107,24 @@ class LogisticsLabCore:
             self.__scenarioSolvers = { k: v for k, v in self.__scenarioSolvers.items() if self.jobs.get(k) }
             self.__scenarioSolvers[id] = solver
         return id
+
+    def convert(self, request):
+        """ scenario (llab) of an old LogisticsLab file (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) - see convertX.py
+
+            request: {fileName: e.g. drogma.CLPX (the extension is the format), content: text of the file}
+            returns {scenario: {...}, fileName: e.g. drogma.clpx.llab}
+        """
+        if not isinstance(request, dict) or not isinstance(request.get('fileName'), str) \
+                or not isinstance(request.get('content'), str):
+            raise LogLabCoreException('fileName and content are needed', 422)
+        name = os.path.basename(request['fileName'].replace('\\', '/'))
+        try:
+            scenario = convertX.convertText(request['content'], name)
+        except convertX.SkipFile as e:
+            raise LogLabCoreException(f'not converted: {e}', 422)
+        except Exception as e:                       # broken files - wrong sections, numbers, ...
+            raise LogLabCoreException(f'{name} cannot be converted: {e}', 400)
+        return {'scenario': scenario, 'fileName': convertX.targetName(name)}
 
     def fetch(self, id, owner=None):
         """ status of a problem and its results if it is finished - a finished problem is deleted afterwards

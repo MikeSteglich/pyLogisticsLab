@@ -234,6 +234,22 @@ async def scenarioApi(request: Request, apiKey: ApiKey = Security(requireService
     return JSONResponse(content=job.toDict(), status_code=job.httpStatus)
 
 
+@app.post(f'/{version}/convert')
+async def convertApi(request: Request, apiKey: ApiKey = Security(requireService())):
+    """ old LogisticsLab file: {fileName, content} -> {scenario, fileName} - no problem is solved """
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse(content={'status': 'error', 'message': 'invalid JSON'}, status_code=400)
+    try:
+        content = core.convert(body)
+    except LogLabCoreException as e:
+        logger.warning('main', f'convert rejected - {e.httpStatus} - {e} - key {apiKey.name}')
+        return JSONResponse(content={'status': 'error', 'message': str(e)}, status_code=e.httpStatus)
+    logger.info('main', f"convert {content['fileName']} - key {apiKey.name}")
+    return JSONResponse(content={'status': 'ok', **content}, status_code=200)
+
+
 @app.post(f'/{version}/results')
 async def resultsApi(resultItem: ResultItem, apiKey: ApiKey = Security(requireService())):
     """ status of a problem and its results if it is finished - finished problems are deleted afterwards """
