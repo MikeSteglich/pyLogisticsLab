@@ -221,6 +221,13 @@ def unlimited(v):
 
 #*************** solver ************************************************
 
+def _utilization(load, capacity):
+    """ capacity and used share of it - empty without a (finite, positive) capacity """
+    if capacity is None or unlimited(capacity) or capacity <= 0:
+        return {}
+    return {'capacity': capacity, 'utilization': load / capacity}
+
+
 class ScenarioSolver:
     """ translates the problems of a scenario into items of the REST server and maps the results to node ids """
 
@@ -439,8 +446,9 @@ class ScenarioSolver:
         if par.get('useDemandRanges'):
             payload['minDemands'] = [ n.minDemand or 0 for n in D ]
             payload['maxDemands'] = [ n.demand if n.maxDemand is None else n.maxDemand for n in D ]
+        caps = None
         if par.get('useCapacities'):
-            payload['capacities'] = pairMatrix('capacity', 'M')
+            payload['capacities'] = caps = pairMatrix('capacity', 'M')
         if par.get('useFixedCosts'):
             payload['fixedCosts'] = pairMatrix('fixedCost', 0)
 
@@ -458,7 +466,8 @@ class ScenarioSolver:
                 'summary': summary,
                 'nodes': {**{ n.id: {'flow': f} for n, f in zip(S, r['sourceFlows']) },
                           **{ n.id: {'flow': f} for n, f in zip(D, r['destinationFlows']) }},
-                'assignments': [ {'from': S[i].id, 'to': D[j].id, 'flow': flows[i][j], 'rate': C[i][j]}
+                'assignments': [ {'from': S[i].id, 'to': D[j].id, 'flow': flows[i][j], 'rate': C[i][j],
+                                  **_utilization(flows[i][j], caps[i][j] if caps else None)}
                                  for i in range(len(S)) for j in range(len(D)) if flows[i][j] > 1e-9 ]}
         return payload, results
 
@@ -752,13 +761,19 @@ class ScenarioSolver:
             out['shortageCosts'] = shortage
         return out
 
-    def _nodeResults(self, nodes, r, values=lambda v: v):
-        """ flow through the nodes, unused supply and unmet demand - values maps a value of the library (e.g. a list per commodity) """
+    def _nodeResults(self, nodes, r, values=lambda v: v, caps=None, load=None):
+        """ flow through the nodes, unused supply and unmet demand - values maps a value of the library (e.g. a list
+            per commodity); caps: capacities of the nodes (default maxCap), load: used capacity of a node flow """
         out = {}
         for key, name in (('nodeFlows', 'flow'), ('unusedSupplies', 'unusedSupply'), ('unmetDemands', 'unmetDemand')):
             for n, v in zip(nodes, r.get(key) or []):
                 if (sum(v) if isinstance(v, list) else v) > 1e-9:
                     out.setdefault(n.id, {})[name] = values(v)
+        caps = caps if caps is not None else [ None if unlimited(n.maxCap) else n.maxCap for n in nodes ]
+        for k, (n, v, c) in enumerate(zip(nodes, r.get('nodeFlows') or [], caps)):
+            used = _utilization(load(k, v) if load else v, c)
+            if used:
+                out.setdefault(n.id, {}).update(used)
         return out
 
     def _summary(self, r):
@@ -791,7 +806,7 @@ class ScenarioSolver:
             out = {'edges': []}
             for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
                 if f > 1e-9:
-                    entry = {'from': a, 'to': b, 'flow': f, 'rate': costs[k]}
+                    entry = {'from': a, 'to': b, 'flow': f, 'rate': costs[k], **_utilization(f, maxCaps[k])}
                     if r.get('usages'):
                         entry['used'] = r['usages'][k]
                     out['edges'].append(entry)
@@ -832,8 +847,9 @@ class ScenarioSolver:
             out = {'edges': []}
             for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
                 if f > 1e-9:
-                    out['edges'].append({'from': a, 'to': b, 'flow': f, 'rate': costs[k], 'used': r['usages'][k]})
-            nodeResults = self._nodeResults(nodes, r)
+                    out['edges'].append({'from': a, 'to': b, 'flow': f, 'rate': costs[k], 'used': r['usages'][k],
+                                         **_utilization(f, payload['maxCaps'][k])})
+            nodeResults = self._nodeResults(nodes, r, caps=caps)
             for n, o in zip(nodes, r['openNodes']):
                 if o is not None:
                     nodeResults.setdefault(n.id, {})['open'] = o
@@ -878,9 +894,12 @@ class ScenarioSolver:
             edges = []
             for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
                 if sum(f) > 1e-9:
-                    edges.append({'from': a, 'to': b, 'flow': sum(f), 'flows': perCommodity(f)})
+                    edges.append({'from': a, 'to': b, 'flow': sum(f), 'flows': perCommodity(f),
+                                  **_utilization(sum(x * c for x, c in zip(f, factors[k])), payload['maxCaps'][k])})
             out = {'edges': edges}
-            nodeResults = self._nodeResults(nodes, r, perCommodity)
+            nodeFactors = payload.get('nodeCapacityFactors')
+            nodeLoad = lambda k, v: sum(x * c for x, c in zip(v, nodeFactors[k] if nodeFactors else [1] * len(v)))
+            nodeResults = self._nodeResults(nodes, r, perCommodity, load=nodeLoad)
             if nodeResults:
                 out['nodes'] = nodeResults
             if self._summary(r):
@@ -921,8 +940,10 @@ class ScenarioSolver:
             edges = []
             for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
                 if sum(f) > 1e-9:
+                    shares = [ x / c for x, c in zip(f, maxCaps[k]) if c is not None and c > 0 ]
                     edges.append({'from': a, 'to': b, 'flow': sum(f),
-                                  'modes': { m.id: x for m, x in zip(modes, f) if x > 1e-9 }})
+                                  'modes': { m.id: x for m, x in zip(modes, f) if x > 1e-9 },
+                                  **({'utilization': max(shares)} if shares else {})})
             out = {'edges': edges}
             nodeResults = self._nodeResults(nodes, r)
             if nodeResults:

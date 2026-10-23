@@ -237,10 +237,10 @@ Eine `.llsol`-Datei ist eine JSON-Liste mit einem Lösungsdokument je gelöstem 
 | --- | --- | --- |
 | `objVal` | Zielfunktionswert in `valueUnit` | alle |
 | `summary` | Kennzahlen, z. B. `nrOfOpen`, `totalVarCosts`, `totalFixedCosts`, `totalOpeningCosts`, `nrOfRoutes` | je nach Typ |
-| `nodes` | Objekt Knoten-ID → Werte: `open`, `load`, `flow`, `unusedSupply`, `unmetDemand`, bei kontinuierlichen Standorten `F1 … Fp` mit `coordinates` | Standortprobleme, Netzflüsse, `multistagewlp` |
-| `assignments` | Liste `{from, to, flow, …}`, bei Transport mit `rate`, bei Standorten mit `value` bzw. `distance` | `tpp`, Standort- und Covering-Probleme |
+| `nodes` | Objekt Knoten-ID → Werte: `open`, `load`, `flow`, `unusedSupply`, `unmetDemand`, bei Knotenkapazität (`maxCap`, Lager: `capacity`) `capacity` und `utilization` (Durchsatz / Kapazität), bei kontinuierlichen Standorten `F1 … Fp` mit `coordinates` | Standortprobleme, Netzflüsse, `multistagewlp` |
+| `assignments` | Liste `{from, to, flow, …}`, bei Transport mit `rate` und mit Kapazitäten (`useCapacities`) `capacity`/`utilization`, bei Standorten mit `value` bzw. `distance` | `tpp`, Standort- und Covering-Probleme |
 | `routes` | je Fahrzeug `vehicle`, `nodes`, `load`, `distance`; beim VRP der Zeitplan `arrivals`, `waitingTimes`, `times`, `serviceTimes`, `travelTimes` und die Summen `travelTime`, `waitingTime`, `serviceTime`, `duration` | `tsp`, `vrp`, `cpp` |
-| `edges` | Liste `{from, to, flow, rate, used}`, bei mehreren Gütern `flows` je Gut, bei mehreren Verkehrsträgern `modes` | Netzflüsse, `multistagewlp` |
+| `edges` | Liste `{from, to, flow, rate, used}`, bei mehreren Gütern `flows` je Gut, bei mehreren Verkehrsträgern `modes`; bei begrenzter Kapazität `capacity` und `utilization` (genutzter Anteil; mehrere Güter mit ihren `capacityFactor`, mehrere Verkehrsträger: der am stärksten ausgelastete) | Netzflüsse, `multistagewlp` |
 | `solvingTime` | Rechenzeit in Sekunden | alle |
 | `native` | die unveränderte Antwort des Kerns (Indizes, Einheiten der Anfrage) | alle |
 
