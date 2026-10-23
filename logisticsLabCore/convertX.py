@@ -19,6 +19,8 @@ import re
 from .scenario import Scenario
 
 FORMATS = ('TPPX', 'TSPX', 'CLPX', 'DLPX', 'NWFX', 'VRPX')
+# older formats - LogisticsLab 4 and DSS: planar coordinates and own matrices, a scenario needs [lat, lon]
+LEGACY_FORMATS = ('TPP', 'TSP', 'NWF', 'WLP', 'VRP', 'CLP', 'DLP', 'STP', 'LOP')
 SCENARIO_EXTENSION = '.llab'
 TABLES = ('SOURCES', 'DESTINATIONS', 'NODES', 'EDGES')
 MATRICES = ('COSTS', 'CAPACITIES', 'FIXEDCOSTS', 'DISTANCES', 'TIMES', 'PRENODES')
@@ -402,7 +404,11 @@ def convertText(text, fileName):
 
 
 def _checkFormat(fileName):
-    if '.' not in fileName or fileName.rsplit('.', 1)[-1].upper() not in CONVERTERS:
+    ext = fileName.rsplit('.', 1)[-1].upper() if '.' in fileName else ''
+    if ext in LEGACY_FORMATS:
+        raise SkipFile(f'{fileName}: {ext} is a format of LogisticsLab 4 (or older) with planar coordinates and '
+                       f'own matrices - it cannot be converted, only {", ".join(FORMATS)}')
+    if ext not in CONVERTERS:
         raise SkipFile(f'{fileName}: unknown format - known are {", ".join(FORMATS)}')
 
 
