@@ -305,6 +305,25 @@ class ScenarioSolver:
             more = f' and {len(missing) - 5} more' if len(missing) > 5 else ''
             raise ScenarioException(f'problem {self.problem.name}: {what} missing at {", ".join(missing[:5])}{more}')
 
+    def _flowEnds(self, nodes, perCommodity=False):
+        """ a network flow needs suppliers and customers in its network with their quantities (per commodity) """
+        ends = []
+        for key, default, attr in (('sources', 'supplier', 'supplies' if perCommodity else 'supply'),
+                                   ('destinations', 'customer', 'demands' if perCommodity else 'demand')):
+            role = (self.par.get('roles') or {}).get(key, default)
+            inNet = [ n for n in nodes if role in n.roles ]
+            if not inNet:
+                raise ScenarioException(f'problem {self.problem.name}: no node with role {role} in the network')
+            if perCommodity:
+                missing = [ (f'{n.name} ({n.id})' if n.name else n.id) for n in inNet if not getattr(n, attr) ]
+                if missing:
+                    raise ScenarioException(f'problem {self.problem.name}: {attr} per commodity missing at '
+                                            f'{", ".join(missing[:5])}')
+            else:
+                self._required(inNet, attr, attr)
+            ends.append(inNet)
+        return ends
+
     def _node(self, id, name):
         if id not in self.nodes:
             raise ScenarioException(f'problem {self.problem.name}: unknown or inactive {name} {id}')
@@ -888,6 +907,7 @@ class ScenarioSolver:
         nodeOptions = self._nodeOptions(nodes)
 
         if type == 'mincostflow':
+            self._flowEnds(nodes)
             payload = {'type': 'mincostflow', 'edges': edges, 'costs': costs,
                        'supplies': [ 0 if unlimited(n.supply) else n.supply for n in nodes ],
                        'demands': [ 0 if unlimited(n.demand) else n.demand for n in nodes ],
@@ -949,6 +969,7 @@ class ScenarioSolver:
         nodes, pos, arcs = self._network('multistagewlp')
         if not any('candidate' in n.roles for n in nodes):
             raise ScenarioException(f'problem {self.problem.name}: multistagewlp needs nodes with role candidate (warehouses)')
+        self._flowEnds(nodes)
         kind = self._kind('costs' if (self.opts.costPerKm or self.opts.costPerHour) else 'distances')
         par = self.par
         costs = [ self._value(kind, d, t) for _, _, _, d, t in arcs ]
@@ -1039,6 +1060,7 @@ class ScenarioSolver:
         commodities = [ c for c in self.s.commodities if c.id in self.par.get('commodities', [ c.id for c in self.s.commodities ]) ]
         if not commodities:
             raise ScenarioException(f'problem {self.problem.name}: multicommodity needs commodities')
+        self._flowEnds(nodes, perCommodity=True)
         self.valueUnit = 'costs'
         ids = [ c.id for c in commodities ]
         costs, factors = [], []
@@ -1092,6 +1114,7 @@ class ScenarioSolver:
         modes = self.s.modes
         if not modes:
             raise ScenarioException(f'problem {self.problem.name}: multimodal needs modes')
+        self._flowEnds(nodes)
         self.valueUnit = 'costs'
         costs, fixed, minCaps, maxCaps = [], [], [], []
         for e, a, b, d, t in arcs:
