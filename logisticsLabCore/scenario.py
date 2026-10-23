@@ -277,11 +277,15 @@ class ScenarioSolver:
             solution['matrixInfo'] = self.matrixInfo
         if answer.get('status') == 'solution':
             native = answer['results']
-            results = {'objVal': native['objVal']}
-            results.update(self._mapResults(native))
-            results['solvingTime'] = native.get('solvingTime')
-            results['native'] = native
-            solution['results'] = results
+            try:
+                results = {'objVal': native['objVal']}
+                results.update(self._mapResults(native))
+                results['solvingTime'] = native.get('solvingTime')
+                results['native'] = native
+                solution['results'] = results
+            except ScenarioException as e:
+                # the solver found something that is no solution of the problem (e.g. a tour over a missing way)
+                solution.update(status='error', message=str(e))
         if self.warnings:
             solution['warnings'] = self.warnings
         return solution
@@ -654,6 +658,7 @@ class ScenarioSolver:
         # OR-Tools needs integers - m, s or 1/100 of the costs, without a connection a very long one
         scale = {'distances': TO_M[self.s.units.distance], 'times': TO_S[self.s.units.time], 'costs': 100}[kind]
         values = self._matrix(nodes, nodes, kind)
+        self._checkReachable(nodes, values, start, end, tourType)
         M = [ [ 10**12 if v == 'M' else round(v * scale) for v in row ] for row in values ]
         payload = {'type': 'tsp', 'distances': M,
                    'startNode': None if start is None else pos[self._node(start, 'startNode').id],
@@ -670,6 +675,12 @@ class ScenarioSolver:
 
         def results(r):
             route = [ nodes[i].id for i in r['route'] ]
+            # a connection without a way in the network has a very large value - then there is no tour at all
+            impossible = [ (nodes[a].name or nodes[a].id, nodes[b].name or nodes[b].id)
+                           for a, b in zip(r['route'], r['route'][1:]) if values[a][b] == 'M' ]
+            if impossible:
+                raise ScenarioException(f'problem {self.problem.name}: no tour through all nodes in the network - '
+                                        f'no way from {impossible[0][0]} to {impossible[0][1]}')
             # the sections of the tour with their length (distance, time or costs as the objective)
             legs = [ {'from': nodes[a].id, 'to': nodes[b].id, 'value': values[a][b]}
                      for a, b in zip(r['route'], r['route'][1:]) ]
@@ -683,6 +694,23 @@ class ScenarioSolver:
                 out['routes'][0]['path'] = path
             return out
         return payload, results
+
+    def _checkReachable(self, nodes, values, start, end, tourType):
+        """ every node of a tour needs a way to another node and from another node - not the start of a passage or
+            an open tour (nothing before it) and not the end of a passage (nothing after it) """
+        name = lambda n: f'{n.name} ({n.id})' if n.name else n.id
+        n = len(nodes)
+        for k, node in enumerate(nodes):
+            out = any(values[k][j] != 'M' for j in range(n) if j != k)
+            into = any(values[i][k] != 'M' for i in range(n) if i != k)
+            needsOut = not (end is not None and end != start and node.id == end)
+            needsIn = not (node.id == start and (end is None or end != start))
+            if needsOut and not out and tourType != 'open':
+                raise ScenarioException(f'problem {self.problem.name}: no way from {name(node)} to another node '
+                                        f'in the network - check the direction of its edges')
+            if needsIn and not into:
+                raise ScenarioException(f'problem {self.problem.name}: no way to {name(node)} from another node '
+                                        f'in the network - check the direction of its edges')
 
     def _cpp(self):
         if not self.problem.network:
