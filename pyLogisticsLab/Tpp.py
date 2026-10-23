@@ -210,7 +210,8 @@ class Tpp(object):
         self.__isSingleSourceCon = bool(isSingleSource)
 
         self.__isBlockCon = minBlock is not None or maxBlock is not None
-        self.__minBlock = setNum(minBlock) if minBlock is not None else 0
+        # without blocking every rate is allowed - also negative ones (contributions of max)
+        self.__minBlock = setNum(minBlock) if minBlock is not None else -bigM
         self.__maxBlock = setNum(_toNumM(maxBlock))
 
         sourceNames = self.__names(sourceNames, self.__nrOfSources, 'S', 'source names')
@@ -366,7 +367,9 @@ class Tpp(object):
 
         for ii,s in enumerate(self.__sources):
             self.__costTolSrc[ii] += self.__costTolAdder
-            maxCost = self.__maxCostSrc[ii] * self.__costTolSrc[ii]
+            # the cost tolerance drops expensive connections of a min problem - not with max, there they are the
+            # least attractive ones in the other direction
+            maxCost = self.__maxCostSrc[ii] * self.__costTolSrc[ii] if self.__objSense != 1 else bigM
 
             for d in self.__destinations:
                 i = s.idx-1
@@ -379,9 +382,9 @@ class Tpp(object):
 
     #*********** __setEdges     ************
 
-    def __addEdge(self, i, j):
+    def __addEdge(self, i, j, cost=None):
         self.__edges.append((i+1,j+1))
-        self.__vCosts.append(self.__costs[i][j])
+        self.__vCosts.append(self.__costs[i][j] if cost is None else cost)
 
         if self.__isFixedCosts:
             self.__fCosts.append(self.__fixCosts[i][j])
@@ -403,8 +406,10 @@ class Tpp(object):
                     break
 
             if not destAssigned:
+                # all connections of the destination blocked: they are added with bigM as a penalty - with max
+                # a penalty is -bigM, otherwise bigM would be the most attractive connection
                 for s in self.__sources:
-                    self.__addEdge(s.idx-1, d.idx-1)
+                    self.__addEdge(s.idx-1, d.idx-1, -bigM if self.__objSense == 1 else None)
 
 
     #*********** __fixVariables  ************

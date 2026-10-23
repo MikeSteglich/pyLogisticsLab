@@ -416,12 +416,27 @@ class ScenarioSolver:
     def _tpp(self):
         S, D = self._role('sources', 'supplier'), self._role('destinations', 'customer')
         par = self.par
-        isMax = par.get('objSense', 'min') == 'max'
+        sense = par.get('objSense', 'min')
+        isMax, isMaxFlow = sense == 'max', sense == 'maxflow'
+        minBlock, maxBlock = par.get('minBlock'), par.get('maxBlock')
         if not isMax:
             kind = self._kind()
             C = self._costFactors(self._matrix(S, D, kind), D, kind)
         else:
             C = self._contributions(S, D)
+        R = C                                        # rates of the solution: costs or contributions per unit
+        if isMaxFlow:
+            # largest total quantity - among those the cheapest: weights 1 - a small share of the cost rate; the
+            # blocking applies to the cost rates, so it is done here
+            def blocked(c):
+                return c == 'M' or (minBlock is not None and c < minBlock) or (not unlimited(maxBlock) and c > maxBlock)
+            R = [ [ 'M' if blocked(c) else c for c in row ] for row in C ]
+            cMax = max([ c for row in R for c in row if c != 'M' ] or [1]) or 1
+            C = [ [ 'M' if c == 'M' else 1 - 1e-4 * c / cMax for c in row ] for row in R ]
+            minBlock = maxBlock = None
+            sense = 'max'
+            if par.get('useFixedCosts'):
+                self.warnings.append('objSense maxflow: the fixed costs are ignored')
         net = self.s.networks.get(self.problem.network) if self.problem.network else None
 
         def pairMatrix(attr, default):
@@ -437,24 +452,37 @@ class ScenarioSolver:
 
         payload = {'type': 'tpp', 'varCosts': C,
                    'supplies': [ n.supply for n in S ], 'demands': [ n.demand for n in D ],
-                   'objSense': par.get('objSense', 'min'), 'isSingleSource': par.get('isSingleSource', False),
-                   'minBlock': par.get('minBlock'), 'maxBlock': par.get('maxBlock'),
+                   'objSense': sense, 'isSingleSource': par.get('isSingleSource', False),
+                   'minBlock': minBlock, 'maxBlock': maxBlock,
                    'sourceNames': [ n.id for n in S ], 'destinationNames': [ n.id for n in D ], **self._common()}
         if par.get('useSupplyRanges'):
             payload['minSupplies'] = [ n.minSupply or 0 for n in S ]
             payload['maxSupplies'] = [ n.supply if n.maxSupply is None else n.maxSupply for n in S ]
+        elif isMaxFlow:
+            # largest quantity: supply and demand are upper bounds
+            payload['minSupplies'], payload['maxSupplies'] = [ 0 for _ in S ], [ n.supply for n in S ]
         if par.get('useDemandRanges'):
             payload['minDemands'] = [ n.minDemand or 0 for n in D ]
             payload['maxDemands'] = [ n.demand if n.maxDemand is None else n.maxDemand for n in D ]
+        elif isMaxFlow:
+            payload['minDemands'], payload['maxDemands'] = [ 0 for _ in D ], [ n.demand for n in D ]
         caps = None
         if par.get('useCapacities'):
             payload['capacities'] = caps = pairMatrix('capacity', 'M')
-        if par.get('useFixedCosts'):
+        if par.get('useFixedCosts') and not isMaxFlow:
             payload['fixedCosts'] = pairMatrix('fixedCost', 0)
 
         def results(r):
             flows = r['flows']
-            if isMax:
+            if isMaxFlow:
+                # the objective is the quantity - the costs of the cost rates of the used connections
+                used = [ (flows[i][j], R[i][j]) for i in range(len(S)) for j in range(len(D))
+                         if flows[i][j] > 1e-9 and R[i][j] != 'M' ]
+                varCosts = sum(f * c for f, c in used)
+                summary = {'totalFlow': sum(sum(row) for row in flows), 'totalCosts': varCosts, 'totalVarCosts': varCosts}
+                if used:
+                    summary.update(minCostRate=min(c for _, c in used), maxCostRate=max(c for _, c in used))
+            elif isMax:
                 # the rates are contributions: total contribution, after the fixed costs (objective), per unit
                 summary = {'totalContribution': r['totalVarCosts'], 'totalFixedCosts': r['totalFixedCosts'],
                            'netContribution': r['totalVarCosts'] - r['totalFixedCosts'], 'totalFlow': r['totalFlow'],
@@ -463,10 +491,11 @@ class ScenarioSolver:
                 summary = {k: r[k] for k in ('totalCosts', 'totalVarCosts', 'totalFixedCosts', 'totalFlow',
                                              'minCostRate', 'maxCostRate') if k in r}
             return {
+                **({'objVal': summary['totalFlow']} if isMaxFlow else {}),
                 'summary': summary,
                 'nodes': {**{ n.id: {'flow': f} for n, f in zip(S, r['sourceFlows']) },
                           **{ n.id: {'flow': f} for n, f in zip(D, r['destinationFlows']) }},
-                'assignments': [ {'from': S[i].id, 'to': D[j].id, 'flow': flows[i][j], 'rate': C[i][j],
+                'assignments': [ {'from': S[i].id, 'to': D[j].id, 'flow': flows[i][j], 'rate': R[i][j],
                                   **_utilization(flows[i][j], caps[i][j] if caps else None)}
                                  for i in range(len(S)) for j in range(len(D)) if flows[i][j] > 1e-9 ]}
         return payload, results
@@ -796,6 +825,25 @@ class ScenarioSolver:
                        'minCaps': minCaps, 'maxCaps': maxCaps, **nodeOptions, **self._common()}
             if par.get('useFixedCosts'):
                 payload['fixedCosts'] = [ e.fixedCost or 0 for e, *_ in arcs ]
+        elif par.get('endpoints', 'nodes') == 'roles':
+            # all suppliers -> all customers: an artificial source before the suppliers and an artificial sink after
+            # the customers, their edges are limited by supply and demand (empty: unlimited)
+            S, D = self._role('sources', 'supplier'), self._role('destinations', 'customer')
+            outside = [ n.id for n in S + D if n.id not in pos ]
+            if outside:
+                self.warnings.append(f'maxflow: not in the network, ignored: {", ".join(outside)}')
+            S, D = [ n for n in S if n.id in pos ], [ n for n in D if n.id in pos ]
+            if not S or not D:
+                raise ScenarioException(f'problem {self.problem.name}: maxflow needs suppliers and customers in the network')
+            source, sink = len(nodes), len(nodes) + 1
+            ends = [ (source, pos[n.id], n.supply) for n in S ] + [ (pos[n.id], sink, n.demand) for n in D ]
+            extend = lambda v, fill: None if v is None else v + [fill, fill]
+            payload = {'type': 'maxflow', 'edges': edges + [ [a, b] for a, b, _ in ends ], 'source': source, 'sink': sink,
+                       'maxCaps': maxCaps + [ 'M' if unlimited(c) else c for _, _, c in ends ],
+                       'minCaps': minCaps + [ 0 for _ in ends ], 'nrOfNodes': len(nodes) + 2,
+                       'maxSolvingTime': par.get('maxSolvingTime'),
+                       'nodeMinCaps': extend(nodeOptions['nodeMinCaps'], 0),
+                       'nodeMaxCaps': extend(nodeOptions['nodeMaxCaps'], None)}
         else:
             payload = {'type': 'maxflow', 'edges': edges, 'source': pos[self._node(par['source'], 'source').id],
                        'sink': pos[self._node(par['sink'], 'sink').id], 'maxCaps': maxCaps, 'minCaps': minCaps,
@@ -811,6 +859,14 @@ class ScenarioSolver:
                         entry['used'] = r['usages'][k]
                     out['edges'].append(entry)
             nodeResults = self._nodeResults(nodes, r)
+            if type == 'maxflow' and par.get('endpoints', 'nodes') == 'roles':
+                # quantity of the suppliers and customers: flows of the artificial edges
+                for (a, b, c), f in zip(ends, r['flows'][len(arcs):]):
+                    n, sends = (nodes[b], True) if a == source else (nodes[a], False)
+                    entry = nodeResults.setdefault(n.id, {})
+                    entry['flow'] = f
+                    if not unlimited(c) and c - f > 1e-9:
+                        entry['unusedSupply' if sends else 'unmetDemand'] = c - f
             if nodeResults:
                 out['nodes'] = nodeResults
             if self._summary(r):

@@ -189,7 +189,7 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 
 | `type` | Problem | liest | eigene Parameter |
 | --- | --- | --- | --- |
-| `tpp` | Transportproblem | `supplier` → `customer`, optional Netz | `objSense` (`min`, `max`, `minimax`), `isSingleSource`, `useFixedCosts`, `useCapacities`, `useSupplyRanges`, `useDemandRanges`, `minBlock`, `maxBlock` |
+| `tpp` | Transportproblem | `supplier` → `customer`, optional Netz | `objSense` (`min`, `max`, `maxflow`, `minimax`), `isSingleSource`, `useFixedCosts`, `useCapacities`, `useSupplyRanges`, `useDemandRanges`, `minBlock`, `maxBlock` |
 | `wlp` | Warehouse Location | `candidate` → `customer` | `isCapacitated` |
 | `pmedian` | p-Median | `candidate` → `customer` | `p` (Pflicht), `isCapacitated`, `isDemandWeighted` |
 | `pcentre` | p-Center | `candidate` → `customer` | wie `pmedian` |
@@ -201,11 +201,12 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 | `cpp` | Briefträgerproblem | Netz (Pflicht) | `startNode` |
 | `vrp` | Tourenplanung | `depot` + `customer`, `vehicles` | `depot`, `useTimeWindows`, `maxTime`, `maxDist` (je Route, in `units`), `capacities` (statt `vehicles`) |
 | `mincostflow` | Min-Cost-Flow | Netz (Pflicht) | `useFixedCosts`, `balance` |
-| `maxflow` | Maximaler Fluss | Netz (Pflicht) | `source`, `sink` (Knoten-IDs, Pflicht) |
+| `maxflow` | Maximaler Fluss | Netz (Pflicht) | `endpoints`: `nodes` (Standard) mit `source`, `sink` (Knoten-IDs) oder `roles`: von allen `supplier` zu allen `customer` – der Kern führt eine künstliche Quelle und Senke ein, `supply`/`demand` begrenzen deren Kanten (leer oder `M`: unbegrenzt) |
 | `multicommodity` | Mehrgüterfluss | Netz, `commodities` | `commodities` (Auswahl), `isInteger`, `balance` |
 | `multimodal` | multimodaler Fluss | Netz, `modes` | `balance` |
 | `multistagewlp` | mehrstufiges WLP | Netz: `supplier` → `candidate` (Lager) → … → `customer` | `isSingleSource`, `balance` |
 
+- **`objSense: maxflow`** beim TPP: größte transportierte Menge; Angebot und Nachfrage sind ohne Spannen Obergrenzen, unter gleich großen Mengen gewinnt die günstigste Verteilung. `minBlock`/`maxBlock` sperren nach Kostensatz, Fixkosten werden ignoriert. Zielwert ist `totalFlow`.
 - **`objSense: max`** beim TPP: Bewertet wird der Deckungsbeitrag je Einheit einer Verbindung = `price` des Kunden − `unitCost` des Anbieters − Transportkosten (aus `costPerKm`/`costPerHour`; ohne sie keine Transportkosten). Die Lösung gibt `totalContribution`, `totalFixedCosts`, `netContribution` (Zielwert: Deckungsbeitrag nach Fixkosten) und `minContributionRate`/`maxContributionRate`; `rate` der Verbindungen ist der Deckungsbeitrag je Einheit. Sinnvoll vor allem mit Spannen für Angebot oder Nachfrage.
 - **`balance`** bei Netzflüssen: `auto` (Standard) gleicht ungleiche Summen von Angebot und Nachfrage aus, nicht gelieferte Mengen kosten `shortageCost`; `exact` verlangt gleiche Summen.
 - **`isSingleSource`** bei `multistagewlp`: Wer von Lagern beliefert wird – Kunden und Lager späterer Stufen –, bekommt die Ware aus genau einem Lager.
