@@ -725,8 +725,10 @@ class ScenarioSolver:
                                'longestLeg': max((l['value'] for l in legs if l['value'] != 'M'), default=0)}}
             if self.problem.network and self.problem.networkMode == 'shortestPaths':
                 path = [route[0]]
-                for a, b in zip(route, route[1:]):
-                    path += self._path(a, b)[1:]
+                for leg, (a, b) in zip(legs, zip(route, route[1:])):
+                    # the way of the section through the network
+                    leg['path'] = self._path(a, b)
+                    path += leg['path'][1:]
                 out['routes'][0]['path'] = path
             return out
         return payload, results
