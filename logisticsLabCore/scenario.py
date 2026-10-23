@@ -297,6 +297,14 @@ class ScenarioSolver:
             raise ScenarioException(f'problem {self.problem.name}: no active nodes with role {role}')
         return nodes
 
+    def _required(self, nodes, attr, what):
+        """ every node needs a number in attr - else the nodes without it in the message """
+        missing = [ (f'{n.name} ({n.id})' if n.name else n.id) for n in nodes
+                    if not isinstance(getattr(n, attr), (int, float)) ]
+        if missing:
+            more = f' and {len(missing) - 5} more' if len(missing) > 5 else ''
+            raise ScenarioException(f'problem {self.problem.name}: {what} missing at {", ".join(missing[:5])}{more}')
+
     def _node(self, id, name):
         if id not in self.nodes:
             raise ScenarioException(f'problem {self.problem.name}: unknown or inactive {name} {id}')
@@ -422,6 +430,8 @@ class ScenarioSolver:
     def _tpp(self):
         S, D = self._role('sources', 'supplier'), self._role('destinations', 'customer')
         par = self.par
+        self._required(S, 'supply', 'supply')
+        self._required(D, 'demand', 'demand')
         sense = par.get('objSense', 'min')
         isMax, isMaxFlow = sense == 'max', sense == 'maxflow'
         minBlock, maxBlock = par.get('minBlock'), par.get('maxBlock')
