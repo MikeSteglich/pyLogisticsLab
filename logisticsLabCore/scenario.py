@@ -72,6 +72,8 @@ class Node(Item):
     fixed: bool = False                          # candidate: must be open
     assignedTo: Optional[str] = None             # customer: fixed assignment to a candidate
     costFactor: float = 1.0                      # customer: factor on its costs
+    price: Optional[float] = None                # customer: revenue per unit - tpp with objSense max
+    unitCost: Optional[float] = None             # supplier: costs per unit (production, purchase) - tpp max
     timeWindow: Optional[list[Optional[float]]] = None   # [earliest, latest] in units.time, latest null: open
     serviceTime: float = 0                       # in units.time
     minCap: float = 0                            # networks: minimal flow through the node (incl. own supply, demand)
@@ -406,9 +408,13 @@ class ScenarioSolver:
     #*********** transportation problem ************
     def _tpp(self):
         S, D = self._role('sources', 'supplier'), self._role('destinations', 'customer')
-        kind = self._kind()
-        C = self._costFactors(self._matrix(S, D, kind), D, kind)
         par = self.par
+        isMax = par.get('objSense', 'min') == 'max'
+        if not isMax:
+            kind = self._kind()
+            C = self._costFactors(self._matrix(S, D, kind), D, kind)
+        else:
+            C = self._contributions(S, D)
         net = self.s.networks.get(self.problem.network) if self.problem.network else None
 
         def pairMatrix(attr, default):
@@ -440,14 +446,41 @@ class ScenarioSolver:
 
         def results(r):
             flows = r['flows']
+            if isMax:
+                # the rates are contributions: total contribution, after the fixed costs (objective), per unit
+                summary = {'totalContribution': r['totalVarCosts'], 'totalFixedCosts': r['totalFixedCosts'],
+                           'netContribution': r['totalVarCosts'] - r['totalFixedCosts'], 'totalFlow': r['totalFlow'],
+                           'minContributionRate': r['minCostRate'], 'maxContributionRate': r['maxCostRate']}
+            else:
+                summary = {k: r[k] for k in ('totalCosts', 'totalVarCosts', 'totalFixedCosts', 'totalFlow',
+                                             'minCostRate', 'maxCostRate') if k in r}
             return {
-                'summary': {k: r[k] for k in ('totalCosts', 'totalVarCosts', 'totalFixedCosts', 'totalFlow',
-                                              'minCostRate', 'maxCostRate') if k in r},
+                'summary': summary,
                 'nodes': {**{ n.id: {'flow': f} for n, f in zip(S, r['sourceFlows']) },
                           **{ n.id: {'flow': f} for n, f in zip(D, r['destinationFlows']) }},
                 'assignments': [ {'from': S[i].id, 'to': D[j].id, 'flow': flows[i][j], 'rate': C[i][j]}
                                  for i in range(len(S)) for j in range(len(D)) if flows[i][j] > 1e-9 ]}
         return payload, results
+
+    def _contributions(self, S, D):
+        """ tpp max: contribution per unit of a connection = price of the customer - unit cost of the supplier -
+            transport costs (matrix with costPerKm/costPerHour; without them no transport costs) """
+        priced = any(n.price is not None for n in D) or any(n.unitCost is not None for n in S)
+        if not priced:
+            self.warnings.append('objSense max without price (customers) and unitCost (suppliers) - '
+                                 'the contribution is only the negative transport costs')
+        if self.opts.costPerKm or self.opts.costPerHour:
+            T = self._costFactors(self._matrix(S, D, 'costs'), D, 'costs')
+        else:
+            self.warnings.append('objSense max without costPerKm and costPerHour - no transport costs')
+            T = [ [ 0 for _ in D ] for _ in S ]
+            if self.problem.network:
+                # the network restricts the connections - its blocked pairs stay blocked
+                M = self._matrix(S, D, 'distances')
+                T = [ [ 'M' if v == 'M' else 0 for v in row ] for row in M ]
+        self.valueUnit = 'costs'
+        return [ [ 'M' if t == 'M' else (d.price or 0) - (s.unitCost or 0) - t for d, t in zip(D, row) ]
+                 for s, row in zip(S, T) ]
 
     #*********** discrete location and covering ************
     def _discrete(self, type):

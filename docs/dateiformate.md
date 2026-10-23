@@ -71,6 +71,8 @@ Ein Knoten kann mehrere Rollen haben, z. B. `["candidate", "depot", "transit"]`.
 | `fixed` | Ja/Nein | `false` | Standort muss offen sein – gespeichert, noch nicht ausgewertet |
 | `assignedTo` | Knoten-ID | – | feste Zuordnung eines Kunden – gespeichert, noch nicht ausgewertet |
 | `costFactor` | Zahl | `1` | Faktor auf die Kosten eines Kunden |
+| `price` | Zahl | – | Erlös je Einheit eines `customer` – TPP mit `objSense: max` |
+| `unitCost` | Zahl | – | Kosten je Einheit eines `supplier` (Herstellung, Einkauf) – TPP mit `objSense: max` |
 | `timeWindow` | `[frühest, spätest]` | – | Zeitfenster in `units.time` für `vrp`; `spätest` `null` = offen |
 | `serviceTime` | Zahl | `0` | Servicezeit in `units.time` für `vrp` |
 | `minCap`, `maxCap` | Zahl | `0`, unbegrenzt | Mindest- und Höchstdurchsatz in Netzflüssen, einschließlich eigenem Angebot und eigener Nachfrage |
@@ -204,6 +206,7 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 | `multimodal` | multimodaler Fluss | Netz, `modes` | `balance` |
 | `multistagewlp` | mehrstufiges WLP | Netz: `supplier` → `candidate` (Lager) → … → `customer` | `isSingleSource`, `balance` |
 
+- **`objSense: max`** beim TPP: Bewertet wird der Deckungsbeitrag je Einheit einer Verbindung = `price` des Kunden − `unitCost` des Anbieters − Transportkosten (aus `costPerKm`/`costPerHour`; ohne sie keine Transportkosten). Die Lösung gibt `totalContribution`, `totalFixedCosts`, `netContribution` (Zielwert: Deckungsbeitrag nach Fixkosten) und `minContributionRate`/`maxContributionRate`; `rate` der Verbindungen ist der Deckungsbeitrag je Einheit. Sinnvoll vor allem mit Spannen für Angebot oder Nachfrage.
 - **`balance`** bei Netzflüssen: `auto` (Standard) gleicht ungleiche Summen von Angebot und Nachfrage aus, nicht gelieferte Mengen kosten `shortageCost`; `exact` verlangt gleiche Summen.
 - **`isSingleSource`** bei `multistagewlp`: Wer von Lagern beliefert wird – Kunden und Lager späterer Stufen –, bekommt die Ware aus genau einem Lager.
 - **`isInteger`** bei `multicommodity`: ganzzahlige Flüsse als MIP; das LP ist beim Mehrgüterfluss im Allgemeinen nicht ganzzahlig.
