@@ -34,7 +34,7 @@ TO_S = {'s': 1, 'min': 60, 'h': 3600}
 Unlimited = Union[float, Literal['M'], None]
 
 PROBLEM_TYPES = ('tpp', 'wlp', 'pmedian', 'pcentre', 'scp', 'mcp', 'contpmedian', 'contpcentre', 'tsp', 'cpp', 'vrp',
-                 'mincostflow', 'maxflow', 'multicommodity', 'multimodal', 'multistagewlp')
+                 'mincostflow', 'maxflow', 'multicommodity', 'multimodal', 'multistagewlp', 'shortestpath')
 
 
 class ScenarioException(Exception):
@@ -962,6 +962,51 @@ class ScenarioSolver:
             summary['nrOfOpen'] = sum(1 for o in r['openNodes'] if o)
             out['summary'] = summary
             return out
+        return payload, results
+
+    def _shortestpath(self):
+        """ shortest way from startNode to endNode in the network - one unit as a min cost flow; the way as a route
+            with its sections like a tour """
+        nodes, pos, arcs = self._network('shortestpath')
+        kind = self._kind('distances')
+        par = self.par
+        name = lambda n: f'{n.name} ({n.id})' if n.name else n.id
+        start, end = self._node(par.get('startNode'), 'startNode'), self._node(par.get('endNode'), 'endNode')
+        for n in (start, end):
+            if n.id not in pos:
+                raise ScenarioException(f'problem {self.problem.name}: {name(n)} is no node of the network')
+        if start.id == end.id:
+            raise ScenarioException(f'problem {self.problem.name}: start and end are the same node')
+        # is there a way at all? (the edges in their direction)
+        succ = {}
+        for _, a, b, _, _ in arcs:
+            succ.setdefault(a, []).append(b)
+        seen, todo = {start.id}, [start.id]
+        while todo:
+            for b in succ.get(todo.pop(), []):
+                if b not in seen:
+                    seen.add(b)
+                    todo.append(b)
+        if end.id not in seen:
+            raise ScenarioException(f'problem {self.problem.name}: no way from {name(start)} to {name(end)} in the '
+                                    f'network - check the direction of the edges')
+        costs = [ self._value(kind, d, t) for _, _, _, d, t in arcs ]
+        payload = {'type': 'mincostflow', 'edges': [ [pos[a], pos[b]] for _, a, b, _, _ in arcs ], 'costs': costs,
+                   'supplies': [ 1 if n.id == start.id else 0 for n in nodes ],
+                   'demands': [ 1 if n.id == end.id else 0 for n in nodes ],
+                   'minCaps': [ 0 for _ in arcs ], 'maxCaps': [ 'M' for _ in arcs ], 'balance': 'exact',
+                   **self._common()}
+
+        def results(r):
+            used = { a: (b, costs[k]) for k, ((_, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])) if f > 0.5 }
+            path, legs = [start.id], []
+            while path[-1] != end.id and path[-1] in used and len(path) <= len(nodes):
+                b, v = used[path[-1]]
+                legs.append({'from': path[-1], 'to': b, 'value': v})
+                path.append(b)
+            length = sum(l['value'] for l in legs)
+            return {'objVal': length, 'routes': [ {'nodes': path, 'legs': legs} ],
+                    'summary': {'pathLength': length, 'nrOfLegs': len(legs)}}
         return payload, results
 
     def _mincostflow(self): return self._flows('mincostflow')

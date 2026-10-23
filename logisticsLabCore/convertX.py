@@ -328,6 +328,13 @@ def convertNwfx(data, id, source):
             e['minFlow'] = number(r['MinCap'])
         edges.append(e)
     problem = {'name': id, 'type': 'mincostflow', 'parameters': {'matrixMode': kind}, 'network': 'network'}
+    # one unit from one node to another: the shortest way (the way LogisticsLab 5 modelled it)
+    volumes = [ number(r.get('Volume')) or 0 for r in data['tables']['NODES'] ]
+    if sorted(v for v in volumes if v) == [-1, 1]:
+        start = next(n['id'] for n in nodes.nodes if n.get('supply') == 1)
+        end = next(n['id'] for n in nodes.nodes if n.get('demand') == 1)
+        problem = {'name': id, 'type': 'shortestpath', 'parameters': {'matrixMode': kind, 'startNode': start,
+                                                                       'endNode': end}, 'network': 'network'}
     return scenario(data, id, source, units, matrix, nodes, [problem], {'network': {'directed': True, 'edges': edges}})
 
 
