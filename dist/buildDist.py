@@ -323,11 +323,12 @@ STDIO_TSP = {"type": "tsp", "distances": [[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0
 STDIO_MSWLP = {"type": "multistagewlp", "edges": [[0, 1], [0, 2], [1, 3], [1, 4], [2, 3], [2, 4]],
                "costs": [1, 1, 1, 4, 4, 1], "supplies": [10, 0, 0, 0, 0], "demands": [0, 0, 0, 4, 6],
                "nodeFixedCosts": [0, 5, 3, 0, 0], "nodeMaxCaps": [None, 10, 10, None, None], "isSingleSource": True}
-# VRP mit Zeitfenster: Knoten 2 erst ab 60 - die Loesung muss den Zeitplan mit Wartezeit enthalten
+# VRP mit Zeitfenster: ein Fahrzeug, Knoten 1 bis 20, Knoten 2 erst ab 100 - eine Wartezeit laesst sich nicht durch
+# eine spaetere Abfahrt vermeiden, die Loesung muss den Zeitplan mit Wartezeit enthalten
 _VRP_D = [[0, 10, 20, 15, 12], [10, 0, 12, 9, 18], [20, 12, 0, 7, 25], [15, 9, 7, 0, 14], [12, 18, 25, 14, 0]]
-STDIO_VRP = {"type": "vrp", "distances": _VRP_D, "times": _VRP_D, "demands": [0, 3, 4, 5, 6], "capacities": [10, 10],
-             "serviceTimes": [0, 5, 5, 5, 5], "timeWindows": [[0, 480], [0, 480], [60, 120], [0, 480], [30, 90]],
-             "maxWaitingTime": 60, "maxSolvingTime": 2}
+STDIO_VRP = {"type": "vrp", "distances": _VRP_D, "times": _VRP_D, "demands": [0, 3, 4, 5, 6], "capacities": [20],
+             "serviceTimes": [0, 5, 5, 5, 5], "timeWindows": [[0, 480], [0, 20], [100, 140], [0, 480], [0, 480]],
+             "maxSolvingTime": 2}
 
 
 def stdio_test(cmd, env, cwd, problems):
