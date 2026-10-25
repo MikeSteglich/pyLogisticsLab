@@ -877,8 +877,10 @@ class ScenarioSolver:
         for v in self.s.vehicles:
             count = v.count if v.count is not None else max(len(customers) // (2 if pdp else 1), 1)
             capacities += [v.capacity] * count
-            vehicleIds += [v.id] if count == 1 else [ f'{v.id}{k+1}' for k in range(count) ]
-            vehicleTypes += [ (v.id, v.count is None) ] * count
+            # the routes are named after the vehicles - their names, else their ids
+            label = v.name or v.id
+            vehicleIds += [label] if count == 1 else [ f'{label}{k+1}' for k in range(count) ]
+            vehicleTypes += [ (label, v.count is None) ] * count
         if 'capacities' in par:
             capacities = par['capacities']
             vehicleIds = [ f'V{k+1}' for k in range(len(capacities)) ]
