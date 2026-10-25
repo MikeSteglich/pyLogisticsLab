@@ -771,13 +771,54 @@ class ScenarioSolver:
             weights.append(self._value(kind, D[i][j], T[i][j]))
             types.append(0 if (net.directed if e.directed is None else e.directed) else 1)
         start = self.par.get('startNode', ids[0])
+        startNode = self._node(start, 'startNode')
+        if startNode.id not in pos:
+            raise ScenarioException(f'problem {self.problem.name}: start {startNode.name or startNode.id} is no node of the network')
+        # every edge must be reachable from the start and the start from every edge (directed edges one way)
+        succ, pred = {}, {}
+        for (i, j), t in zip(edges, types):
+            for a, b in ((i, j), (j, i)) if t == 1 else ((i, j),):
+                succ.setdefault(a, set()).add(b)
+                pred.setdefault(b, set()).add(a)
+        def reach(graph, frm):
+            seen, todo = {frm}, [frm]
+            while todo:
+                for b in graph.get(todo.pop(), ()):
+                    if b not in seen:
+                        seen.add(b)
+                        todo.append(b)
+            return seen
+        s0 = pos[startNode.id]
+        there, back = reach(succ, s0), reach(pred, s0)
+        name = lambda k: nodes[k].name or nodes[k].id
+        cut = [ k for k in range(len(ids)) if k not in there or k not in back ]
+        if cut:
+            k = cut[0]
+            way = f'from the start {name(s0)} to {name(k)}' if k not in there else \
+                f'from {name(k)} back to the start {name(s0)}'
+            raise ScenarioException(f'problem {self.problem.name}: no way {way} - check the direction of the edges')
         payload = {'type': 'cpp', 'edges': edges, 'edgeWeights': weights, 'edgeTypes': types,
-                   'startNode': pos[self._node(start, 'startNode').id], **self._common()}
+                   'startNode': s0, **self._common()}
 
         def results(r):
-            return {'routes': [ {'nodes': [ ids[i] for i in r['eulerTour'] ]} ],
+            tour = [ ids[i] for i in r['eulerTour'] ]
+            # value of a section: the cheapest edge between its nodes in its direction
+            values = {}
+            for e, (i, j), t, w in zip(net.edges, edges, types, weights):
+                for a, b in ((i, j), (j, i)) if t == 1 else ((i, j),):
+                    key = (ids[a], ids[b])
+                    values[key] = min(values.get(key, w), w)
+            legs = [ {'from': a, 'to': b, 'value': values.get((a, b), 0)} for a, b in zip(tour, tour[1:]) ]
+            length = sum(l['value'] for l in legs)
+            edgesLength = sum(weights)
+            usages = r['edgeUsages']
+            return {'objVal': length,
+                    'routes': [ {'nodes': tour, 'legs': legs} ],
                     'edges': [ {'from': e.from_, 'to': e.to, 'usages': u, 'value': w}
-                               for e, u, w in zip(net.edges, r['edgeUsages'], weights) ]}
+                               for e, u, w in zip(net.edges, usages, weights) ],
+                    'summary': {'tourLength': length, 'edgesLength': edgesLength,
+                                'extraLength': length - edgesLength, 'nrOfEdges': len(net.edges),
+                                'nrOfRepeats': sum(max(u - 1, 0) for u in usages)}}
         return payload, results
 
     def _vrp(self):
