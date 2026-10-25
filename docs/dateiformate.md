@@ -200,7 +200,7 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 | `contpcentre` | kontinuierliches p-Center | `customer` | wie `contpmedian` |
 | `tsp` | Rundreise oder Durchfahrt | alle Knoten, optional Netz | `tourType`: `round` (zurück zum Start), `path` (Durchfahrt von `startNode` nach `endNode`), `open` (offenes Ende), `openStart` (offener Anfang, nur `endNode`), `free` (komplett offen); ohne `tourType` `startNode`, `endNode` (Knoten-ID; `null` = offener Start bzw. offenes Ende); `matrixMode` |
 | `cpp` | Briefträgerproblem | Netz (Pflicht) | `startNode` |
-| `vrp` | Tourenplanung | `depot` + `customer`, `vehicles` | `depot`, `useTimeWindows`, `maxTime` (Höchstdauer je Route vom Start bis zur Rückkehr), `maxDist` (je Route, in `units`), `capacities` (statt `vehicles`) |
+| `vrp` | Tourenplanung | `depot` + `customer`, `vehicles` | `depot`, `useTimeWindows`, `fixedStart` (alle Routen beginnen zum Start der Einsatzzeit des Depots, sonst so spät wie möglich ohne Warten), `maxTime` (Höchstdauer je Route vom Start bis zur Rückkehr), `maxDist` (je Route, in `units`), `capacities` (statt `vehicles`) |
 | `mincostflow` | Min-Cost-Flow | Netz (Pflicht) | `useFixedCosts`, `balance` |
 | `shortestpath` | Kürzester Weg | Netz (Pflicht) | `startNode`, `endNode` (Knoten-IDs), `matrixMode`; Kanten je einzeln gerichtet (`directed`) – Ergebnis wie beim TSP: `routes` mit `legs`, `summary` mit `pathLength`, `nrOfLegs` |
 | `maxflow` | Maximaler Fluss | Netz (Pflicht) | `endpoints`: `nodes` (Standard) mit `source`, `sink` (Knoten-IDs) oder `roles`: von allen `supplier` zu allen `customer` – der Kern führt eine künstliche Quelle und Senke ein, `supply`/`demand` begrenzen deren Kanten (leer oder `M`: unbegrenzt) |

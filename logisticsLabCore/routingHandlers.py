@@ -136,6 +136,8 @@ class VrpHandler(ProblemHandler):
             if d.maxWaitingTime is not None:
                 self.__problem.setMaxWaitingTime(int(d.maxWaitingTime))
             self.__problem.setMaxSolvingTime(int(self._maxSolvingTime(d.maxSolvingTime)))
+            if d.fixedStart:
+                self.__problem.setFixedStart(True)
             if d.vehicleFixedCost:
                 self.__problem.setVehicleFixedCost(int(d.vehicleFixedCost))
         except ll.LogLabException as e:

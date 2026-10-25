@@ -45,6 +45,7 @@ class Vrp(object):
 
         self.__maxSolvingTime = 3
         self.__maxWaitingTimeSet = None   # maximal waiting before a time window - None: the horizon
+        self.__fixedStart = False     # True: every route starts at the start of the time window of the depot
         self.__vehicleFixedCost = 0   # > 0: costs of every used vehicle - the number of routes is minimised first
 
         if self.__time_matrix:
@@ -214,18 +215,23 @@ class Vrp(object):
                         index = self.__manager.NodeToIndex(location_idx)
                         time_dimension.CumulVar(index).SetRange(time_window[0], min(time_window[1], horizon))
 
-                    # time window of the depot: the start of the routes and their latest return
+                    # time window of the depot: the start of the routes and their latest return - with a fixed start
+                    # every route starts at the beginning of the window (waiting at the customers if needed)
                     depot_tw = self.__time_windows[self.__depot]
                     for vehicle_id in range(self.__num_vehicles):
-                        for index in (self.__routing.Start(vehicle_id), self.__routing.End(vehicle_id)):
-                            time_dimension.CumulVar(index).SetRange(depot_tw[0], min(depot_tw[1], horizon))
+                        start, end = self.__routing.Start(vehicle_id), self.__routing.End(vehicle_id)
+                        if self.__fixedStart:
+                            time_dimension.CumulVar(start).SetRange(depot_tw[0], depot_tw[0])
+                        else:
+                            time_dimension.CumulVar(start).SetRange(depot_tw[0], min(depot_tw[1], horizon))
+                        time_dimension.CumulVar(end).SetRange(depot_tw[0], min(depot_tw[1], horizon))
 
                     # first the routes end as early as possible, then they start as late as possible - no waiting at
                     # the depot (the finalizer fixes the variables in this order)
                     for i in range(self.__num_vehicles):
                         self.__routing.AddVariableMinimizedByFinalizer(
                                 time_dimension.CumulVar(self.__routing.End(i)))
-                    for i in range(self.__num_vehicles):
+                    for i in range(self.__num_vehicles if not self.__fixedStart else 0):
                         self.__routing.AddVariableMaximizedByFinalizer(
                                 time_dimension.CumulVar(self.__routing.Start(i)))
 
@@ -287,6 +293,10 @@ class Vrp(object):
 
     def setMaxSolvingTime(self, maxTime):
         self.__maxSolvingTime = maxTime
+
+    def setFixedStart(self, fixed=True):
+        """ every route starts at the start of the time window of the depot - otherwise as late as possible """
+        self.__fixedStart = fixed
 
     def setVehicleFixedCost(self, cost):
         """ costs of every used vehicle - larger than any distance saved: as few routes as possible, then the

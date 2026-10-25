@@ -147,6 +147,7 @@ class VrpItem(MatrixOptions):
     maxWaitingTime: Optional[int] = None
     maxSolvingTime: Optional[int] = 10          # search time of OR-Tools in seconds
     vehicleFixedCost: Optional[int] = None      # costs of every used vehicle - large: as few routes as possible
+    fixedStart: Optional[bool] = False          # every route starts at the start of the time window of the depot
 
 class FlowOptions(LogLabItem):
     """ network flow problems - nodes are 0-based indices, capacities null or "M" mean unlimited """

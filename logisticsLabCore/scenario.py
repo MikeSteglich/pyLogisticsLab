@@ -862,7 +862,8 @@ class ScenarioSolver:
         fixed = sum(max(round(v) for v in row) for row in D) * 2 + 1 if auto and 'capacities' not in par else None
         payload = {'type': 'vrp', 'distances': [ [ round(v) for v in row ] for row in D ],
                    'demands': [0] + [ n.demand or 0 for n in customers ], 'capacities': capacities, 'depot': 0,
-                   'maxSolvingTime': par.get('maxSolvingTime'), 'vehicleFixedCost': fixed}
+                   'maxSolvingTime': par.get('maxSolvingTime'), 'vehicleFixedCost': fixed,
+                   'fixedStart': bool(par.get('fixedStart', False))}
         # the times always - the solution contains the travel and waiting times of the routes
         payload['times'] = [ [ round(v) for v in row ] for row in T ]
         payload['serviceTimes'] = [ round(n.serviceTime * ts) for n in nodes ]
