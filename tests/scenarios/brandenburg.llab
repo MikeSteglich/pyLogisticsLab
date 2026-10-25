@@ -43,6 +43,20 @@
         { "from": "D2", "to": "P", "fixedCost": 40, "modes": { "truck": {} } },
         { "from": "D2", "to": "B", "fixedCost": 60, "modes": { "truck": {} } }
       ]
+    },
+    "Straßen": {
+      "directed": false,
+      "edges": [
+        { "from": "W", "to": "P" },
+        { "from": "W", "to": "D1" },
+        { "from": "W", "to": "D2" },
+        { "from": "D2", "to": "P" },
+        { "from": "P", "to": "B" },
+        { "from": "B", "to": "D1", "directed": true },
+        { "from": "D1", "to": "F" },
+        { "from": "D1", "to": "C" },
+        { "from": "F", "to": "C" }
+      ]
     }
   },
 
@@ -71,6 +85,9 @@
     { "name": "Lkw oder Bahn", "type": "multimodal", "network": "supply" },
     { "name": "Lager mehrstufig", "type": "multistagewlp", "network": "supply" },
     { "name": "Lager mehrstufig, single source", "type": "multistagewlp", "network": "supply",
-      "parameters": { "isSingleSource": true } }
+      "parameters": { "isSingleSource": true } },
+    { "name": "Straßenreinigung ab Wildau", "type": "cpp", "network": "Straßen", "parameters": { "startNode": "D1" } },
+    { "name": "Weg nach Cottbus", "type": "shortestpath", "network": "Straßen",
+      "parameters": { "startNode": "D2", "endNode": "C" } }
   ]
 }
