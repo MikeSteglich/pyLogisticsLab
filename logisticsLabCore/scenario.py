@@ -913,6 +913,13 @@ class ScenarioSolver:
                 for j, (a, b) in enumerate(zip(route, route[1:])):
                     leg = {'from': nodes[a].id, 'to': nodes[b].id, 'value': D[a][b] / dm,
                            'amount': nodes[b].demand or 0 if b != 0 else 0}
+                    # the schedule of the section: departure at its start (after the service there), travel time,
+                    # arrival, waiting and service at its end
+                    if entry.get('times') and entry.get('serviceTimes'):
+                        leg['departure'] = entry['times'][j] + entry['serviceTimes'][j]
+                        leg['service'] = entry['serviceTimes'][j + 1]
+                    if entry.get('travelTimes'):
+                        leg['travel'] = entry['travelTimes'][j + 1]
                     if entry.get('arrivals'):
                         leg['arrival'] = entry['arrivals'][j + 1]
                     if entry.get('waitingTimes'):
