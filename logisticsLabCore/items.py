@@ -146,6 +146,7 @@ class VrpItem(MatrixOptions):
     maxDist: Optional[int] = None               # maximal distance of a route
     maxWaitingTime: Optional[int] = None
     maxSolvingTime: Optional[int] = 10          # search time of OR-Tools in seconds
+    vehicleFixedCost: Optional[int] = None      # costs of every used vehicle - large: as few routes as possible
 
 class FlowOptions(LogLabItem):
     """ network flow problems - nodes are 0-based indices, capacities null or "M" mean unlimited """

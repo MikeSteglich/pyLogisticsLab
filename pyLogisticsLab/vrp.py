@@ -44,6 +44,7 @@ class Vrp(object):
         self.__maxWaitingTime = 30
 
         self.__maxSolvingTime = 3
+        self.__vehicleFixedCost = 0   # > 0: costs of every used vehicle - the number of routes is minimised first
 
         if self.__time_matrix:
             self.__isTimeMatrix = True
@@ -109,7 +110,9 @@ class Vrp(object):
 
     def getSolutionData(self):
         
-        self.__objValue = self.__solution.ObjectiveValue()
+        # the objective without the fixed costs of the vehicles: the distance
+        used = sum(1 for v in range(self.__num_vehicles) if self.__routing.IsVehicleUsed(self.__solution, v))
+        self.__objValue = self.__solution.ObjectiveValue() - self.__vehicleFixedCost * used
 
         if self.__isTimeWindow or self.__isMaxTime:
             time_dimension = self.__routing.GetDimensionOrDie('Time')
@@ -170,6 +173,8 @@ class Vrp(object):
 
             dist_callback_index = self.__routing.RegisterTransitCallback(self.distance_callback)
             self.__routing.SetArcCostEvaluatorOfAllVehicles(dist_callback_index)
+            if self.__vehicleFixedCost > 0:
+                self.__routing.SetFixedCostOfAllVehicles(self.__vehicleFixedCost)
 
             if self.__isMaxDist:
                 dist = 'Dist'
@@ -269,6 +274,11 @@ class Vrp(object):
 
     def setMaxSolvingTime(self, maxTime):
         self.__maxSolvingTime = maxTime
+
+    def setVehicleFixedCost(self, cost):
+        """ costs of every used vehicle - larger than any distance saved: as few routes as possible, then the
+            shortest total distance """
+        self.__vehicleFixedCost = int(cost)
 
     def useTimeWindows(self, tw = True):
         self.__isTimeWindow = tw

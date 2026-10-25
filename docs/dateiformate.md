@@ -123,7 +123,7 @@ Fahrzeuge braucht nur `vrp`, Güter nur `multicommodity`, Verkehrsträger nur `m
 | `id` | Text | Pflicht | Name; bei `count` > 1 heißen die Fahrzeuge in der Lösung `<id>1`, `<id>2` … |
 | `name` | Text | – | Bezeichnung für die Anzeige |
 | `capacity` | Zahl | Pflicht | Kapazität eines Fahrzeugs |
-| `count` | Zahl | `1` | Anzahl |
+| `count` | Zahl | automatisch | Anzahl; fehlt sie, stehen so viele Fahrzeuge wie Kunden bereit und der Solver minimiert zuerst die Zahl der Touren, dann die Strecke |
 | `depot` | Knoten-ID | – | Depot; sonst Parameter `depot` oder der einzige Knoten mit Rolle `depot` |
 
 **Güter** (`commodities`) – Standardwerte für alle Kanten; an einer Kante unter `commodities` abweichend:

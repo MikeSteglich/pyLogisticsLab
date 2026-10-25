@@ -60,7 +60,7 @@
     }
   },
 
-  "vehicles": [ { "id": "LKW", "capacity": 60, "count": 2, "depot": "D1" } ],
+  "vehicles": [ { "id": "LKW", "capacity": 60, "depot": "D1" } ],
 
   "commodities": [
     { "id": "food", "name": "Lebensmittel", "costPerKm": 0.5 },

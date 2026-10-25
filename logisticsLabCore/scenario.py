@@ -144,7 +144,7 @@ class Vehicle(Item):
     id: str
     name: Optional[str] = None
     capacity: float
-    count: int = 1
+    count: Optional[int] = None                  # None: automatic - as many as needed, as few routes as possible
     depot: Optional[str] = None
 
 class Units(Item):
@@ -838,10 +838,14 @@ class ScenarioSolver:
         ts = TO_S[self.s.units.time]
         par = self.par
         useTW = par.get('useTimeWindows', any(n.timeWindow for n in customers))
-        capacities, vehicleIds = [], []
+        capacities, vehicleIds, vehicleTypes = [], [], []
+        # a vehicle without a count: as many as there are customers - the solver uses as few as possible
+        auto = any(v.count is None for v in self.s.vehicles)
         for v in self.s.vehicles:
-            capacities += [v.capacity] * v.count
-            vehicleIds += [v.id] if v.count == 1 else [ f'{v.id}{k+1}' for k in range(v.count) ]
+            count = v.count if v.count is not None else max(len(customers), 1)
+            capacities += [v.capacity] * count
+            vehicleIds += [v.id] if count == 1 else [ f'{v.id}{k+1}' for k in range(count) ]
+            vehicleTypes += [ (v.id, v.count is None) ] * count
         if 'capacities' in par:
             capacities = par['capacities']
             vehicleIds = [ f'V{k+1}' for k in range(len(capacities)) ]
@@ -854,9 +858,11 @@ class ScenarioSolver:
             raise ScenarioException(f'problem {self.problem.name}: the demand {n.demand:g} of {n.name or n.id} is larger '
                                     f'than the largest vehicle ({max(capacities):g})')
         # OR-Tools needs integers - meters and seconds
+        # costs of a vehicle larger than any distance: the number of routes first, then the distance
+        fixed = sum(max(round(v) for v in row) for row in D) * 2 + 1 if auto and 'capacities' not in par else None
         payload = {'type': 'vrp', 'distances': [ [ round(v) for v in row ] for row in D ],
                    'demands': [0] + [ n.demand or 0 for n in customers ], 'capacities': capacities, 'depot': 0,
-                   'maxSolvingTime': par.get('maxSolvingTime')}
+                   'maxSolvingTime': par.get('maxSolvingTime'), 'vehicleFixedCost': fixed}
         # the times always - the solution contains the travel and waiting times of the routes
         payload['times'] = [ [ round(v) for v in row ] for row in T ]
         payload['serviceTimes'] = [ round(n.serviceTime * ts) for n in nodes ]
@@ -874,11 +880,19 @@ class ScenarioSolver:
 
         def results(r):
             routes = []
+            used = {}                                # automatic vehicles: numbered in the order of their routes
             for k, route in enumerate(r['routes']):
                 if len(route) <= 2:
                     continue
-                entry = {'vehicle': vehicleIds[k], 'nodes': [ nodes[i].id for i in route ],
-                         'load': sum(r['routeLoads'][k]), 'distance': r['routeDistances'][k][-1] / dm}
+                name = vehicleIds[k]
+                if k < len(vehicleTypes) and vehicleTypes[k][1]:
+                    base = vehicleTypes[k][0]
+                    used[base] = used.get(base, 0) + 1
+                    name = f'{base}{used[base]}'
+                # the distance of the route from its sections - the costs of the solver contain fixed costs
+                entry = {'vehicle': name, 'nodes': [ nodes[i].id for i in route ],
+                         'load': sum(r['routeLoads'][k]),
+                         'distance': sum(D[a][b] for a, b in zip(route, route[1:])) / dm}
                 if r.get('routeTimes'):
                     # schedule per node of the route and the totals of the route, in units.time
                     for key, name in (('routeArrivals', 'arrivals'), ('routeTimes', 'times'),
@@ -900,7 +914,7 @@ class ScenarioSolver:
                         leg['waiting'] = entry['waitingTimes'][j + 1]
                     entry['legs'].append(leg)
                 routes.append(entry)
-            summary = {'totalDistance': r['objVal'] / dm, 'nrOfRoutes': len(routes), 'nrOfVehicles': len(capacities),
+            summary = {'totalDistance': r['objVal'] / dm, 'nrOfRoutes': len(routes), 'nrOfVehicles': len(capacities) if not fixed else None,
                        'totalLoad': sum(e['load'] for e in routes),
                        'longestRoute': max((e['distance'] for e in routes), default=0)}
             if routes and 'duration' in routes[0]:
