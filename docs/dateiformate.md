@@ -40,7 +40,7 @@ Pflicht sind nur `id` und `nodes`; alles andere hat einen Standard.
 | `modes` | Liste | `[]` | Verkehrsträger für `multimodal` |
 | `problems` | Liste | `[]` | Probleme, die auf diesen Daten gerechnet werden |
 
-Beim Einlesen wird geprüft: Knoten-IDs sind eindeutig; Kanten, `assignedTo`, `depot` und `network` verweisen nur auf vorhandene Knoten bzw. Netze; Güter und Verkehrsträger an Knoten und Kanten sind im Szenario definiert. Ein Fehler nennt die Stelle.
+Beim Einlesen wird geprüft: Knoten-IDs sind eindeutig; Kanten, `assignedTo`, `deliveryTo`, `depot` und `network` verweisen nur auf vorhandene Knoten bzw. Netze; Güter und Verkehrsträger an Knoten und Kanten sind im Szenario definiert. Ein Fehler nennt die Stelle.
 
 ## Knoten
 
@@ -51,7 +51,9 @@ Jeder Knoten hat eine eindeutige `id` und Koordinaten `[lat, lon]` in Grad; sein
 | `supplier` | Anbieter mit Angebot | `tpp`, Netzflüsse, `multistagewlp` |
 | `customer` | Kunde mit Nachfrage | alle Transport-, Standort- und Tourenprobleme, Netzflüsse |
 | `candidate` | möglicher Standort bzw. Lager | `wlp`, `pmedian`, `pcentre`, `scp`, `mcp`, `multistagewlp` |
-| `depot` | Depot der Fahrzeuge | `vrp` |
+| `depot` | Depot der Fahrzeuge | `vrp`, `pdp` |
+| `pickup` | Abholort: holt `amount` ab und bringt es zu `deliveryTo` | `pdp` |
+| `delivery` | Zustellort | `pdp` |
 | `transit` | Umschlagknoten ohne Angebot und Nachfrage | Netzflüsse (Kennzeichnung) |
 
 Ein Knoten kann mehrere Rollen haben, z. B. `["candidate", "depot", "transit"]`. Welche Rolle ein Problem als Quelle oder Ziel liest, lässt sich mit dem Parameter `roles` umstellen: `"roles": {"sources": "depot", "destinations": "customer"}`.
@@ -74,7 +76,9 @@ Ein Knoten kann mehrere Rollen haben, z. B. `["candidate", "depot", "transit"]`.
 | `price` | Zahl | – | Erlös je Einheit eines `customer` – TPP mit `objSense: max` |
 | `unitCost` | Zahl | – | Kosten je Einheit eines `supplier` (Herstellung, Einkauf) – TPP mit `objSense: max` |
 | `timeWindow` | `[frühest, spätest]` | – | Zeitfenster für `vrp` als Uhrzeit in `units.time` ab 0:00 (bei `min`: 480 = 08:00); `spätest` `null` = offen. Am Depot: Start der Touren und späteste Rückkehr – gilt auch ohne `useTimeWindows` |
-| `serviceTime` | Zahl | `0` | Servicezeit in `units.time` für `vrp` |
+| `serviceTime` | Zahl | `0` | Servicezeit in `units.time` für `vrp` und `pdp` |
+| `amount` | Zahl | – | Abholort (`pdp`): abzuholende Menge |
+| `deliveryTo` | Knoten-ID | – | Abholort (`pdp`): Zustellort der Menge – ein Knoten mit Rolle `delivery`; mehrere Abholorte dürfen denselben Zustellort haben |
 | `minCap`, `maxCap` | Zahl | `0`, unbegrenzt | Mindest- und Höchstdurchsatz in Netzflüssen, einschließlich eigenem Angebot und eigener Nachfrage |
 | `shortageCost` | Zahl | `0` | Kosten je nicht gelieferter Einheit bei `balance: auto` |
 | `supplies`, `demands` | Objekt Gut → Zahl | – | Angebot und Nachfrage je Gut für `multicommodity` |
@@ -114,7 +118,7 @@ Ein Netz legt die erlaubten Verbindungen zwischen Knoten fest; Länge und Fahrze
 
 ## Fahrzeuge, Güter und Verkehrsträger
 
-Fahrzeuge braucht nur `vrp`, Güter nur `multicommodity`, Verkehrsträger nur `multimodal`.
+Fahrzeuge brauchen nur `vrp` und `pdp`, Güter nur `multicommodity`, Verkehrsträger nur `multimodal`.
 
 **Fahrzeuge** (`vehicles`) – je Eintrag ein Fahrzeugtyp:
 
@@ -200,6 +204,7 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 | `contpcentre` | kontinuierliches p-Center | `customer` | wie `contpmedian` |
 | `tsp` | Rundreise oder Durchfahrt | alle Knoten, optional Netz | `tourType`: `round` (zurück zum Start), `path` (Durchfahrt von `startNode` nach `endNode`), `open` (offenes Ende), `openStart` (offener Anfang, nur `endNode`), `free` (komplett offen); ohne `tourType` `startNode`, `endNode` (Knoten-ID; `null` = offener Start bzw. offenes Ende); `matrixMode` |
 | `cpp` | Briefträgerproblem | Netz (Pflicht) | `startNode` |
+| `pdp` | Pickup and Delivery: jede Menge wird auf derselben Tour erst abgeholt, dann zugestellt; die Ladung bleibt unter der Kapazität | `depot` + `pickup` (mit `amount`, `deliveryTo`) + `delivery`, `vehicles` | wie `vrp`; in den Ergebnissen je Abschnitt `amount` (+ Abholung, − Zustellung) und `load` (Ladung danach), je Route `maxLoad`; `load` ist die abgeholte Menge, `utilization` bezieht sich auf `maxLoad` |
 | `vrp` | Tourenplanung | `depot` + `customer`, `vehicles` | `depot`, `useTimeWindows`, `fixedStart` (alle Routen beginnen zum Start der Einsatzzeit des Depots, sonst so spät wie möglich ohne Warten), `maxTime` (Höchstdauer je Route vom Start bis zur Rückkehr), `maxDist` (je Route, in `units`), `capacities` (statt `vehicles`) |
 | `mincostflow` | Min-Cost-Flow | Netz (Pflicht) | `useFixedCosts`, `balance` |
 | `shortestpath` | Kürzester Weg | Netz (Pflicht) | `startNode`, `endNode` (Knoten-IDs), `matrixMode`; Kanten je einzeln gerichtet (`directed`) – Ergebnis wie beim TSP: `routes` mit `legs`, `summary` mit `pathLength`, `nrOfLegs` |
@@ -242,7 +247,7 @@ Eine `.llsol`-Datei ist eine JSON-Liste mit einem Lösungsdokument je gelöstem 
 | `summary` | Kennzahlen, z. B. `nrOfOpen`, `totalVarCosts`, `totalFixedCosts`, `totalOpeningCosts`, `nrOfRoutes` | je nach Typ |
 | `nodes` | Objekt Knoten-ID → Werte: `open`, `load`, `flow`, `unusedSupply`, `unmetDemand`, bei Knotenkapazität (`maxCap`, Lager: `capacity`) `capacity` und `utilization` (Durchsatz / Kapazität), bei kontinuierlichen Standorten `F1 … Fp` mit `coordinates` | Standortprobleme, Netzflüsse, `multistagewlp` |
 | `assignments` | Liste `{from, to, flow, …}`, bei Transport mit `rate` und mit Kapazitäten (`useCapacities`) `capacity`/`utilization`, bei Standorten mit `value` bzw. `distance` | `tpp`, Standort- und Covering-Probleme |
-| `routes` | je Fahrzeug `vehicle`, `nodes`, `load`, `distance`; beim TSP die Abschnitte `legs` (`from`, `to`, `value` in `valueUnit`) und `summary` mit `tourLength`, `nrOfNodes`, `longestLeg`; beim VRP je Route die Abschnitte `legs` (mit `arrival`, `waiting`), `summary` mit `totalDistance`, `nrOfRoutes`, `nrOfVehicles`, `totalLoad`, `longestRoute`, `longestDuration` und der Zeitplan `arrivals`, `waitingTimes`, `times`, `serviceTimes`, `travelTimes` und die Summen `travelTime`, `waitingTime`, `serviceTime`, `duration` | `tsp`, `shortestpath`, `vrp`, `cpp` |
+| `routes` | je Fahrzeug `vehicle`, `nodes`, `load`, `distance`; beim TSP die Abschnitte `legs` (`from`, `to`, `value` in `valueUnit`) und `summary` mit `tourLength`, `nrOfNodes`, `longestLeg`; beim VRP je Route die Abschnitte `legs` (mit `arrival`, `waiting`), `summary` mit `totalDistance`, `nrOfRoutes`, `nrOfVehicles`, `totalLoad`, `longestRoute`, `longestDuration` und der Zeitplan `arrivals`, `waitingTimes`, `times`, `serviceTimes`, `travelTimes` und die Summen `travelTime`, `waitingTime`, `serviceTime`, `duration` | `tsp`, `shortestpath`, `vrp`, `pdp`, `cpp` |
 | `edges` | Liste `{from, to, flow, rate, used}`, bei mehreren Gütern `flows` je Gut, bei mehreren Verkehrsträgern `modes`; bei begrenzter Kapazität `capacity` und `utilization` (genutzter Anteil; mehrere Güter mit ihren `capacityFactor`, mehrere Verkehrsträger: der am stärksten ausgelastete) | Netzflüsse, `multistagewlp` |
 | `solvingTime` | Rechenzeit in Sekunden | alle |
 | `native` | die unveränderte Antwort des Kerns (Indizes, Einheiten der Anfrage) | alle |

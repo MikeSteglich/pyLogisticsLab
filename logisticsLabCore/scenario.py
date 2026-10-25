@@ -33,7 +33,7 @@ TO_M = {'m': 1, 'km': 1000}
 TO_S = {'s': 1, 'min': 60, 'h': 3600}
 Unlimited = Union[float, Literal['M'], None]
 
-PROBLEM_TYPES = ('tpp', 'wlp', 'pmedian', 'pcentre', 'scp', 'mcp', 'contpmedian', 'contpcentre', 'tsp', 'cpp', 'vrp',
+PROBLEM_TYPES = ('tpp', 'wlp', 'pmedian', 'pcentre', 'scp', 'mcp', 'contpmedian', 'contpcentre', 'tsp', 'cpp', 'vrp', 'pdp',
                  'mincostflow', 'maxflow', 'multicommodity', 'multimodal', 'multistagewlp', 'shortestpath')
 
 
@@ -59,7 +59,7 @@ class Node(Item):
     coordinates: list[float]                     # [lat, lon]
     address: Optional[str] = None                # free text, e.g. for geocoding
     addressDetails: Optional[AddressDetails] = None
-    roles: list[Literal['supplier', 'customer', 'candidate', 'depot', 'transit']] = []
+    roles: list[Literal['supplier', 'customer', 'candidate', 'depot', 'transit', 'pickup', 'delivery']] = []
     active: bool = True                          # False: the node is ignored
     supply: Unlimited = None
     minSupply: Unlimited = None
@@ -76,6 +76,8 @@ class Node(Item):
     unitCost: Optional[float] = None             # supplier: costs per unit (production, purchase) - tpp max
     timeWindow: Optional[list[Optional[float]]] = None   # [earliest, latest] in units.time, latest null: open
     serviceTime: float = 0                       # in units.time
+    amount: Optional[float] = None               # pickup: quantity picked up and brought to deliveryTo (pdp)
+    deliveryTo: Optional[str] = None             # pickup: node where its quantity is delivered (pdp)
     minCap: float = 0                            # networks: minimal flow through the node (incl. own supply, demand)
     maxCap: Unlimited = None                     # networks: maximal flow through the node
     shortageCost: float = 0                      # networks with balance auto: costs per unit of unmet demand
@@ -193,6 +195,8 @@ class Scenario(Item):
         for n in self.nodes:
             if n.assignedTo and n.assignedTo not in known:
                 raise ValueError(f'node {n.id}: unknown assignedTo {n.assignedTo}')
+            if n.deliveryTo and n.deliveryTo not in known:
+                raise ValueError(f'node {n.id}: unknown deliveryTo {n.deliveryTo}')
             for k in list(n.supplies or {}) + list(n.demands or {}) + list(n.capacityFactors or {}):
                 if k not in commodities:
                     raise ValueError(f'node {n.id}: unknown commodity {k}')
@@ -822,15 +826,44 @@ class ScenarioSolver:
                                 'nrOfRepeats': sum(max(u - 1, 0) for u in usages)}}
         return payload, results
 
-    def _vrp(self):
+    def _pdp(self):
+        """ pickup and delivery: every pickup brings its amount to its node deliveryTo on the same route """
+        return self._vrp(pdp=True)
+
+    def _vrp(self, pdp=False):
         depots = [ n for n in self.nodes.values() if 'depot' in n.roles ]
         depotId = self.par.get('depot') or (self.s.vehicles[0].depot if self.s.vehicles and self.s.vehicles[0].depot
                                              else (depots[0].id if len(depots) == 1 else None))
         if depotId is None:
             raise ScenarioException(f'problem {self.problem.name}: no depot - parameter depot or one node with role depot')
         depot = self._node(depotId, 'depot')
-        customers = [ n for n in self._role('destinations', 'customer') if n.id != depot.id ]
-        self._required(customers, 'demand', 'demand')
+        pairs = []                                   # pdp: (pickup, delivery) - indices in nodes
+        if pdp:
+            # a stop per pickup and one per delivery - a delivery node of several pickups gets several stops
+            pickups = [ n for n in self._role('sources', 'pickup') if n.id != depot.id ]
+            self._required(pickups, 'amount', 'amount')
+            deliveryRole = (self.par.get('roles') or {}).get('destinations', 'delivery')
+            customers, demands = [], [0]
+            for p in pickups:
+                if not p.deliveryTo:
+                    raise ScenarioException(f'problem {self.problem.name}: {p.name or p.id} has no delivery node (deliveryTo)')
+                d = self._node(p.deliveryTo, f'delivery node of {p.name or p.id}')
+                if deliveryRole not in d.roles:
+                    raise ScenarioException(f'problem {self.problem.name}: {d.name or d.id}, the delivery node of '
+                                            f'{p.name or p.id}, has not the role {deliveryRole}')
+                if d.id == depot.id or d.id == p.id:
+                    raise ScenarioException(f'problem {self.problem.name}: {p.name or p.id} is delivered to itself or the depot')
+                customers += [p, d]
+                demands += [p.amount, -p.amount]
+                pairs.append([len(customers) - 1, len(customers)])
+            served = { p.deliveryTo for p in pickups }
+            idle = [ n.name or n.id for n in self.nodes.values() if deliveryRole in n.roles and n.id not in served ]
+            if idle:
+                self.warnings.append(f'delivery nodes without a pickup: {", ".join(idle)}')
+        else:
+            customers = [ n for n in self._role('destinations', 'customer') if n.id != depot.id ]
+            self._required(customers, 'demand', 'demand')
+            demands = [0] + [ n.demand or 0 for n in customers ]
         nodes = [depot] + customers
         if self.problem.network:
             self.warnings.append('vrp uses the complete matrix of the OSM servers, the network is ignored')
@@ -842,7 +875,7 @@ class ScenarioSolver:
         # a vehicle without a count: as many as there are customers - the solver uses as few as possible
         auto = any(v.count is None for v in self.s.vehicles)
         for v in self.s.vehicles:
-            count = v.count if v.count is not None else max(len(customers), 1)
+            count = v.count if v.count is not None else max(len(customers) // (2 if pdp else 1), 1)
             capacities += [v.capacity] * count
             vehicleIds += [v.id] if count == 1 else [ f'{v.id}{k+1}' for k in range(count) ]
             vehicleTypes += [ (v.id, v.count is None) ] * count
@@ -852,18 +885,20 @@ class ScenarioSolver:
         if not capacities:
             raise ScenarioException(f'problem {self.problem.name}: no vehicles')
         # a customer whose demand fits into no vehicle
-        tooBig = [ n for n in customers if n.demand > max(capacities) ]
+        tooBig = [ (n, q) for n, q in zip(customers, demands[1:]) if q > max(capacities) ]
         if tooBig:
-            n = tooBig[0]
-            raise ScenarioException(f'problem {self.problem.name}: the demand {n.demand:g} of {n.name or n.id} is larger '
-                                    f'than the largest vehicle ({max(capacities):g})')
+            n, q = tooBig[0]
+            raise ScenarioException(f'problem {self.problem.name}: the {"amount" if pdp else "demand"} {q:g} of '
+                                    f'{n.name or n.id} is larger than the largest vehicle ({max(capacities):g})')
         # OR-Tools needs integers - meters and seconds
         # costs of a vehicle larger than any distance: the number of routes first, then the distance
         fixed = sum(max(round(v) for v in row) for row in D) * 2 + 1 if auto and 'capacities' not in par else None
         payload = {'type': 'vrp', 'distances': [ [ round(v) for v in row ] for row in D ],
-                   'demands': [0] + [ n.demand or 0 for n in customers ], 'capacities': capacities, 'depot': 0,
+                   'demands': [ round(q) for q in demands ], 'capacities': capacities, 'depot': 0,
                    'maxSolvingTime': par.get('maxSolvingTime'), 'vehicleFixedCost': fixed,
                    'fixedStart': bool(par.get('fixedStart', False))}
+        if pairs:
+            payload['pickupsDeliveries'] = pairs
         # the times always - the solution contains the travel and waiting times of the routes
         payload['times'] = [ [ round(v) for v in row ] for row in T ]
         payload['serviceTimes'] = [ round(n.serviceTime * ts) for n in nodes ]
@@ -894,8 +929,9 @@ class ScenarioSolver:
                     used[base] = used.get(base, 0) + 1
                     name = f'{base}{used[base]}'
                 # the distance of the route from its sections - the costs of the solver contain fixed costs
+                # pdp: the quantity picked up - the load rises at the pickups and falls at the deliveries
                 entry = {'vehicle': name, 'nodes': [ nodes[i].id for i in route ],
-                         'load': sum(r['routeLoads'][k]),
+                         'load': sum(max(demands[i], 0) for i in route),
                          'distance': sum(D[a][b] for a, b in zip(route, route[1:])) / dm}
                 if r.get('routeTimes'):
                     # schedule per node of the route and the totals of the route, in units.time
@@ -910,9 +946,14 @@ class ScenarioSolver:
                     entry['duration'] = entry['times'][-1] - entry['times'][0]
                 # the sections of the route: distance and - with times - arrival and waiting at their end
                 entry['legs'] = []
+                load = 0
                 for j, (a, b) in enumerate(zip(route, route[1:])):
                     leg = {'from': nodes[a].id, 'to': nodes[b].id, 'value': D[a][b] / dm,
-                           'amount': nodes[b].demand or 0 if b != 0 else 0}
+                           'amount': demands[b] if b != 0 else 0}
+                    if pdp:
+                        # the load of the vehicle after the stop
+                        load += demands[b] if b != 0 else 0
+                        leg['load'] = load
                     # the schedule of the section: departure at its start (after the service there), travel time,
                     # arrival, waiting and service at its end
                     if entry.get('times') and entry.get('serviceTimes'):
@@ -927,7 +968,10 @@ class ScenarioSolver:
                     entry['legs'].append(leg)
                 # the vehicle: capacity and how much of it the route uses; start and return at the depot
                 entry['capacity'] = capacities[k]
-                entry['utilization'] = entry['load'] / capacities[k] if capacities[k] else None
+                if pdp:
+                    # the highest load of the route - the vehicle carries several quantities one after another
+                    entry['maxLoad'] = max([0] + [ l['load'] for l in entry['legs'] ])
+                entry['utilization'] = entry.get('maxLoad', entry['load']) / capacities[k] if capacities[k] else None
                 entry['stops'] = len(route) - 2
                 if entry.get('times'):
                     entry['start'], entry['end'] = entry['times'][0], entry['times'][-1]
@@ -942,7 +986,7 @@ class ScenarioSolver:
                     summary[name] = sum(e.get(key, 0) for e in routes)
             capacity = sum(e['capacity'] for e in routes)
             if capacity:
-                summary['utilization'] = summary['totalLoad'] / capacity
+                summary['utilization'] = sum(e.get('maxLoad', e['load']) for e in routes) / capacity
             return {'objVal': r['objVal'] / dm, 'routes': routes, 'summary': summary}
         return payload, results
 

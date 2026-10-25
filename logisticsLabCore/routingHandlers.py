@@ -140,6 +140,8 @@ class VrpHandler(ProblemHandler):
                 self.__problem.setFixedStart(True)
             if d.vehicleFixedCost:
                 self.__problem.setVehicleFixedCost(int(d.vehicleFixedCost))
+            if d.pickupsDeliveries:
+                self.__problem.setPickupsDeliveries([ [ int(i) for i in pair ] for pair in d.pickupsDeliveries ])
         except ll.LogLabException as e:
             raise LogLabCoreException(e)
 

@@ -47,6 +47,7 @@ class Vrp(object):
         self.__maxWaitingTimeSet = None   # maximal waiting before a time window - None: the horizon
         self.__fixedStart = False     # True: every route starts at the start of the time window of the depot
         self.__vehicleFixedCost = 0   # > 0: costs of every used vehicle - the number of routes is minimised first
+        self.__pickupsDeliveries = [] # pickup and delivery: pairs of nodes (pickup, delivery) on the same route
 
         if self.__time_matrix:
             self.__isTimeMatrix = True
@@ -240,11 +241,25 @@ class Vrp(object):
             self.__routing.AddDimensionWithVehicleCapacity(demand_callback_index,
                                                         0,  self.__vehicle_capacities,  
                                                         True, 'Capacity')
-            
-            
+
+            # pickup and delivery: the demand of a pickup is positive, of its delivery negative - the load of the
+            # vehicle stays between 0 and its capacity; both on the same route, the pickup first
+            if self.__pickupsDeliveries:
+                if not self.__isMaxDist:
+                    self.__routing.AddDimension(dist_callback_index, 0, self.__maxDist, True, 'Dist')
+                dist_dimension = self.__routing.GetDimensionOrDie('Dist')
+                solver = self.__routing.solver()
+                for pickup, delivery in self.__pickupsDeliveries:
+                    p = self.__manager.NodeToIndex(pickup)
+                    d = self.__manager.NodeToIndex(delivery)
+                    self.__routing.AddPickupAndDelivery(p, d)
+                    solver.Add(self.__routing.VehicleVar(p) == self.__routing.VehicleVar(d))
+                    solver.Add(dist_dimension.CumulVar(p) <= dist_dimension.CumulVar(d))
+
             search_parameters = pywrapcp.DefaultRoutingSearchParameters()
             search_parameters.first_solution_strategy = (
-                        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
+                        routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+                        if self.__pickupsDeliveries else routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
             
             search_parameters.local_search_metaheuristic = (
                        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
@@ -302,6 +317,18 @@ class Vrp(object):
         """ costs of every used vehicle - larger than any distance saved: as few routes as possible, then the
             shortest total distance """
         self.__vehicleFixedCost = int(cost)
+
+    def setPickupsDeliveries(self, pairs):
+        """ pickup and delivery: pairs of node indices (pickup, delivery) - served by the same vehicle, the pickup
+            before the delivery; the demand of the pickup is positive, the demand of the delivery negative """
+        n = len(self.__distance_matrix)
+        for pair in pairs:
+            if len(pair) != 2 or not all(isinstance(i, int) and 0 <= i < n and i != self.__depot for i in pair):
+                raise LogLabException(f'LogisticsLab error: Wrong pickup and delivery {pair}')
+        used = [ i for pair in pairs for i in pair ]
+        if len(used) != len(set(used)):
+            raise LogLabException('LogisticsLab error: a node in more than one pickup and delivery')
+        self.__pickupsDeliveries = [ tuple(pair) for pair in pairs ]
 
     def useTimeWindows(self, tw = True):
         self.__isTimeWindow = tw

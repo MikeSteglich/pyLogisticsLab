@@ -148,6 +148,8 @@ class VrpItem(MatrixOptions):
     maxSolvingTime: Optional[int] = 10          # search time of OR-Tools in seconds
     vehicleFixedCost: Optional[int] = None      # costs of every used vehicle - large: as few routes as possible
     fixedStart: Optional[bool] = False          # every route starts at the start of the time window of the depot
+    pickupsDeliveries: Optional[list] = None    # pickup and delivery: [[pickup, delivery], ...] - demand of the
+                                                # pickup positive, of the delivery negative (the same quantity)
 
 class FlowOptions(LogLabItem):
     """ network flow problems - nodes are 0-based indices, capacities null or "M" mean unlimited """

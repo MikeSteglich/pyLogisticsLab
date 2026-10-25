@@ -329,6 +329,9 @@ _VRP_D = [[0, 10, 20, 15, 12], [10, 0, 12, 9, 18], [20, 12, 0, 7, 25], [15, 9, 7
 STDIO_VRP = {"type": "vrp", "distances": _VRP_D, "times": _VRP_D, "demands": [0, 3, 4, 5, 6], "capacities": [20],
              "serviceTimes": [0, 5, 5, 5, 5], "timeWindows": [[0, 480], [0, 20], [100, 140], [0, 480], [0, 480]],
              "maxSolvingTime": 2}
+# pickup and delivery: 1 -> 3 and 2 -> 4, both quantities together do not fit - one after the other
+STDIO_PDP = {"type": "vrp", "distances": _VRP_D, "demands": [0, 12, 10, -12, -10], "capacities": [15],
+             "pickupsDeliveries": [[1, 3], [2, 4]], "maxSolvingTime": 2}
 
 
 def stdio_test(cmd, env, cwd, problems):
@@ -366,7 +369,17 @@ def stdio_test(cmd, env, cwd, problems):
                 r = res["results"]
                 if abs(r["objVal"] - 28) > 1e-6 or r.get("openNodes") != [None, 1, 1, None, None]:
                     raise BuildError(f"Test fehlgeschlagen (stdio, multistagewlp): {r}")
-            if problem["type"] == "vrp":
+            if name == "pdp":
+                route = next(rt for rt in res["results"]["routes"] if len(rt) > 2)
+                order = all(p in route and d in route and route.index(p) < route.index(d) for p, d in ((1, 3), (2, 4)))
+                load, peak = 0, 0
+                for i in route[1:-1]:
+                    load += problem["demands"][i]
+                    peak = max(peak, load)
+                print(f"    {'':12} Abholung vor Zustellung {order}, hoechste Ladung {peak}")
+                if not order or peak > 15:
+                    raise BuildError(f"Test fehlgeschlagen (stdio, pdp): {res['results']}")
+            if name == "vrp":
                 r = res["results"]
                 wait = sum(map(sum, r.get("routeWaitingTimes") or [[0]]))
                 lengths = all(len(r[k][v]) == len(r["routes"][v]) for v in range(len(r["routes"]))
@@ -427,7 +440,7 @@ def smoke_test(t, stage, work, port):
     log("Test: lokale Schnittstelle (JSON-RPC ueber stdin/stdout)")
     stdio_test([t.python_exe(stage / RUNTIME), "-I", "-m", "logisticsLabCore.stdio", "--logPath", tdir / "stdio"],
                dict(env, LOGLAB_CONF_DIR=str(stage / "confs")), tdir,
-               {"tpp": STDIO_TPP, "tsp": STDIO_TSP, "vrp": STDIO_VRP, "multistagewlp": STDIO_MSWLP})
+               {"tpp": STDIO_TPP, "tsp": STDIO_TSP, "vrp": STDIO_VRP, "pdp": STDIO_PDP, "multistagewlp": STDIO_MSWLP})
 
     smoke_test_server(t, stage, tdir, env, port)
 
