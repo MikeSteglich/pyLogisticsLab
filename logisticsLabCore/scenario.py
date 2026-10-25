@@ -903,6 +903,15 @@ class ScenarioSolver:
                    'fixedStart': bool(par.get('fixedStart', False))}
         if pairs:
             payload['pickupsDeliveries'] = pairs
+            # dial-a-ride: the longest ride of every pair - absolute and/or a factor of the direct ride, the stricter
+            maxRide, detour = par.get('maxRideTime'), par.get('maxDetour')
+            if maxRide is not None or detour is not None:
+                limits = []
+                for p, d in pairs:
+                    candidates = ([maxRide * ts] if maxRide is not None else []) + \
+                                 ([detour * T[p][d]] if detour is not None else [])
+                    limits.append(round(min(candidates)))
+                payload['maxRideTimes'] = limits
         # the times always - the solution contains the travel and waiting times of the routes
         payload['times'] = [ [ round(v) for v in row ] for row in T ]
         # service: the stop time of the node and the time per unit of its quantity (demand, amount picked up or
@@ -997,6 +1006,20 @@ class ScenarioSolver:
                 if entry.get('times'):
                     entry['start'], entry['end'] = entry['times'][0], entry['times'][-1]
                 routes.append(entry)
+            # pickup and delivery: every pair with its direct and its real ride (departure at the pickup to the start
+            # of the service at the delivery) and the detour factor
+            requests = []
+            for k, route in enumerate(r['routes']):
+                times, services = (r.get('routeTimes') or [[]] * (k + 1))[k], (r.get('routeServiceTimes') or [[]] * (k + 1))[k]
+                for p, d in pairs:
+                    if p in route and d in route and times:
+                        i, j = route.index(p), route.index(d)
+                        ride = (times[j] - times[i] - services[i]) / tm
+                        direct = T[p][d] / tm
+                        requests.append({'pickup': nodes[p].id, 'delivery': nodes[d].id, 'amount': demands[p],
+                                         'vehicle': next((e['vehicle'] for e in routes if e['nodes'] and nodes[p].id in e['nodes']), None),
+                                         'direct': direct, 'ride': ride,
+                                         'detour': ride / direct if direct > 0 else None})
             summary = {'totalDistance': r['objVal'] / dm, 'nrOfRoutes': len(routes), 'nrOfVehicles': len(capacities) if not fixed else None,
                        'totalLoad': sum(e['load'] for e in routes),
                        'longestRoute': max((e['distance'] for e in routes), default=0)}
@@ -1008,7 +1031,15 @@ class ScenarioSolver:
             capacity = sum(e['capacity'] for e in routes)
             if capacity:
                 summary['utilization'] = sum(e.get('maxLoad', e['load']) for e in routes) / capacity
-            return {'objVal': r['objVal'] / dm, 'routes': routes, 'summary': summary}
+            if requests:
+                summary['longestRide'] = max(q['ride'] for q in requests)
+                detours = [ q['detour'] for q in requests if q['detour'] is not None ]
+                if detours:
+                    summary['maxDetour'] = max(detours)
+            out = {'objVal': r['objVal'] / dm, 'routes': routes, 'summary': summary}
+            if requests:
+                out['requests'] = requests
+            return out
         return payload, results
 
     #*********** network flows ************

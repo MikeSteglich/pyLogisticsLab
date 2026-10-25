@@ -50,6 +50,7 @@ class Vrp(object):
         self.__pickupsDeliveries = [] # pickup and delivery: pairs of nodes (pickup, delivery) on the same route
         self.__handlingTimes = None   # service time per node beside the stop time - e.g. per unit of the demand
         self.__locations = None       # place of every node - nodes at the same place one after another: one stop time
+        self.__maxRideTimes = None    # dial-a-ride: per pickup and delivery the longest time in the vehicle - None: any
 
         if self.__time_matrix:
             self.__isTimeMatrix = True
@@ -127,7 +128,7 @@ class Vrp(object):
         used = sum(1 for v in range(self.__num_vehicles) if self.__routing.IsVehicleUsed(self.__solution, v))
         self.__objValue = self.__solution.ObjectiveValue() - self.__vehicleFixedCost * used
 
-        if self.__isTimeWindow or self.__isMaxTime:
+        if self.usesTime():
             time_dimension = self.__routing.GetDimensionOrDie('Time')
 
         route_distance = 0
@@ -141,7 +142,7 @@ class Vrp(object):
             
             route_distance = 0
             rDists.append(0)            # distance at the start - one value per node of the route, also without times
-            if self.__isTimeWindow or self.__isMaxTime:
+            if self.usesTime():
                 time_var = time_dimension.CumulVar(index)
                 rTimes.append(self.__solution.Min(time_var))
 
@@ -155,14 +156,14 @@ class Vrp(object):
                 route_distance += self.__routing.GetArcCostForVehicle(
                 previous_index, index, vehicle_id)
 
-                if self.__isTimeWindow or self.__isMaxTime:
+                if self.usesTime():
                     time_var = time_dimension.CumulVar(index)
 
                 rIndices.append(node_index)
                 rLoads.append(self.__demands[node_index])
                 rDists.append(route_distance)
                 
-                if self.__isTimeWindow or self.__isMaxTime:
+                if self.usesTime():
                     rTimes.append(self.__solution.Min(time_var))
                    
             node_index = self.__manager.IndexToNode(index)
@@ -194,7 +195,7 @@ class Vrp(object):
                 self.__routing.AddDimension( dist_callback_index,  0,  self.__maxDist , 
                                     False, dist)
 
-            if self.__isTimeWindow or self.__isMaxTime:
+            if self.usesTime():
 
                 if not self.__isTimeMatrix:
                     raise LogLabException('Specify time matrix before using time windows or max time')
@@ -260,12 +261,19 @@ class Vrp(object):
                     self.__routing.AddDimension(dist_callback_index, 0, self.__maxDist, True, 'Dist')
                 dist_dimension = self.__routing.GetDimensionOrDie('Dist')
                 solver = self.__routing.solver()
-                for pickup, delivery in self.__pickupsDeliveries:
+                for k, (pickup, delivery) in enumerate(self.__pickupsDeliveries):
                     p = self.__manager.NodeToIndex(pickup)
                     d = self.__manager.NodeToIndex(delivery)
                     self.__routing.AddPickupAndDelivery(p, d)
                     solver.Add(self.__routing.VehicleVar(p) == self.__routing.VehicleVar(d))
                     solver.Add(dist_dimension.CumulVar(p) <= dist_dimension.CumulVar(d))
+                    # dial-a-ride: the ride from the departure at the pickup (after its service) to the start of the
+                    # service at the delivery - waiting on the way included
+                    limit = self.__maxRideTimes[k] if self.__maxRideTimes else None
+                    if limit is not None:
+                        time_dimension = self.__routing.GetDimensionOrDie('Time')
+                        service = self.__service_times[pickup] + (self.__handlingTimes[pickup] if self.__handlingTimes else 0)
+                        solver.Add(time_dimension.CumulVar(d) - time_dimension.CumulVar(p) <= int(limit) + service)
 
             search_parameters = pywrapcp.DefaultRoutingSearchParameters()
             search_parameters.first_solution_strategy = (
@@ -341,6 +349,15 @@ class Vrp(object):
             raise LogLabException('LogisticsLab error: a node in more than one pickup and delivery')
         self.__pickupsDeliveries = [ tuple(pair) for pair in pairs ]
 
+    def usesTime(self):
+        """ the time dimension: time windows, a maximal duration of the routes or maximal ride times """
+        return bool(self.__isTimeWindow or self.__isMaxTime or (self.__maxRideTimes and any(t is not None for t in self.__maxRideTimes)))
+
+    def setMaxRideTimes(self, limits):
+        """ dial-a-ride: per pair of setPickupsDeliveries the longest ride (departure at the pickup to the start of
+            the service at the delivery) - None: no limit """
+        self.__maxRideTimes = [ None if t is None else int(t) for t in limits ]
+
     def setHandlingTimes(self, times):
         """ service time of every node beside its stop time (serviceTimes) - e.g. the time per unit times the demand """
         self.__handlingTimes = setIntVector(times)
@@ -366,7 +383,7 @@ class Vrp(object):
         return self.__routeLoads
 
     def getRouteTimes(self):
-        if self.__isTimeWindow or self.__isMaxTime:
+        if self.usesTime():
             return self.__routeTimes
         else:
             return None

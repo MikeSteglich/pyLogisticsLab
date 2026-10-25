@@ -153,6 +153,7 @@ class VrpItem(MatrixOptions):
     fixedStart: Optional[bool] = False          # every route starts at the start of the time window of the depot
     pickupsDeliveries: Optional[list] = None    # pickup and delivery: [[pickup, delivery], ...] - demand of the
                                                 # pickup positive, of the delivery negative (the same quantity)
+    maxRideTimes: Optional[list] = None         # dial-a-ride: per pair of pickupsDeliveries the longest ride - null: any
 
 class FlowOptions(LogLabItem):
     """ network flow problems - nodes are 0-based indices, capacities null or "M" mean unlimited """

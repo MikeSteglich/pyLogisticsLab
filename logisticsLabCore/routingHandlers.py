@@ -103,7 +103,8 @@ class VrpHandler(ProblemHandler):
         self._logger.debug('vrp', 'init vrp')
 
         d = problemData
-        usesTimes = d.timeWindows is not None or d.maxTime is not None
+        rides = bool(d.maxRideTimes) and any(t is not None for t in d.maxRideTimes)
+        usesTimes = d.timeWindows is not None or d.maxTime is not None or rides
         self.__calculated = {}          # matrices loaded via OSM - sent back with the results
 
         if d.distances:
@@ -157,11 +158,15 @@ class VrpHandler(ProblemHandler):
                 self.__problem.setLocations(locations)
             if d.pickupsDeliveries:
                 self.__problem.setPickupsDeliveries([ [ int(i) for i in pair ] for pair in d.pickupsDeliveries ])
+                if rides:
+                    if len(d.maxRideTimes) != len(d.pickupsDeliveries):
+                        raise LogLabCoreException('maxRideTimes: one value per pickup and delivery expected')
+                    self.__problem.setMaxRideTimes(d.maxRideTimes)
         except ll.LogLabException as e:
             raise LogLabCoreException(e)
 
         # times of the solver with time windows or a maximal route duration, otherwise only the schedule
-        self.__routeTimes = timeWindows is not None or d.maxTime is not None
+        self.__routeTimes = usesTimes
         self.__times = toInt(times) if times else None
         self.__serviceTimes = toInt(serviceTimes) if times else None
         self.__handlingTimes = toInt(handlingTimes) if handlingTimes else None
