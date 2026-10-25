@@ -62,7 +62,7 @@ class CppHandler(ProblemHandler):
             self._results['edgeUsages'] = self.__problem.getEdgeUsages()
 
 
-def vrpSchedule(routes, times, serviceTimes, starts=None):
+def vrpSchedule(routes, times, serviceTimes, starts=None, handlingTimes=None, locations=None):
     """ schedule of every route - lists per node of the route:
         routeTimes        start of the service (the time of the solver if given - it may include waiting)
         routeArrivals     arrival = start of the service at the previous node + its service time + travel time
@@ -70,7 +70,15 @@ def vrpSchedule(routes, times, serviceTimes, starts=None):
         routeWaitingTimes waiting time before the service (time windows)
         routeServiceTimes service time
         Without starts (no time windows, no maxTime) every route starts at 0 and nothing waits.
+        The service of a node: its handling time and its stop time - the stop time once for nodes at the same place
+        one after another (with the last of them).
     """
+    def service(a, b):
+        s = handlingTimes[a] if handlingTimes else 0
+        if b is None or not (locations and locations[a] == locations[b]):
+            s += serviceTimes[a]
+        return s
+
     out = {k: [] for k in ('routeTimes', 'routeArrivals', 'routeTravelTimes', 'routeWaitingTimes', 'routeServiceTimes')}
     for k, route in enumerate(routes):
         given = starts[k] if starts and len(starts[k]) == len(route) else None
@@ -78,10 +86,11 @@ def vrpSchedule(routes, times, serviceTimes, starts=None):
         st, arr, tr, wt = [start], [start], [0], [0]
         for pos, (a, b) in enumerate(zip(route, route[1:]), 1):
             travel = times[a][b]
-            arrival = st[-1] + serviceTimes[a] + travel
+            arrival = st[-1] + service(a, b) + travel
             begin = max(arrival, given[pos]) if given else arrival
             st.append(begin); arr.append(arrival); tr.append(travel); wt.append(begin - arrival)
-        for key, v in zip(out, (st, arr, tr, wt, [ serviceTimes[i] for i in route ])):
+        services = [ service(a, b) for a, b in zip(route, route[1:] + [None]) ]
+        for key, v in zip(out, (st, arr, tr, wt, services)):
             out[key].append(v)
     return out
 
@@ -123,6 +132,8 @@ class VrpHandler(ProblemHandler):
         demands = self._checkLength(d.demands, n, 'demands')
         timeWindows = self._checkLength(d.timeWindows, n, 'timeWindows') if d.timeWindows is not None else None
         serviceTimes = self._checkLength(d.serviceTimes, n, 'serviceTimes', default=0) if times else []
+        handlingTimes = self._checkLength(d.handlingTimes, n, 'handlingTimes') if times and d.handlingTimes else None
+        locations = self._checkLength(d.locations, n, 'locations') if d.locations else None
 
         try:
             self.__problem = ll.Vrp(toInt(distances), toInt(demands), toInt(d.capacities), d.depot,
@@ -140,6 +151,10 @@ class VrpHandler(ProblemHandler):
                 self.__problem.setFixedStart(True)
             if d.vehicleFixedCost:
                 self.__problem.setVehicleFixedCost(int(d.vehicleFixedCost))
+            if handlingTimes:
+                self.__problem.setHandlingTimes(toInt(handlingTimes))
+            if locations:
+                self.__problem.setLocations(locations)
             if d.pickupsDeliveries:
                 self.__problem.setPickupsDeliveries([ [ int(i) for i in pair ] for pair in d.pickupsDeliveries ])
         except ll.LogLabException as e:
@@ -149,6 +164,8 @@ class VrpHandler(ProblemHandler):
         self.__routeTimes = timeWindows is not None or d.maxTime is not None
         self.__times = toInt(times) if times else None
         self.__serviceTimes = toInt(serviceTimes) if times else None
+        self.__handlingTimes = toInt(handlingTimes) if handlingTimes else None
+        self.__locations = locations
 
     def solve(self):
         try:
@@ -168,5 +185,6 @@ class VrpHandler(ProblemHandler):
             self._results['routeDistances'] = p.getRouteDistances()
             if self.__times:
                 self._results.update(vrpSchedule(self._results['routes'], self.__times, self.__serviceTimes,
-                                                 p.getRouteTimes() if self.__routeTimes else None))
+                                                 p.getRouteTimes() if self.__routeTimes else None,
+                                                 self.__handlingTimes, self.__locations))
             self._results.update(self.__calculated)

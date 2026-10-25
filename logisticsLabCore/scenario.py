@@ -75,7 +75,9 @@ class Node(Item):
     price: Optional[float] = None                # customer: revenue per unit - tpp with objSense max
     unitCost: Optional[float] = None             # supplier: costs per unit (production, purchase) - tpp max
     timeWindow: Optional[list[Optional[float]]] = None   # [earliest, latest] in units.time, latest null: open
-    serviceTime: float = 0                       # in units.time
+    serviceTime: float = 0                       # in units.time - stop time of a visit (stopping, parking, doors)
+    serviceTimePerUnit: float = 0                # in units.time per unit of the demand (vrp) or amount (pdp) -
+                                                 # handling of the parcels, boarding or alighting persons
     amount: Optional[float] = None               # pickup: quantity picked up and brought to deliveryTo (pdp)
     deliveryTo: Optional[str] = None             # pickup: node where its quantity is delivered (pdp)
     minCap: float = 0                            # networks: minimal flow through the node (incl. own supply, demand)
@@ -903,7 +905,14 @@ class ScenarioSolver:
             payload['pickupsDeliveries'] = pairs
         # the times always - the solution contains the travel and waiting times of the routes
         payload['times'] = [ [ round(v) for v in row ] for row in T ]
+        # service: the stop time of the node and the time per unit of its quantity (demand, amount picked up or
+        # delivered) - pdp: one stop time for the stops at one node one after another
         payload['serviceTimes'] = [ round(n.serviceTime * ts) for n in nodes ]
+        if any(n.serviceTimePerUnit for n in nodes):
+            payload['handlingTimes'] = [ round(n.serviceTimePerUnit * abs(q) * ts) for n, q in zip(nodes, demands) ]
+        if pdp:
+            places = {}
+            payload['locations'] = [ places.setdefault(n.id, len(places)) for n in nodes ]
         # times of the day: the time windows of the customers (with useTimeWindows) and of the depot (start of the
         # routes, latest return) - without useTimeWindows the customers are open
         if useTW or depot.timeWindow:
@@ -967,14 +976,24 @@ class ScenarioSolver:
                         leg['arrival'] = entry['arrivals'][j + 1]
                     if entry.get('waitingTimes'):
                         leg['waiting'] = entry['waitingTimes'][j + 1]
+                    # pdp: a further stop at the same node (another quantity) - one section with both quantities
+                    last = entry['legs'][-1] if entry['legs'] else None
+                    if pdp and last is not None and leg['from'] == leg['to'] == last['to']:
+                        last['amount'] += leg['amount']
+                        last['load'] = leg['load']
+                        for key in ('service', 'waiting'):
+                            if key in leg:
+                                last[key] = last.get(key, 0) + leg[key]
+                        continue
                     entry['legs'].append(leg)
+                entry['nodes'] = [ v for i, v in enumerate(entry['nodes']) if i == 0 or v != entry['nodes'][i - 1] ]
                 # the vehicle: capacity and how much of it the route uses; start and return at the depot
                 entry['capacity'] = capacities[k]
                 if pdp:
                     # the highest load of the route - the vehicle carries several quantities one after another
                     entry['maxLoad'] = max([0] + [ l['load'] for l in entry['legs'] ])
                 entry['utilization'] = entry.get('maxLoad', entry['load']) / capacities[k] if capacities[k] else None
-                entry['stops'] = len(route) - 2
+                entry['stops'] = len(entry['nodes']) - 2
                 if entry.get('times'):
                     entry['start'], entry['end'] = entry['times'][0], entry['times'][-1]
                 routes.append(entry)

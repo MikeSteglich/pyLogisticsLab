@@ -48,6 +48,8 @@ class Vrp(object):
         self.__fixedStart = False     # True: every route starts at the start of the time window of the depot
         self.__vehicleFixedCost = 0   # > 0: costs of every used vehicle - the number of routes is minimised first
         self.__pickupsDeliveries = [] # pickup and delivery: pairs of nodes (pickup, delivery) on the same route
+        self.__handlingTimes = None   # service time per node beside the stop time - e.g. per unit of the demand
+        self.__locations = None       # place of every node - nodes at the same place one after another: one stop time
 
         if self.__time_matrix:
             self.__isTimeMatrix = True
@@ -102,10 +104,18 @@ class Vrp(object):
         to_node = self.__manager.IndexToNode(to_index)
         return self.__distance_matrix[from_node][to_node]
 
+    def serviceTime(self, from_node, to_node):
+        """ service at from_node before going to to_node: its handling time and its stop time - the stop time only
+            once for nodes at the same place one after another (paid when the vehicle leaves the place) """
+        s = self.__handlingTimes[from_node] if self.__handlingTimes else 0
+        if not (self.__locations and self.__locations[from_node] == self.__locations[to_node]):
+            s += self.__service_times[from_node]
+        return s
+
     def time_callback(self, from_index, to_index):
         from_node = self.__manager.IndexToNode(from_index)
         to_node = self.__manager.IndexToNode(to_index)
-        return (self.__time_matrix[from_node][to_node] + self.__service_times[from_node] )
+        return self.__time_matrix[from_node][to_node] + self.serviceTime(from_node, to_node)
 
     def demand_callback(self, from_index):
         from_node = self.__manager.IndexToNode(from_index)
@@ -193,7 +203,8 @@ class Vrp(object):
 
                 # the times are clock times (time windows from the start of the day) - the horizon covers the
                 # latest time window and the longest possible route after it
-                horizon = sum(max(row) for row in self.__time_matrix) + sum(self.__service_times)
+                horizon = sum(max(row) for row in self.__time_matrix) + sum(self.__service_times) + \
+                          sum(self.__handlingTimes or [])
                 if self.__isTimeWindow:
                     finite = [ t for tw in self.__time_windows for t in tw if t < 10**8 ]
                     horizon += max(finite + [0])
@@ -329,6 +340,14 @@ class Vrp(object):
         if len(used) != len(set(used)):
             raise LogLabException('LogisticsLab error: a node in more than one pickup and delivery')
         self.__pickupsDeliveries = [ tuple(pair) for pair in pairs ]
+
+    def setHandlingTimes(self, times):
+        """ service time of every node beside its stop time (serviceTimes) - e.g. the time per unit times the demand """
+        self.__handlingTimes = setIntVector(times)
+
+    def setLocations(self, locations):
+        """ place of every node - nodes at the same place visited one after another need the stop time only once """
+        self.__locations = list(locations)
 
     def useTimeWindows(self, tw = True):
         self.__isTimeWindow = tw

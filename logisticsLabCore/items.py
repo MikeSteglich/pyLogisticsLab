@@ -141,7 +141,10 @@ class VrpItem(MatrixOptions):
     capacities: list                            # one capacity per vehicle
     depot: Optional[int] = 0
     timeWindows: Optional[list] = None          # [[earliest, latest], ...] for every node
-    serviceTimes: Optional[list] = None         # default 0
+    serviceTimes: Optional[list] = None         # stop time of every node - default 0
+    handlingTimes: Optional[list] = None        # service time beside the stop time, e.g. per unit of the demand
+    locations: Optional[list] = None            # place of every node - one stop time for nodes at the same place
+                                                # one after another (pdp: several stops at one node)
     maxTime: Optional[int] = None               # maximal duration of a route
     maxDist: Optional[int] = None               # maximal distance of a route
     maxWaitingTime: Optional[int] = None

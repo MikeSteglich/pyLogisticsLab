@@ -76,7 +76,8 @@ Ein Knoten kann mehrere Rollen haben, z. B. `["candidate", "depot", "transit"]`.
 | `price` | Zahl | – | Erlös je Einheit eines `customer` – TPP mit `objSense: max` |
 | `unitCost` | Zahl | – | Kosten je Einheit eines `supplier` (Herstellung, Einkauf) – TPP mit `objSense: max` |
 | `timeWindow` | `[frühest, spätest]` | – | Zeitfenster für `vrp` als Uhrzeit in `units.time` ab 0:00 (bei `min`: 480 = 08:00); `spätest` `null` = offen. Am Depot: Start der Touren und späteste Rückkehr – gilt auch ohne `useTimeWindows` |
-| `serviceTime` | Zahl | `0` | Servicezeit in `units.time` für `vrp` und `pdp` |
+| `serviceTime` | Zahl | `0` | Servicezeit in `units.time` für `vrp` und `pdp` – beim Zustellort (`pdp`) die Stoppzeit je Halt: mehrere Mengen, die nacheinander an denselben Knoten gehen, sind ein Halt mit einer Stoppzeit |
+| `serviceTimePerUnit` | Zahl | `0` | Servicezeit je Einheit in `units.time`, zusätzlich zu `serviceTime` – mal Nachfrage (`vrp`), Abhol- oder Liefermenge (`pdp`) |
 | `amount` | Zahl | – | Abholort (`pdp`): abzuholende Menge |
 | `deliveryTo` | Knoten-ID | – | Abholort (`pdp`): Zustellort der Menge – ein Knoten mit Rolle `delivery`; mehrere Abholorte dürfen denselben Zustellort haben |
 | `minCap`, `maxCap` | Zahl | `0`, unbegrenzt | Mindest- und Höchstdurchsatz in Netzflüssen, einschließlich eigenem Angebot und eigener Nachfrage |
