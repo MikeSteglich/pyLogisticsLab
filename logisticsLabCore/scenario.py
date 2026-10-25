@@ -142,6 +142,7 @@ class Network(Item):
 
 class Vehicle(Item):
     id: str
+    name: Optional[str] = None
     capacity: float
     count: int = 1
     depot: Optional[str] = None
@@ -829,6 +830,7 @@ class ScenarioSolver:
             raise ScenarioException(f'problem {self.problem.name}: no depot - parameter depot or one node with role depot')
         depot = self._node(depotId, 'depot')
         customers = [ n for n in self._role('destinations', 'customer') if n.id != depot.id ]
+        self._required(customers, 'demand', 'demand')
         nodes = [depot] + customers
         if self.problem.network:
             self.warnings.append('vrp uses the complete matrix of the OSM servers, the network is ignored')
@@ -845,6 +847,12 @@ class ScenarioSolver:
             vehicleIds = [ f'V{k+1}' for k in range(len(capacities)) ]
         if not capacities:
             raise ScenarioException(f'problem {self.problem.name}: no vehicles')
+        # a customer whose demand fits into no vehicle
+        tooBig = [ n for n in customers if n.demand > max(capacities) ]
+        if tooBig:
+            n = tooBig[0]
+            raise ScenarioException(f'problem {self.problem.name}: the demand {n.demand:g} of {n.name or n.id} is larger '
+                                    f'than the largest vehicle ({max(capacities):g})')
         # OR-Tools needs integers - meters and seconds
         payload = {'type': 'vrp', 'distances': [ [ round(v) for v in row ] for row in D ],
                    'demands': [0] + [ n.demand or 0 for n in customers ], 'capacities': capacities, 'depot': 0,
@@ -882,8 +890,22 @@ class ScenarioSolver:
                     entry['waitingTime'] = sum(entry.get('waitingTimes', []))
                     entry['serviceTime'] = sum(entry.get('serviceTimes', []))
                     entry['duration'] = entry['times'][-1] - entry['times'][0]
+                # the sections of the route: distance and - with times - arrival and waiting at their end
+                entry['legs'] = []
+                for j, (a, b) in enumerate(zip(route, route[1:])):
+                    leg = {'from': nodes[a].id, 'to': nodes[b].id, 'value': D[a][b] / dm}
+                    if entry.get('arrivals'):
+                        leg['arrival'] = entry['arrivals'][j + 1]
+                    if entry.get('waitingTimes'):
+                        leg['waiting'] = entry['waitingTimes'][j + 1]
+                    entry['legs'].append(leg)
                 routes.append(entry)
-            return {'objVal': r['objVal'] / dm, 'routes': routes, 'summary': {'nrOfRoutes': len(routes)}}
+            summary = {'totalDistance': r['objVal'] / dm, 'nrOfRoutes': len(routes), 'nrOfVehicles': len(capacities),
+                       'totalLoad': sum(e['load'] for e in routes),
+                       'longestRoute': max((e['distance'] for e in routes), default=0)}
+            if routes and 'duration' in routes[0]:
+                summary['longestDuration'] = max(e['duration'] for e in routes)
+            return {'objVal': r['objVal'] / dm, 'routes': routes, 'summary': summary}
         return payload, results
 
     #*********** network flows ************

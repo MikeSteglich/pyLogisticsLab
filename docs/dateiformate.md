@@ -121,6 +121,7 @@ Fahrzeuge braucht nur `vrp`, Güter nur `multicommodity`, Verkehrsträger nur `m
 | Feld | Typ | Standard | Bedeutung |
 | --- | --- | --- | --- |
 | `id` | Text | Pflicht | Name; bei `count` > 1 heißen die Fahrzeuge in der Lösung `<id>1`, `<id>2` … |
+| `name` | Text | – | Bezeichnung für die Anzeige |
 | `capacity` | Zahl | Pflicht | Kapazität eines Fahrzeugs |
 | `count` | Zahl | `1` | Anzahl |
 | `depot` | Knoten-ID | – | Depot; sonst Parameter `depot` oder der einzige Knoten mit Rolle `depot` |
@@ -241,7 +242,7 @@ Eine `.llsol`-Datei ist eine JSON-Liste mit einem Lösungsdokument je gelöstem 
 | `summary` | Kennzahlen, z. B. `nrOfOpen`, `totalVarCosts`, `totalFixedCosts`, `totalOpeningCosts`, `nrOfRoutes` | je nach Typ |
 | `nodes` | Objekt Knoten-ID → Werte: `open`, `load`, `flow`, `unusedSupply`, `unmetDemand`, bei Knotenkapazität (`maxCap`, Lager: `capacity`) `capacity` und `utilization` (Durchsatz / Kapazität), bei kontinuierlichen Standorten `F1 … Fp` mit `coordinates` | Standortprobleme, Netzflüsse, `multistagewlp` |
 | `assignments` | Liste `{from, to, flow, …}`, bei Transport mit `rate` und mit Kapazitäten (`useCapacities`) `capacity`/`utilization`, bei Standorten mit `value` bzw. `distance` | `tpp`, Standort- und Covering-Probleme |
-| `routes` | je Fahrzeug `vehicle`, `nodes`, `load`, `distance`; beim TSP die Abschnitte `legs` (`from`, `to`, `value` in `valueUnit`) und `summary` mit `tourLength`, `nrOfNodes`, `longestLeg`; beim VRP der Zeitplan `arrivals`, `waitingTimes`, `times`, `serviceTimes`, `travelTimes` und die Summen `travelTime`, `waitingTime`, `serviceTime`, `duration` | `tsp`, `shortestpath`, `vrp`, `cpp` |
+| `routes` | je Fahrzeug `vehicle`, `nodes`, `load`, `distance`; beim TSP die Abschnitte `legs` (`from`, `to`, `value` in `valueUnit`) und `summary` mit `tourLength`, `nrOfNodes`, `longestLeg`; beim VRP je Route die Abschnitte `legs` (mit `arrival`, `waiting`), `summary` mit `totalDistance`, `nrOfRoutes`, `nrOfVehicles`, `totalLoad`, `longestRoute`, `longestDuration` und der Zeitplan `arrivals`, `waitingTimes`, `times`, `serviceTimes`, `travelTimes` und die Summen `travelTime`, `waitingTime`, `serviceTime`, `duration` | `tsp`, `shortestpath`, `vrp`, `cpp` |
 | `edges` | Liste `{from, to, flow, rate, used}`, bei mehreren Gütern `flows` je Gut, bei mehreren Verkehrsträgern `modes`; bei begrenzter Kapazität `capacity` und `utilization` (genutzter Anteil; mehrere Güter mit ihren `capacityFactor`, mehrere Verkehrsträger: der am stärksten ausgelastete) | Netzflüsse, `multistagewlp` |
 | `solvingTime` | Rechenzeit in Sekunden | alle |
 | `native` | die unveränderte Antwort des Kerns (Indizes, Einheiten der Anfrage) | alle |

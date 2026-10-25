@@ -76,7 +76,7 @@
     { "name": "Lagerstandorte (WLP)", "type": "wlp", "parameters": { "matrixMode": "costs", "isCapacitated": true } },
     { "name": "Ein Lager (p-Median)", "type": "pmedian",
       "parameters": { "p": 1, "matrixMode": "distances", "isDemandWeighted": true } },
-    { "name": "Touren ab Wildau", "type": "vrp", "parameters": { "maxSolvingTime": 5 } },
+    { "name": "Touren ab Wildau", "type": "vrp", "parameters": { "useTimeWindows": true, "maxSolvingTime": 5 } },
     { "name": "Rundreise", "type": "tsp", "parameters": { "startNode": "D1" } },
     { "name": "Distribution über die Lager", "type": "mincostflow", "network": "supply",
       "parameters": { "matrixMode": "costs", "useFixedCosts": true } },
