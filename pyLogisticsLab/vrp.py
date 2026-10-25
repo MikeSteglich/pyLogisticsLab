@@ -44,6 +44,7 @@ class Vrp(object):
         self.__maxWaitingTime = 30
 
         self.__maxSolvingTime = 3
+        self.__maxWaitingTimeSet = None   # maximal waiting before a time window - None: the horizon
         self.__vehicleFixedCost = 0   # > 0: costs of every used vehicle - the number of routes is minimised first
 
         if self.__time_matrix:
@@ -188,35 +189,46 @@ class Vrp(object):
 
                 time_callback_index = self.__routing.RegisterTransitCallback(self.time_callback)
 
-                time = 'Time'
-                self.__routing.AddDimension( time_callback_index, self.__maxWaitingTime, 
-                                                self.__maxTime, False, time)
-                                                
-                time_dimension = self.__routing.GetDimensionOrDie(time)
-               
+                # the times are clock times (time windows from the start of the day) - the horizon covers the
+                # latest time window and the longest possible route after it
+                horizon = sum(max(row) for row in self.__time_matrix) + sum(self.__service_times)
                 if self.__isTimeWindow:
-                    # Add time window constraints for each location except depot.
+                    finite = [ t for tw in self.__time_windows for t in tw if t < 10**8 ]
+                    horizon += max(finite + [0])
+                # waiting before a time window may be long (start at 7, window from 10)
+                slack = self.__maxWaitingTimeSet if self.__maxWaitingTimeSet is not None else horizon
+                time = 'Time'
+                self.__routing.AddDimension(time_callback_index, slack, horizon, False, time)
+                time_dimension = self.__routing.GetDimensionOrDie(time)
+
+                # maximal duration of a route: from its start to its end
+                if self.__isMaxTime:
+                    for vehicle_id in range(self.__num_vehicles):
+                        time_dimension.SetSpanUpperBoundForVehicle(self.__maxTime, vehicle_id)
+
+                if self.__isTimeWindow:
+                    # time windows of the customers
                     for location_idx, time_window in enumerate(self.__time_windows):
                         if location_idx == self.__depot:
                             continue
                         index = self.__manager.NodeToIndex(location_idx)
-                        time_dimension.CumulVar(index).SetRange(time_window[0], time_window[1])
+                        time_dimension.CumulVar(index).SetRange(time_window[0], min(time_window[1], horizon))
 
-                    # Add time window constraints for each vehicle start node.
-                    depot_idx = self.__depot
+                    # time window of the depot: the start of the routes and their latest return
+                    depot_tw = self.__time_windows[self.__depot]
                     for vehicle_id in range(self.__num_vehicles):
-                        index = self.__routing.Start(vehicle_id)
-                        time_dimension.CumulVar(index).SetRange(
-                                        self.__time_windows[depot_idx][0],
-                                        self.__time_windows[depot_idx][1])
+                        for index in (self.__routing.Start(vehicle_id), self.__routing.End(vehicle_id)):
+                            time_dimension.CumulVar(index).SetRange(depot_tw[0], min(depot_tw[1], horizon))
 
-                    # Instantiate route start and end times to produce feasible times.
+                    # first the routes end as early as possible, then they start as late as possible - no waiting at
+                    # the depot (the finalizer fixes the variables in this order)
                     for i in range(self.__num_vehicles):
                         self.__routing.AddVariableMinimizedByFinalizer(
-                                time_dimension.CumulVar(self.__routing.Start(i)))
-                        self.__routing.AddVariableMinimizedByFinalizer(
                                 time_dimension.CumulVar(self.__routing.End(i)))
-          
+                    for i in range(self.__num_vehicles):
+                        self.__routing.AddVariableMaximizedByFinalizer(
+                                time_dimension.CumulVar(self.__routing.Start(i)))
+
             demand_callback_index = self.__routing.RegisterUnaryTransitCallback(self.demand_callback)
 
             self.__routing.AddDimensionWithVehicleCapacity(demand_callback_index,
@@ -263,6 +275,7 @@ class Vrp(object):
     
     def setMaxWaitingTime(self, maxWaitingTime):
         self.__maxWaitingTime = maxWaitingTime
+        self.__maxWaitingTimeSet = maxWaitingTime
 
     def setMaxTime(self, maxTime):
         self.__maxTime = maxTime    

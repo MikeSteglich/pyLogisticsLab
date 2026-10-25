@@ -73,7 +73,7 @@ Ein Knoten kann mehrere Rollen haben, z. B. `["candidate", "depot", "transit"]`.
 | `costFactor` | Zahl | `1` | Faktor auf die Kosten eines Kunden |
 | `price` | Zahl | – | Erlös je Einheit eines `customer` – TPP mit `objSense: max` |
 | `unitCost` | Zahl | – | Kosten je Einheit eines `supplier` (Herstellung, Einkauf) – TPP mit `objSense: max` |
-| `timeWindow` | `[frühest, spätest]` | – | Zeitfenster in `units.time` für `vrp`; `spätest` `null` = offen |
+| `timeWindow` | `[frühest, spätest]` | – | Zeitfenster für `vrp` als Uhrzeit in `units.time` ab 0:00 (bei `min`: 480 = 08:00); `spätest` `null` = offen. Am Depot: Start der Touren und späteste Rückkehr – gilt auch ohne `useTimeWindows` |
 | `serviceTime` | Zahl | `0` | Servicezeit in `units.time` für `vrp` |
 | `minCap`, `maxCap` | Zahl | `0`, unbegrenzt | Mindest- und Höchstdurchsatz in Netzflüssen, einschließlich eigenem Angebot und eigener Nachfrage |
 | `shortageCost` | Zahl | `0` | Kosten je nicht gelieferter Einheit bei `balance: auto` |
@@ -200,7 +200,7 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 | `contpcentre` | kontinuierliches p-Center | `customer` | wie `contpmedian` |
 | `tsp` | Rundreise oder Durchfahrt | alle Knoten, optional Netz | `tourType`: `round` (zurück zum Start), `path` (Durchfahrt von `startNode` nach `endNode`), `open` (offenes Ende), `openStart` (offener Anfang, nur `endNode`), `free` (komplett offen); ohne `tourType` `startNode`, `endNode` (Knoten-ID; `null` = offener Start bzw. offenes Ende); `matrixMode` |
 | `cpp` | Briefträgerproblem | Netz (Pflicht) | `startNode` |
-| `vrp` | Tourenplanung | `depot` + `customer`, `vehicles` | `depot`, `useTimeWindows`, `maxTime`, `maxDist` (je Route, in `units`), `capacities` (statt `vehicles`) |
+| `vrp` | Tourenplanung | `depot` + `customer`, `vehicles` | `depot`, `useTimeWindows`, `maxTime` (Höchstdauer je Route vom Start bis zur Rückkehr), `maxDist` (je Route, in `units`), `capacities` (statt `vehicles`) |
 | `mincostflow` | Min-Cost-Flow | Netz (Pflicht) | `useFixedCosts`, `balance` |
 | `shortestpath` | Kürzester Weg | Netz (Pflicht) | `startNode`, `endNode` (Knoten-IDs), `matrixMode`; Kanten je einzeln gerichtet (`directed`) – Ergebnis wie beim TSP: `routes` mit `legs`, `summary` mit `pathLength`, `nrOfLegs` |
 | `maxflow` | Maximaler Fluss | Netz (Pflicht) | `endpoints`: `nodes` (Standard) mit `source`, `sink` (Knoten-IDs) oder `roles`: von allen `supplier` zu allen `customer` – der Kern führt eine künstliche Quelle und Senke ein, `supply`/`demand` begrenzen deren Kanten (leer oder `M`: unbegrenzt) |

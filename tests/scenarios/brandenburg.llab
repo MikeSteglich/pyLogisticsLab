@@ -12,23 +12,23 @@
       "supplies": { "food": 60, "parcels": 40 },
       "addressDetails": { "city": "Ludwigsfelde", "postcode": "14974", "country": "DE" } },
     { "id": "D1", "name": "Lager Wildau", "coordinates": [52.32, 13.63], "roles": ["candidate", "depot", "transit"],
-      "capacity": 80, "fixedCost": 5000, "maxCap": 80,
+      "timeWindow": [420, 1080], "capacity": 80, "fixedCost": 5000, "maxCap": 80,
       "addressDetails": { "city": "Wildau", "postcode": "15745", "country": "DE" } },
     { "id": "D2", "name": "Lager Brandenburg", "coordinates": [52.41, 12.55], "roles": ["candidate", "transit"],
       "capacity": 60, "fixedCost": 4000,
       "addressDetails": { "city": "Brandenburg an der Havel", "country": "DE" } },
     { "id": "B", "name": "Berlin", "coordinates": [52.52, 13.40], "roles": ["customer"], "demand": 40,
       "demands": { "food": 25, "parcels": 15 },
-      "timeWindow": [0, 240], "serviceTime": 10 },
+      "timeWindow": [480, 720], "serviceTime": 10 },
     { "id": "P", "name": "Potsdam", "coordinates": [52.39, 13.06], "roles": ["customer"], "demand": 25,
       "demands": { "food": 15, "parcels": 10 },
-      "timeWindow": [0, 360], "serviceTime": 10 },
+      "timeWindow": [540, 780], "serviceTime": 10 },
     { "id": "F", "name": "Frankfurt (Oder)", "coordinates": [52.34, 14.55], "roles": ["customer"], "demand": 20,
       "demands": { "food": 10, "parcels": 10 },
-      "timeWindow": [60, 480], "serviceTime": 15, "costFactor": 1.2 },
+      "timeWindow": [600, 900], "serviceTime": 15, "costFactor": 1.2 },
     { "id": "C", "name": "Cottbus", "coordinates": [51.76, 14.33], "roles": ["customer"], "demand": 15,
       "demands": { "food": 10, "parcels": 5 },
-      "timeWindow": [60, 480], "serviceTime": 15 }
+      "timeWindow": [480, 1020], "serviceTime": 15 }
   ],
 
   "networks": {

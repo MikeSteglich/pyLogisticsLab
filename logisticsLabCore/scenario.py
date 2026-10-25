@@ -866,11 +866,14 @@ class ScenarioSolver:
         # the times always - the solution contains the travel and waiting times of the routes
         payload['times'] = [ [ round(v) for v in row ] for row in T ]
         payload['serviceTimes'] = [ round(n.serviceTime * ts) for n in nodes ]
-        if useTW:
+        # times of the day: the time windows of the customers (with useTimeWindows) and of the depot (start of the
+        # routes, latest return) - without useTimeWindows the customers are open
+        if useTW or depot.timeWindow:
             big = 10**9
-            payload['timeWindows'] = [ [ round((n.timeWindow or [0, None])[0] * ts),
-                                         big if (n.timeWindow or [0, None])[1] is None else round(n.timeWindow[1] * ts) ]
-                                       for n in nodes ]
+            def window(n, use):
+                tw = n.timeWindow if use and n.timeWindow else [0, None]
+                return [ round((tw[0] or 0) * ts), big if tw[1] is None else round(tw[1] * ts) ]
+            payload['timeWindows'] = [ window(n, k == 0 or useTW) for k, n in enumerate(nodes) ]
         if par.get('maxTime') is not None:
             payload['maxTime'] = round(par['maxTime'] * ts)
         if par.get('maxDist') is not None:
@@ -907,18 +910,31 @@ class ScenarioSolver:
                 # the sections of the route: distance and - with times - arrival and waiting at their end
                 entry['legs'] = []
                 for j, (a, b) in enumerate(zip(route, route[1:])):
-                    leg = {'from': nodes[a].id, 'to': nodes[b].id, 'value': D[a][b] / dm}
+                    leg = {'from': nodes[a].id, 'to': nodes[b].id, 'value': D[a][b] / dm,
+                           'amount': nodes[b].demand or 0 if b != 0 else 0}
                     if entry.get('arrivals'):
                         leg['arrival'] = entry['arrivals'][j + 1]
                     if entry.get('waitingTimes'):
                         leg['waiting'] = entry['waitingTimes'][j + 1]
                     entry['legs'].append(leg)
+                # the vehicle: capacity and how much of it the route uses; start and return at the depot
+                entry['capacity'] = capacities[k]
+                entry['utilization'] = entry['load'] / capacities[k] if capacities[k] else None
+                entry['stops'] = len(route) - 2
+                if entry.get('times'):
+                    entry['start'], entry['end'] = entry['times'][0], entry['times'][-1]
                 routes.append(entry)
             summary = {'totalDistance': r['objVal'] / dm, 'nrOfRoutes': len(routes), 'nrOfVehicles': len(capacities) if not fixed else None,
                        'totalLoad': sum(e['load'] for e in routes),
                        'longestRoute': max((e['distance'] for e in routes), default=0)}
             if routes and 'duration' in routes[0]:
                 summary['longestDuration'] = max(e['duration'] for e in routes)
+                for key, name in (('travelTime', 'totalTravelTime'), ('waitingTime', 'totalWaitingTime'),
+                                  ('serviceTime', 'totalServiceTime'), ('duration', 'totalDuration')):
+                    summary[name] = sum(e.get(key, 0) for e in routes)
+            capacity = sum(e['capacity'] for e in routes)
+            if capacity:
+                summary['utilization'] = summary['totalLoad'] / capacity
             return {'objVal': r['objVal'] / dm, 'routes': routes, 'summary': summary}
         return payload, results
 
