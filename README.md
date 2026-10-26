@@ -599,3 +599,11 @@ python tests/pythonClient/parallelAndCancel.py
 ```
 
 **OSM-Server direkt** (`tests/osmTests/`): `get*.py` nutzen die Bibliothek `osm_data`, `ors*.py` fragen einen OpenRouteService-Server direkt per HTTP ab (Koordinaten `[lon, lat]`, kein LogisticsLab-Key). Diese Skripte testen die OSM-Server, nicht den LogisticsLab-Server.
+
+## Lizenz
+
+© 2026 Mike Steglich, Technische Hochschule Wildau
+
+pyLogisticsLab ist freie Software unter der [GNU Affero General Public License v3](LICENSE) oder einer späteren Version (AGPL-3.0-or-later). Wer eine geänderte Fassung als Netzdienst anbietet, z. B. den REST-Server, muss den Nutzern auch den Quellcode der Änderungen zugänglich machen.
+
+Verwendete Software Dritter: pyCmpl und CMPL (GPL v3), HiGHS (MIT), OR-Tools (Apache 2.0) sowie die Python-Pakete aus `pyproject.toml` mit ihren eigenen Lizenzen. Beiträge siehe [CONTRIBUTING.md](CONTRIBUTING.md).

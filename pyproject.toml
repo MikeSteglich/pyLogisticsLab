@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "pyLogisticsLab"
 version = "1.0.0"
 description = "LogisticsLab - logistics models (CMPL, OR-Tools), core, local interface and command line tool"
 requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [{ name = "Mike Steglich", email = "mike.steglich@th-wildau.de" }]
 # pyCmpl is installed separately (requirements.txt or pip install -e ../pyCmpl) - as dependency here pip would
 # replace an editable pyCmpl by the version of the git repository
