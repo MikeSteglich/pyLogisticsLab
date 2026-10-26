@@ -579,8 +579,8 @@ class ScenarioSolver:
         capacities = [ n.capacity for n in S ]
         fixedCosts = [ n.fixedCost or 0 for n in S ]
         if type in ('pmedian', 'pcentre'):
-            p = par.get('p')
-            if not isinstance(p, int) or isinstance(p, bool) or p < 1:
+            p = self._count(par.get('p'))
+            if p is None or p < 1:
                 raise ScenarioException(f'problem {self.problem.name}: parameter p (number of locations) is needed')
             if p > len(S):
                 raise ScenarioException(f'problem {self.problem.name}: p = {p} locations, but only {len(S)} candidates')
@@ -600,7 +600,7 @@ class ScenarioSolver:
             if payload['isCapacitated']:
                 payload['supplies'] = capacities
         elif type in ('pmedian', 'pcentre'):
-            payload = {'type': type, 'p': par['p'], 'varCosts': M, 'demands': demands,
+            payload = {'type': type, 'p': self._count(par['p']), 'varCosts': M, 'demands': demands,
                        'isCapacitated': par.get('isCapacitated', False),
                        'isDemandWeighted': par.get('isDemandWeighted', False)}
             if payload['isCapacitated']:
@@ -656,6 +656,13 @@ class ScenarioSolver:
             return out
         return payload, results
 
+    @staticmethod
+    def _count(v):
+        """ a whole number - also written as 5.0 (e.g. by a number field); None otherwise """
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        return int(v) if float(v).is_integer() else None
+
     def _wlp(self): return self._discrete('wlp')
     def _pmedian(self): return self._discrete('pmedian')
     def _pcentre(self): return self._discrete('pcentre')
@@ -667,8 +674,8 @@ class ScenarioSolver:
         D = self._role('destinations', 'customer')
         par = self.par
         # the facilities are a result - their number p and their capacities are parameters, not nodes
-        p = par.get('p')
-        if not isinstance(p, int) or isinstance(p, bool) or p < 1:
+        p = self._count(par.get('p'))
+        if p is None or p < 1:
             raise ScenarioException(f'problem {self.problem.name}: parameter p (number of facilities) is needed')
         caps = par.get('capacities')
         isCap = par.get('isCapacitated', caps is not None)
