@@ -1,58 +1,58 @@
 # pyLogisticsLab
 
-Python-Bibliothek und REST-Server für logistische Optimierungsprobleme (TSP, Transportproblem, Standortprobleme, Tourenplanung …) mit Anbindung an OpenStreetMap-Dienste für Distanzmatrizen, Routing und Geocoding. Neben dem REST-Server gibt es eine lokale Schnittstelle für Desktop-Apps.
+Python library and REST server for logistics optimisation problems (TSP, transportation problem, location problems, vehicle routing …) with access to OpenStreetMap services for distance matrices, routing and geocoding. Besides the REST server there is a local interface for desktop apps.
 
 ```
-        Flutter-App (Desktop, Web, Mobil)
+        Flutter app (desktop, web, mobile)
            │                       │
-   REST + API-Key            JSON-RPC über stdin/stdout
-           │                   (nur Desktop)
+   REST + API key            JSON-RPC via stdin/stdout
+           │                   (desktop only)
   logisticsLabServer        logisticsLabCore.stdio
            └──────────┬────────────┘
-               logisticsLabCore         Prüfung der Daten, Jobs, Solver-Prozesse, Abbruch
+               logisticsLabCore         validation of the data, jobs, solver processes, cancelling
                       │
-          pyLogisticsLab · osm_data     Modelle (CMPL, OR-Tools) · OSM-Server der TH Wildau
+          pyLogisticsLab · osm_data     models (CMPL, OR-Tools) · OSM servers of TH Wildau
 ```
 
-Ein Projekt der Technischen Hochschule Wildau, LGPL-3.0.
+A project of the Technical University of Applied Sciences Wildau, AGPL-3.0-or-later.
 
-## Inhalt
+## Contents
 
-| Verzeichnis | Inhalt |
+| Directory | Contents |
 |---|---|
-| `pyLogisticsLab/` | Bibliothek mit den Modellen: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, die kontinuierlichen `ContPMedian`, `ContPCentre` (`contLocation.py`), `Scp`, `Mcp`, `Cpp`, `Vrp` und den Netzwerkflüssen `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` und dem mehrstufigen WLP `MultiStageWlp` (`nwf.py`) |
-| `logisticsLabCore/` | Kern ohne Transportschicht: Datenmodelle (Items), Handler, Jobverwaltung mit Solver-Prozessen, lokale stdio-Schnittstelle, Szenario-Format (`scenario.py`) |
-| `logisticsLabServer/` | REST-Server (FastAPI) auf Basis des Kerns, mit API-Keys und Limits |
-| `osm_data/` | Zugriff auf OpenRouteService/OSRM (Matrix, Routing) und Photon/Nominatim (Geocoding) |
-| `cmpl/` | CMPL-Installation dieses Rechners (`bin/cmpl`, `Thirdparty/…`), nicht versioniert – siehe unten |
-| `confs/` | alle Konfigurationen: OSM-Server (`logisticsLab.yml`), Server (`logisticsLabServer.yml`), API-Keys (`apiKeys.yml`, nicht versioniert) |
-| `logs/` | Logdateien und Matrix-Cache von Server, Kommandozeilen-Tool und lokaler Schnittstelle, nicht versioniert |
-| `logisticsLabCli/` | Kommandozeilen-Tool `logisticslab`: Szenarien lösen und anzeigen, alte LogisticsLab-Dateien (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) umwandeln |
-| `tests/` | Beispiel- und Testskripte für Bibliothek (`tests/pyCmpl`) und Server (`tests/serverTests`), Beispielszenario (`tests/scenarios`) |
+| `pyLogisticsLab/` | library with the models: `TspMaster`, `Tpp`, `Wlp`, `PMedian`, `PCentre`, the continuous `ContPMedian`, `ContPCentre` (`contLocation.py`), `Scp`, `Mcp`, `Cpp`, `Vrp` and the network flows `MinCostFlow`, `MaxFlow`, `MultiCommodityFlow`, `MultiModalFlow` and the multi-stage WLP `MultiStageWlp` (`nwf.py`) |
+| `logisticsLabCore/` | core without transport layer: data models (items), handlers, job management with solver processes, local stdio interface, scenario format (`scenario.py`) |
+| `logisticsLabServer/` | REST server (FastAPI) based on the core, with API keys and limits |
+| `osm_data/` | access to OpenRouteService/OSRM (matrix, routing) and Photon/Nominatim (geocoding) |
+| `cmpl/` | CMPL installation of this machine (`bin/cmpl`, `Thirdparty/…`), not versioned – see below |
+| `confs/` | all configurations: OSM servers (`logisticsLab.yml`), server (`logisticsLabServer.yml`), API keys (`apiKeys.yml`, not versioned) |
+| `logs/` | log files and matrix cache of the server, the command line tool and the local interface, not versioned |
+| `logisticsLabCli/` | command line tool `logisticslab`: solve and show scenarios, convert old LogisticsLab files (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) |
+| `tests/` | example and test scripts for the library (`tests/pyCmpl`) and the server (`tests/serverTests`), example scenario (`tests/scenarios`) |
 
 ## Installation
 
 ```bash
 conda create -n pyLogisticsLab python=3.14
 conda activate pyLogisticsLab
-pip install -r requirements.txt          # pyCmpl aus GitHub und die übrigen Pakete
-pip install -e .                         # Arbeitsplatz und Desktop-App
-pip install -e ".[server]"               # REST-Server: zusätzlich fastapi, uvicorn, httpx
+pip install -r requirements.txt          # pyCmpl from GitHub and the other packages
+pip install -e .                         # workstation and desktop app
+pip install -e ".[server]"               # REST server: additionally fastapi, uvicorn, httpx
 ```
 
-`pip install -e .` installiert das Projekt aus `pyproject.toml` im Entwicklungsmodus. Danach lassen sich `pyLogisticsLab`, `logisticsLabCore`, `logisticsLabCli` und `osm_data` von überall importieren, ohne `PYTHONPATH`. Änderungen an den Quellen wirken sofort.
-- **Befehle:** Die Installation legt zwei Befehle an: `logisticslab` (Kommandozeilen-Tool, siehe unten) und `logisticslab-stdio` (lokale Schnittstelle für Desktop-Apps, gleich `python -m logisticsLabCore.stdio`).
-- **Nur im Entwicklungsmodus (`-e`):** `pyLogisticsLab` findet die CMPL-Installation unter `<Projekt>/cmpl` über den Ort seiner Quellen. Bei einer normalen Installation müsste `CMPLHOME` gesetzt sein.
-- **pyCmpl ist keine Abhängigkeit in `pyproject.toml`:** Sonst würde pip ein mit `pip install -e ../pyCmpl` eingebundenes pyCmpl durch die Fassung aus GitHub ersetzen. Wer pyCmpl lokal weiterentwickelt, installiert es zuerst mit `pip install -e ../pyCmpl` und dann `pip install -e . --no-deps`, falls die übrigen Pakete schon da sind.
-- **Der REST-Server** (`logisticsLabServer/`) ist kein Paket, sondern wird aus seinem Verzeichnis gestartet. Den Kern findet er über die Installation.
+`pip install -e .` installs the project from `pyproject.toml` in development mode. Afterwards `pyLogisticsLab`, `logisticsLabCore`, `logisticsLabCli` and `osm_data` can be imported from anywhere, without `PYTHONPATH`. Changes to the sources take effect immediately.
+- **Commands:** The installation creates two commands: `logisticslab` (command line tool, see below) and `logisticslab-stdio` (local interface for desktop apps, same as `python -m logisticsLabCore.stdio`).
+- **Only in development mode (`-e`):** `pyLogisticsLab` finds the CMPL installation under `<project>/cmpl` via the location of its sources. With a normal installation `CMPLHOME` has to be set.
+- **pyCmpl is not a dependency in `pyproject.toml`:** Otherwise pip would replace a pyCmpl installed with `pip install -e ../pyCmpl` by the version from GitHub. Anyone developing pyCmpl locally installs it first with `pip install -e ../pyCmpl` and then `pip install -e . --no-deps`, if the other packages are already there.
+- **The REST server** (`logisticsLabServer/`) is not a package but is started from its directory. It finds the core via the installation.
 
-**pyCmpl** ist ein eigenes Repository ([MikeSteglich/pyCmpl](https://github.com/MikeSteglich/pyCmpl)) und wird über `requirements.txt` in einer festen Version installiert (Git-Tag, z. B. `v3.0.0`). Derselbe Stand wird auch von der CMPL-Distribution und der CMPL-IDE verwendet.
-- **Neue Version übernehmen:** In pyCmpl einen neuen Tag setzen, in `requirements.txt` eintragen und neu installieren.
-- **pyCmpl gleichzeitig weiterentwickeln:** pyCmpl neben pyLogisticsLab klonen und mit `pip install -e ../pyCmpl` einbinden. Änderungen wirken dann sofort.
-- **pyCmpl ändern:** nur in `../pyCmpl`, nicht in einer Kopie. Den ganzen Ablauf (Entwickeln, Version und Tag, Projekte aktualisieren, CMPL-IDE neu bauen) beschreibt der Abschnitt „Changing pyCmpl“ in der README von pyCmpl.
-- **Privates Repository:** Auf einem Server braucht pip Lesezugriff, z. B. über einen Deploy-Key (SSH) oder ein Token mit Leserecht.
+**pyCmpl** is a repository of its own ([MikeSteglich/pyCmpl](https://github.com/MikeSteglich/pyCmpl)) and is installed in a fixed version via `requirements.txt` (git tag, e.g. `v3.0.0`). The same version is also used by the CMPL distribution and the CMPL IDE.
+- **Taking over a new version:** Set a new tag in pyCmpl, enter it in `requirements.txt` and reinstall.
+- **Developing pyCmpl at the same time:** Clone pyCmpl next to pyLogisticsLab and include it with `pip install -e ../pyCmpl`. Changes then take effect immediately.
+- **Changing pyCmpl:** only in `../pyCmpl`, not in a copy. The whole process (developing, version and tag, updating the projects, rebuilding the CMPL IDE) is described in the section “Changing pyCmpl” in the README of pyCmpl.
+- **Private repository:** On a server pip needs read access, e.g. via a deploy key (SSH) or a token with read permission.
 
-**CMPL-Binärdateien:** Sie sind nicht im Repository. pyCmpl sucht CMPL unter `$CMPLHOME/bin/cmpl` (unter Windows `cmpl.exe`). Ist `CMPLHOME` nicht gesetzt, setzt `pyLogisticsLab` die Variable auf `<Projekt>/cmpl`, sofern es dort ein `bin/` gibt. Das Verzeichnis hat das Layout einer CMPL-Installation:
+**CMPL binaries:** They are not in the repository. pyCmpl looks for CMPL under `$CMPLHOME/bin/cmpl` (on Windows `cmpl.exe`). If `CMPLHOME` is not set, `pyLogisticsLab` sets the variable to `<project>/cmpl`, provided there is a `bin/` there. The directory has the layout of a CMPL installation:
 
 ```
 cmpl/
@@ -60,23 +60,23 @@ cmpl/
   Thirdparty/Highs/highs
 ```
 
-Die Pfade zu den Solvern in `bin/cmpl.opt` sind relativ zu `bin/` (`../Thirdparty/Highs/highs`). Ohne CMPL laufen nur TSP und VRP, die OR-Tools nutzen. Für den Linux-Server wird eine CMPL-Distribution für Linux gebraucht.
+The paths to the solvers in `bin/cmpl.opt` are relative to `bin/` (`../Thirdparty/Highs/highs`). Without CMPL only TSP and VRP run, which use OR-Tools. The Linux server needs a CMPL distribution for Linux.
 
-**Konfiguration und Logs:** Alle Konfigurationen liegen in `confs/`, alle Logdateien und der Matrix-Cache in `logs/`. Server, Kommandozeilen-Tool, lokale Schnittstelle, `osm_data` und die Tests finden sie dort von selbst, egal aus welchem Verzeichnis sie gestartet werden (`logisticsLabCore/paths.py`).
+**Configuration and logs:** All configurations are in `confs/`, all log files and the matrix cache in `logs/`. The server, the command line tool, the local interface, `osm_data` and the tests find them there by themselves, no matter from which directory they are started (`logisticsLabCore/paths.py`).
 
-| Datei | versioniert | Inhalt |
+| File | versioned | Contents |
 |---|---|---|
-| `confs/logisticsLab.yml` | ja | OSM-Server der TH Wildau (Matrix, Routing, Geocoding), ohne Zugangsdaten |
-| `confs/logisticsLab.local.yml` | nein | optional: eigene OSM-Server oder ein ORS-API-Key. Ist sie vorhanden, ersetzt sie `logisticsLab.yml`. Vorlage: `confs/logisticsLab.local.example.yml` |
-| `confs/logisticsLabServer.yml` | ja | Konfiguration des REST-Servers, siehe unten |
-| `confs/apiKeys.yml` | nein | API-Keys des Servers (nur Hashes), erzeugt von `manageKeys.py`. Vorlage zur Ansicht: `confs/apiKeys.example.yml` |
-| `checkserver/checkServer.opt` | nein | Mailzugang der Serverüberwachung, Vorlage `checkserver/checkServer.example.opt` |
+| `confs/logisticsLab.yml` | yes | OSM servers of TH Wildau (matrix, routing, geocoding), without credentials |
+| `confs/logisticsLab.local.yml` | no | optional: own OSM servers or an ORS API key. If present, it replaces `logisticsLab.yml`. Template: `confs/logisticsLab.local.example.yml` |
+| `confs/logisticsLabServer.yml` | yes | configuration of the REST server, see below |
+| `confs/apiKeys.yml` | no | API keys of the server (hashes only), created by `manageKeys.py`. Template for reference: `confs/apiKeys.example.yml` |
+| `checkserver/checkServer.opt` | no | mail access of the server monitoring, template `checkserver/checkServer.example.opt` |
 
-- **Andere Orte:** `LOGLAB_CONF_DIR` legt das Konfigurationsverzeichnis fest, `LOGLAB_LOG_DIR` das Log-Verzeichnis, z. B. `/etc/logisticsLab` und `/var/log/logisticsLab` auf dem Linux-Server. Einzelne Dateien lassen sich in `logisticsLabServer.yml` (`apiKeyFile`, `logPath`, `osmConfigFile`) bzw. mit `--osmConfig` und `--logPath` umstellen.
+- **Other locations:** `LOGLAB_CONF_DIR` sets the configuration directory, `LOGLAB_LOG_DIR` the log directory, e.g. `/etc/logisticsLab` and `/var/log/logisticsLab` on the Linux server. Single files can be changed in `logisticsLabServer.yml` (`apiKeyFile`, `logPath`, `osmConfigFile`) or with `--osmConfig` and `--logPath`.
 
-## Bibliothek
+## Library
 
-Die Modelle bekommen ihre Daten direkt als Listen bzw. Matrizen:
+The models get their data directly as lists or matrices:
 
 ```python
 import pyLogisticsLab as ll
@@ -87,26 +87,26 @@ m.solve()
 print(m.getObjValue(), m.getFlows())
 ```
 
-Weitere Beispiele stehen in `tests/pyCmpl/`. Wer pyCmpl ohne `pyLogisticsLab` direkt nutzt, muss `CMPLHOME` selbst setzen. Fehler werden als `ll.LogLabException` gemeldet. Fortschrittsmeldungen gehen über das `logging`-Modul (Logger `pyLogisticsLab.*`) und nicht über `print`. Wer sie sehen will, ruft `logging.basicConfig(level=logging.INFO)` auf.
+More examples are in `tests/pyCmpl/`. Anyone using pyCmpl directly without `pyLogisticsLab` has to set `CMPLHOME` themselves. Errors are reported as `ll.LogLabException`. Progress messages go through the `logging` module (logger `pyLogisticsLab.*`) and not through `print`. To see them, call `logging.basicConfig(level=logging.INFO)`.
 
 ## Server
 
-Der Server liegt in `logisticsLabServer/` und wird **aus diesem Verzeichnis** gestartet, weil seine Module sich gegenseitig direkt importieren. Seine Konfiguration liest er aus `confs/logisticsLabServer.yml` und `confs/logisticsLab.yml`, die Logs schreibt er nach `logs/`.
+The server is in `logisticsLabServer/` and is started **from this directory**, because its modules import each other directly. It reads its configuration from `confs/logisticsLabServer.yml` and `confs/logisticsLab.yml` and writes its logs to `logs/`.
 
 ```bash
 cd logisticsLabServer
-python manageKeys.py add mein-test          # Key einmalig anlegen und notieren
+python manageKeys.py add my-test            # create a key once and note it down
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-Zum Entwickeln geht auch `fastapi dev main.py` (lädt bei Änderungen neu). `fastapi dev` ist nicht für den Betrieb gedacht.
+For development `fastapi dev main.py` also works (reloads on changes). `fastapi dev` is not meant for production.
 
-### Ablauf einer Anfrage
+### Course of a request
 
-Optimierungsprobleme laufen asynchron. Der Client reicht das Problem ein, bekommt eine `id` und fragt das Ergebnis ab, bis der Status `solution`, `noSolution`, `error` oder `cancelled` ist. Jedes Problem wird in einem eigenen Solver-Prozess gelöst, deshalb kann es über `/v1/cancel` abgebrochen werden, auch während es läuft.
+Optimisation problems run asynchronously. The client submits the problem, gets an `id` and polls the result until the status is `solution`, `noSolution`, `error` or `cancelled`. Each problem is solved in a solver process of its own, so it can be cancelled via `/v1/cancel`, even while it is running.
 
 ```bash
-KEY=...   # aus manageKeys.py
+KEY=...   # from manageKeys.py
 curl -s -X POST http://127.0.0.1:8000/v1/tpp -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
      -d '{"varCosts": [[3,2],[1,4]], "supplies": [10,10], "demands": [8,8]}'
 # {"id": "6f1c…", "status": "waiting", "message": "Problem is waiting in queue"}
@@ -116,218 +116,218 @@ curl -s -X POST http://127.0.0.1:8000/v1/results -H "X-API-Key: $KEY" -H "Conten
 # {"id": "6f1c…", "status": "solution", "message": "...", "results": {"objVal": 24.0, "solvingTime": 0.04, ...}}
 ```
 
-Ein abgeholtes Endergebnis wird gelöscht. Ergebnisse, die nicht abgeholt werden, löscht der Server nach `maxInactivityTime`.
+A final result is deleted once it has been fetched. Results that are not fetched are deleted by the server after `maxInactivityTime`.
 
-Ein Service-Thread räumt außerdem regelmäßig auf (alle `serviceIntervall` Sekunden):
+A service thread also cleans up regularly (every `serviceIntervall` seconds):
 
-- **Verlassene Probleme:** Fragt ein Client länger als `maxPollingPause` nicht nach dem Status eines wartenden oder laufenden Problems, wird es abgebrochen (`cancelled`). Clients müssen also mindestens alle `maxPollingPause` Sekunden `/v1/results` aufrufen.
-- **Hängende Solver:** Ein Watchdog beendet jedes Problem, das länger rechnet als `maxSolvingTime` + `runTimeGrace`. Ohne `maxSolvingTime` gilt `defaultMaxRunTime` + `runTimeGrace`, oder `maxRunTime` des Problemtyps, wenn gesetzt. Das Problem endet dann mit `error` und HTTP-Status 504.
+- **Abandoned problems:** If a client does not ask for the status of a waiting or running problem for longer than `maxPollingPause`, the problem is cancelled (`cancelled`). Clients therefore have to call `/v1/results` at least every `maxPollingPause` seconds.
+- **Hanging solvers:** A watchdog terminates every problem that computes longer than `maxSolvingTime` + `runTimeGrace`. Without `maxSolvingTime`, `defaultMaxRunTime` + `runTimeGrace` applies, or `maxRunTime` of the problem type, if set. The problem then ends with `error` and HTTP status 504.
 
 ### Endpoints
 
-Alle Endpoints sind `POST` und erwarten JSON. Unbekannte Felder werden mit 422 abgelehnt.
+All endpoints are `POST` and expect JSON. Unknown fields are rejected with 422.
 
-| Endpoint | Zweck | Dienst für Key-Rechte |
+| Endpoint | Purpose | Service for key permissions |
 |---|---|---|
-| `/v1/tsp` | Traveling Salesman: `distances` oder `coordinates` | `tsp` |
-| `/v1/tpp` | Transportproblem: `varCosts` oder `sourceCoordinates` + `destinationCoordinates`, dazu `supplies`, `demands`; optional Fixkosten, Kapazitäten, Bereiche, `objSense` (`min`/`max`/`minimax`), Single Source, Blocking | `tpp` |
-| `/v1/wlp` | Warehouse Location: `varCosts` (Kostensatz je Nachfrageeinheit) oder Koordinaten, `fixedCosts`, `demands`; mit `isCapacitated` auch `supplies` | `wlp` |
-| `/v1/pmedian` | p-Median: `p`, `varCosts` oder Koordinaten; optional `demands`, `supplies`, `isDemandWeighted`, `isCapacitated` | `pmedian` |
-| `/v1/pcentre` | p-Center (minimiert die größte Entfernung): Felder wie p-Median | `pcentre` |
-| `/v1/contpmedian` | kontinuierlicher p-Median (Standorte frei wählbar, Großkreisdistanz in km): `p`, `coordinates` der Kunden, optional `demands`, `capacities` (Zahl oder p Zahlen; ohne: unkapazitiert), `isSingleSource` (Standard `true`), `nrOfStarts` (Standard 20) | `contpmedian` |
-| `/v1/contpcentre` | kontinuierliches p-Center: Felder wie `contpmedian` | `contpcentre` |
-| `/v1/scp` | Set Covering: `distances` oder Koordinaten, `radius`; optional `fixedCosts` (Standard 1, also möglichst wenige Standorte) | `scp` |
-| `/v1/mcp` | Maximal Covering: `distances` oder Koordinaten, `radius`, `demands`, `maxSrcCost` (Budget für die Fixkosten der Standorte; mit `fixedCosts` 1 die Anzahl) | `mcp` |
-| `/v1/cpp` | Chinese Postman: `edges` (`[[i, j], ...]`), `edgeWeights`, `startNode`; optional `edgeTypes` (0 gerichtet, 1 ungerichtet, Standard 1) | `cpp` |
-| `/v1/vrp` | Tourenplanung: `distances` oder `coordinates` (alle Knoten mit Depot), `demands`, `capacities` (je Fahrzeug), `depot`; optional `times`, `timeWindows`, `serviceTimes`, `maxTime`, `maxDist`, `maxWaitingTime`, `maxSolvingTime` | `vrp` |
-| `/v1/mincostflow` | Min-Cost-Flow: `edges`, `costs` je Kante, `supplies`, optional `demands`, `minCaps`, `maxCaps`, `fixedCosts` je Kante (fallen an, wenn die Kante Fluss trägt; macht das Problem zum MIP, mit `mipGap`) | `mincostflow` |
-| `/v1/maxflow` | maximaler Fluss: `edges`, `source`, `sink`, `maxCaps`, optional `minCaps`, `nrOfNodes` | `maxflow` |
-| `/v1/multicommodity` | Multi-Commodity-Flow: `edges`, `costs` [Kanten × Güter], `supplies`/`demands` [Knoten × Güter], optional gemeinsame `minCaps`/`maxCaps` je Kante, `capacityFactors` [Kanten × Güter] | `multicommodity` |
-| `/v1/multistagewlp` | mehrstufiges WLP (Fixkosten-Umladeproblem): Quellen → Lager in einer oder mehreren Stufen → Kunden. `edges`, `costs`, `supplies`, optional `demands`, `nodeFixedCosts` (Öffnungskosten, Knoten mit Kosten > 0 sind Lager), `nodeMaxCaps` (Kapazität eines Lagers), `nodeMinCaps` (Mindestdurchsatz eines offenen Lagers), `minCaps`, `maxCaps`, `fixedCosts` je Kante, `isSingleSource` (Standard `false`: wer von Lagern beliefert wird, bekommt die Ware aus genau einem Lager), `balance`, `shortageCosts`, `mipGap` | `multistagewlp` |
-| `/v1/multimodal` | multimodaler Fluss: `edges`, `costs` [Kanten × Verkehrsträger] (`null`: Verkehrsträger auf dieser Kante nicht verfügbar), `supplies`, optional `demands`, `fixedCosts`, `minCaps` (Mindestmenge, wenn genutzt), `maxCaps` | `multimodal` |
-| `/v1/solve` | beliebiges Problem, ausgewählt über das Feld `type` (`"tsp"`, `"tpp"`, `"wlp"`, `"pmedian"`, `"pcentre"`, `"contpmedian"`, `"contpcentre"`, `"scp"`, `"mcp"`, `"cpp"`, `"vrp"`, `"mincostflow"`, `"maxflow"`, `"multicommodity"`, `"multimodal"`, `"multistagewlp"`) | je nach `type` |
-| `/v1/results` | Status bzw. Ergebnis zu einer `id` | – |
-| `/v1/cancel` | wartendes oder laufendes Problem abbrechen (`{"id": ...}`); der Status wechselt kurz danach zu `cancelled` | – |
-| `/v1/matrix` | Matrix aus Koordinaten: `matrixMode` `distances` (m), `durations` (s), `costs`, `both` (Distanzen und Zeiten) oder `all`, optional `sources`, `destinations`, `rounded` und die Matrix-Optionen (siehe unten) | `matrix` |
-| `/v1/routing` | Route über mehrere Koordinaten | `routing` |
-| `/v1/coordinates` | Koordinaten `[lat, lon]` zu `adresses`, optional `limit` (Treffer je Adresse, 1–10), `countrycodes` (z. B. `["DE"]`), `near` (`[lat, lon]`, nahe Treffer zuerst). Antwort: `coordinates` (erster Treffer, `null` ohne Treffer) und `hits` (je Adresse eine Liste mit `coordinates`, `name`, `street`, `postcode`, `city`, `country`, `countrycode`, `server`) | `geocoding` |
-| `/v1/search`, `/v1/reverse` | Treffer zu einer Adresse (`adress`) bzw. Adresse zu einer Koordinate (`coordinate`), `results` ist ohne Treffer leer | `geocoding` |
+| `/v1/tsp` | travelling salesman: `distances` or `coordinates` | `tsp` |
+| `/v1/tpp` | transportation problem: `varCosts` or `sourceCoordinates` + `destinationCoordinates`, plus `supplies`, `demands`; optional fixed costs, capacities, ranges, `objSense` (`min`/`max`/`minimax`), single source, blocking | `tpp` |
+| `/v1/wlp` | warehouse location: `varCosts` (cost rate per unit of demand) or coordinates, `fixedCosts`, `demands`; with `isCapacitated` also `supplies` | `wlp` |
+| `/v1/pmedian` | p-median: `p`, `varCosts` or coordinates; optional `demands`, `supplies`, `isDemandWeighted`, `isCapacitated` | `pmedian` |
+| `/v1/pcentre` | p-centre (minimises the largest distance): fields as for p-median | `pcentre` |
+| `/v1/contpmedian` | continuous p-median (locations can be chosen freely, great-circle distance in km): `p`, `coordinates` of the customers, optional `demands`, `capacities` (a number or p numbers; without: uncapacitated), `isSingleSource` (default `true`), `nrOfStarts` (default 20) | `contpmedian` |
+| `/v1/contpcentre` | continuous p-centre: fields as for `contpmedian` | `contpcentre` |
+| `/v1/scp` | set covering: `distances` or coordinates, `radius`; optional `fixedCosts` (default 1, i.e. as few locations as possible) | `scp` |
+| `/v1/mcp` | maximal covering: `distances` or coordinates, `radius`, `demands`, `maxSrcCost` (budget for the fixed costs of the locations; with `fixedCosts` 1 the number) | `mcp` |
+| `/v1/cpp` | Chinese postman: `edges` (`[[i, j], ...]`), `edgeWeights`, `startNode`; optional `edgeTypes` (0 directed, 1 undirected, default 1) | `cpp` |
+| `/v1/vrp` | vehicle routing: `distances` or `coordinates` (all nodes including the depot), `demands`, `capacities` (per vehicle), `depot`; optional `times`, `timeWindows`, `serviceTimes`, `maxTime`, `maxDist`, `maxWaitingTime`, `maxSolvingTime` | `vrp` |
+| `/v1/mincostflow` | min-cost flow: `edges`, `costs` per edge, `supplies`, optional `demands`, `minCaps`, `maxCaps`, `fixedCosts` per edge (incurred if the edge carries flow; makes the problem a MIP, with `mipGap`) | `mincostflow` |
+| `/v1/maxflow` | maximum flow: `edges`, `source`, `sink`, `maxCaps`, optional `minCaps`, `nrOfNodes` | `maxflow` |
+| `/v1/multicommodity` | multi-commodity flow: `edges`, `costs` [edges × commodities], `supplies`/`demands` [nodes × commodities], optional shared `minCaps`/`maxCaps` per edge, `capacityFactors` [edges × commodities] | `multicommodity` |
+| `/v1/multistagewlp` | multi-stage WLP (fixed-charge transshipment problem): sources → warehouses in one or more stages → customers. `edges`, `costs`, `supplies`, optional `demands`, `nodeFixedCosts` (opening costs, nodes with costs > 0 are warehouses), `nodeMaxCaps` (capacity of a warehouse), `nodeMinCaps` (minimum throughput of an open warehouse), `minCaps`, `maxCaps`, `fixedCosts` per edge, `isSingleSource` (default `false`: whoever is supplied by warehouses gets the goods from exactly one warehouse), `balance`, `shortageCosts`, `mipGap` | `multistagewlp` |
+| `/v1/multimodal` | multimodal flow: `edges`, `costs` [edges × modes] (`null`: mode not available on this edge), `supplies`, optional `demands`, `fixedCosts`, `minCaps` (minimum quantity if used), `maxCaps` | `multimodal` |
+| `/v1/solve` | any problem, selected via the field `type` (`"tsp"`, `"tpp"`, `"wlp"`, `"pmedian"`, `"pcentre"`, `"contpmedian"`, `"contpcentre"`, `"scp"`, `"mcp"`, `"cpp"`, `"vrp"`, `"mincostflow"`, `"maxflow"`, `"multicommodity"`, `"multimodal"`, `"multistagewlp"`) | depending on `type` |
+| `/v1/results` | status or result for an `id` | – |
+| `/v1/cancel` | cancel a waiting or running problem (`{"id": ...}`); the status changes to `cancelled` shortly afterwards | – |
+| `/v1/matrix` | matrix from coordinates: `matrixMode` `distances` (m), `durations` (s), `costs`, `both` (distances and times) or `all`, optional `sources`, `destinations`, `rounded` and the matrix options (see below) | `matrix` |
+| `/v1/routing` | route via several coordinates | `routing` |
+| `/v1/coordinates` | coordinates `[lat, lon]` for `adresses`, optional `limit` (hits per address, 1–10), `countrycodes` (e.g. `["DE"]`), `near` (`[lat, lon]`, nearby hits first). Answer: `coordinates` (first hit, `null` without a hit) and `hits` (per address a list with `coordinates`, `name`, `street`, `postcode`, `city`, `country`, `countrycode`, `server`) | `geocoding` |
+| `/v1/search`, `/v1/reverse` | hits for an address (`adress`) or address for a coordinate (`coordinate`), `results` is empty without a hit | `geocoding` |
 
-Die Ergebnisse aller Probleme beginnen mit `objVal` und `solvingTime`, danach folgen die problemspezifischen Felder. Koordinaten werden als `[lat, lon]` übergeben. Alle Indizes sind **0-basiert**, also Position in der übergebenen Liste bzw. Zeile der Matrix. `-1` bedeutet „keine“.
+The results of all problems start with `objVal` and `solvingTime`, followed by the problem-specific fields. Coordinates are passed as `[lat, lon]`. All indices are **0-based**, i.e. the position in the passed list or the row of the matrix. `-1` means “none”.
 
-| Typ | Ergebnisfelder |
+| Type | Result fields |
 |---|---|
-| `tsp` | `route` (Knotenfolge) |
-| `tpp` | `flows` (Matrix), `totalCosts`, `totalVarCosts`, `totalFixedCosts`, `totalFlow`, `sourceFlows`, `destinationFlows`, `minCostRate`, `maxCostRate` |
-| `wlp`, `pmedian`, `pcentre` | `activeSources` (0/1 je Quelle), `assignments` (versorgende Quelle je Senke) |
-| `contpmedian`, `contpcentre` | `locations` (`[lat, lon]` je Standort), `assignments` (Standort mit dem größten Fluss je Kunde), `customerDistances` (km, bei Aufteilung zum entferntesten liefernden Standort), mit `isSingleSource: false` auch `flows` [Standorte × Kunden] |
-| `scp`, `mcp` | `activeSources`, `coveringSources` (alle geöffneten Quellen im Radius je Senke), `assignments` (nächste davon; bei `mcp` `-1` für nicht überdeckte Senken) |
-| `cpp` | `eulerTour` (Knotenfolge), `edgeUsages` (Nutzungen je übergebener Kante) |
-| `vrp` | `routes`, `routeLoads`, `routeDistances` je Fahrzeug; mit Zeiten (`times` oder aus `coordinates`) der Ablauf je Halt: `routeArrivals` (Ankunft), `routeWaitingTimes` (Warten wegen Zeitfenster), `routeTimes` (Beginn der Bedienung), `routeServiceTimes`, `routeTravelTimes` (Fahrzeit vom vorigen Halt). Ohne Zeitfenster und `maxTime` beginnt jede Route bei 0 und wartet nicht. Unbenutzte Fahrzeuge haben die Route `[depot, depot]` |
-| `mincostflow`, `maxflow` | `flows` je Kante; bei `maxflow` ist `objVal` der maximale Fluss; `mincostflow` mit `fixedCosts` zusätzlich `usages` (0/1 je Kante), `totalVarCosts`, `totalFixedCosts` |
-| `multicommodity` | `flows` [Kanten × Güter] |
-| `multimodal` | `flows` und `usages` (0/1) [Kanten × Verkehrsträger], `totalVarCosts`, `totalFixedCosts` |
-| `multistagewlp` | `flows`, `usages` (0/1) je Kante, `openNodes` (1 offen, 0 geschlossen je Lager, sonst `null`), `nodeFlows`, `totalVarCosts`, `totalFixedCosts` (Kanten), `totalOpeningCosts` |
+| `tsp` | `route` (sequence of nodes) |
+| `tpp` | `flows` (matrix), `totalCosts`, `totalVarCosts`, `totalFixedCosts`, `totalFlow`, `sourceFlows`, `destinationFlows`, `minCostRate`, `maxCostRate` |
+| `wlp`, `pmedian`, `pcentre` | `activeSources` (0/1 per source), `assignments` (supplying source per sink) |
+| `contpmedian`, `contpcentre` | `locations` (`[lat, lon]` per location), `assignments` (location with the largest flow per customer), `customerDistances` (km, if split, to the most distant supplying location), with `isSingleSource: false` also `flows` [locations × customers] |
+| `scp`, `mcp` | `activeSources`, `coveringSources` (all open sources within the radius per sink), `assignments` (the nearest of them; for `mcp` `-1` for uncovered sinks) |
+| `cpp` | `eulerTour` (sequence of nodes), `edgeUsages` (usages per passed edge) |
+| `vrp` | `routes`, `routeLoads`, `routeDistances` per vehicle; with times (`times` or from `coordinates`) the schedule per stop: `routeArrivals` (arrival), `routeWaitingTimes` (waiting because of time windows), `routeTimes` (start of service), `routeServiceTimes`, `routeTravelTimes` (travel time from the previous stop). Without time windows and `maxTime` every route starts at 0 and does not wait. Unused vehicles have the route `[depot, depot]` |
+| `mincostflow`, `maxflow` | `flows` per edge; for `maxflow` `objVal` is the maximum flow; `mincostflow` with `fixedCosts` additionally `usages` (0/1 per edge), `totalVarCosts`, `totalFixedCosts` |
+| `multicommodity` | `flows` [edges × commodities] |
+| `multimodal` | `flows` and `usages` (0/1) [edges × modes], `totalVarCosts`, `totalFixedCosts` |
+| `multistagewlp` | `flows`, `usages` (0/1) per edge, `openNodes` (1 open, 0 closed per warehouse, otherwise `null`), `nodeFlows`, `totalVarCosts`, `totalFixedCosts` (edges), `totalOpeningCosts` |
 
-Für die Netzwerkflüsse gilt:
-- **Knoten und Kanten:** Knoten sind Indizes ab 0, Kanten Paare `[i, j]`.
-- **Unbegrenzte Kapazitäten:** `null` oder `"M"`.
-- **Ausgleich (`balance`):**
-  - `"auto"` (Standard): wie bei TPP. Bei Angebotsüberschuss bleibt Angebot an den Quellen ungenutzt. Bei Nachfrageüberschuss wird das ganze Angebot geliefert, und ein Teil der Nachfrage bleibt offen. `shortageCosts` legt je Knoten Kosten pro nicht gelieferter Einheit fest, Standard 0. Gilt für alle Flüsse außer `maxflow`.
-  - `"exact"`: Gesamtangebot und Gesamtnachfrage müssen gleich sein, bei `multicommodity` je Gut. Sonst kommt 400.
-- **Knotenkapazitäten:** `nodeMinCaps`/`nodeMaxCaps` begrenzen den Fluss durch jeden Knoten, einschließlich eigenem Angebot und eigener Nachfrage, z. B. an einem Umschlagpunkt. Bei `multicommodity` gilt die Grenze gemeinsam für alle Güter. Bei `multimodal` gibt es nur `nodeMaxCaps`, denn Mindestmengen gelten dort nur für genutzte Verkehrsträger.
-- **Umsetzung:** Intern teilt die Bibliothek einen Knoten mit Kapazität in einen Eingangs- und einen Ausgangsknoten. Dummy-Knoten nehmen den Überschuss auf. Die Ergebnisse beziehen sich nur auf die ursprünglichen Knoten und Kanten.
-- **Ergebnisse dazu:** mit Knotenkapazitäten `nodeFlows`. Wurde ein Überschuss ausgeglichen, kommen `unusedSupplies`, `unmetDemands` und `totalShortageCosts` hinzu, jeweils je Knoten, bei `multicommodity` je Knoten und Gut.
-- **Parallele Kanten:** Keines der Flussmodelle erlaubt parallele Kanten zwischen denselben Knoten. Mehrere Verkehrswege bildet man über `multimodal` mit Verkehrsträgern ab.
-- **Solver:** Alle vier laufen über CMPL und HiGHS (`minCostFlow.cmpl`, mit Fixkosten `minCostFlowFixed.cmpl`, `maxFlow.cmpl`, `multiCommodity.cmpl`, `multimodal.cmpl` in `pyLogisticsLab/`).
-- **Fixkosten:** Bei `mincostflow` bleibt `minCaps` eine feste Mindestmenge. Eine Kante mit `minCaps > 0` wird also immer genutzt und kostet ihre Fixkosten. Bei `multimodal` gilt die Mindestmenge dagegen nur, wenn der Verkehrsträger genutzt wird.
-- **Unbeschränkter Max-Flow:** Gibt es einen Weg von `source` nach `sink` nur über unbegrenzte Kanten, kommt 400.
+For the network flows:
+- **Nodes and edges:** Nodes are indices from 0, edges are pairs `[i, j]`.
+- **Unlimited capacities:** `null` or `"M"`.
+- **Balancing (`balance`):**
+  - `"auto"` (default): as for TPP. With excess supply, supply remains unused at the sources. With excess demand, the whole supply is delivered and part of the demand remains unmet. `shortageCosts` sets costs per undelivered unit per node, default 0. Applies to all flows except `maxflow`.
+  - `"exact"`: Total supply and total demand have to be equal, for `multicommodity` per commodity. Otherwise 400 is returned.
+- **Node capacities:** `nodeMinCaps`/`nodeMaxCaps` limit the flow through each node, including its own supply and demand, e.g. at a transshipment point. For `multicommodity` the limit applies to all commodities together. For `multimodal` there are only `nodeMaxCaps`, because minimum quantities there only apply to used modes.
+- **Implementation:** Internally the library splits a node with capacity into an input and an output node. Dummy nodes take up the excess. The results refer only to the original nodes and edges.
+- **Related results:** with node capacities `nodeFlows`. If an excess was balanced, `unusedSupplies`, `unmetDemands` and `totalShortageCosts` are added, each per node, for `multicommodity` per node and commodity.
+- **Parallel edges:** None of the flow models allows parallel edges between the same nodes. Several transport routes are modelled via `multimodal` with modes.
+- **Solver:** All four run via CMPL and HiGHS (`minCostFlow.cmpl`, with fixed costs `minCostFlowFixed.cmpl`, `maxFlow.cmpl`, `multiCommodity.cmpl`, `multimodal.cmpl` in `pyLogisticsLab/`).
+- **Fixed costs:** For `mincostflow`, `minCaps` remains a fixed minimum quantity. An edge with `minCaps > 0` is therefore always used and incurs its fixed costs. For `multimodal`, on the other hand, the minimum quantity only applies if the mode is used.
+- **Unbounded max flow:** If there is a path from `source` to `sink` only over unlimited edges, 400 is returned.
 
-Für die kontinuierlichen Standortprobleme gilt:
-- **Distanz:** Großkreisdistanz in km, nicht das Straßennetz. Die Kunden müssen auf einer Halbkugel liegen.
-- **Zielfunktion:** `contpmedian` minimiert die Summe Bedarf × Distanz, `contpcentre` die größte Distanz eines Kunden zu einem liefernden Standort. Beim unkapazitierten `contpcentre` zählen die Bedarfe nicht.
-- **Kapazitäten:** Mit `capacities` sind `demands` Pflicht. `isSingleSource: true` ordnet jeden Kunden genau einem Standort zu, `false` erlaubt die Aufteilung seines Bedarfs.
-- **Verfahren:** heuristisch, nicht beweisbar optimal. Start ist das diskrete `pmedian`/`pcentre` mit den Kunden als Kandidaten, danach abwechselnd Standortwahl (sphärischer Weiszfeld bzw. kleinste umschließende Kugelkappe) und Zuordnung (nächster Standort bzw. `Tpp.cmpl` mit Kapazitäten), dann weitere Zufallsstarts im Rahmen von `nrOfStarts` und `maxSolvingTime`.
+For the continuous location problems:
+- **Distance:** great-circle distance in km, not the road network. The customers have to lie on one hemisphere.
+- **Objective:** `contpmedian` minimises the sum of demand × distance, `contpcentre` the largest distance of a customer to a supplying location. For the uncapacitated `contpcentre` the demands do not count.
+- **Capacities:** With `capacities`, `demands` are mandatory. `isSingleSource: true` assigns each customer to exactly one location, `false` allows its demand to be split.
+- **Method:** heuristic, not provably optimal. It starts with the discrete `pmedian`/`pcentre` with the customers as candidates, then alternates location choice (spherical Weiszfeld or smallest enclosing spherical cap) and assignment (nearest location or `Tpp.cmpl` with capacities), then further random starts within `nrOfStarts` and `maxSolvingTime`.
 
-Zum Geocoding:
-- **Kein Treffer:** `null` bzw. eine leere Liste, nie `[0, 0]`. Das wäre ein gültiger Punkt im Atlantik und würde still in Matrizen eingehen.
-- **`countrycodes`:** Nominatim filtert auf dem Server. Photon kennt keinen Länderfilter, dort wird unter den abgerufenen Treffern (höchstens 10) gefiltert. Gibt es darunter keinen im Land, ist die Liste leer.
-- **`near`:** bevorzugt Treffer in der Nähe, ohne die Relevanz zu ersetzen. Photon gewichtet sie selbst, mit einem Radius von einigen 10 km (`zoom=10`), bei Nominatim gilt ein bevorzugter Kartenausschnitt von etwa 50 km um den Punkt (`viewbox`). Weiter entfernte Treffer bleiben möglich. Für einen harten Ausschluss sind `countrycodes` gedacht.
+On geocoding:
+- **No hit:** `null` or an empty list, never `[0, 0]`. That would be a valid point in the Atlantic and would silently end up in matrices.
+- **`countrycodes`:** Nominatim filters on the server. Photon has no country filter, there the fetched hits (at most 10) are filtered. If none of them is in the country, the list is empty.
+- **`near`:** prefers hits nearby without replacing the relevance. Photon weights them itself, with a radius of some 10 km (`zoom=10`), with Nominatim a preferred map section of about 50 km around the point applies (`viewbox`). More distant hits remain possible. `countrycodes` is meant for a hard exclusion.
 
-### Matrizen aus Koordinaten
+### Matrices from coordinates
 
-Alle Probleme mit Koordinaten (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `scp`, `mcp`, `vrp`) und `/v1/matrix` berechnen ihre Matrix an einer Stelle (`logisticsLabCore/matrixService.py`). Der Client braucht keine Matrizen zu verwalten.
+All problems with coordinates (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `scp`, `mcp`, `vrp`) and `/v1/matrix` compute their matrix in one place (`logisticsLabCore/matrixService.py`). The client does not need to manage matrices.
 
-| Feld | Standard | Bedeutung |
+| Field | Default | Meaning |
 |---|---|---|
-| `matrixMode` | `distances` | `distances` (m), `times` (s) oder `costs`; bei `vrp` immer Distanzen, mit `timeWindows`/`maxTime` auch Zeiten |
-| `travelmode` | `car` | `car`, `foot`, `wheelchair`. Die OSM-Server der TH Wildau bieten derzeit nur `car` an. |
-| `matrixSource` | `osm` | `osm`: Straßennetz der OSM-Server. `beeline`: Luftlinie × `detourFactor`, ganz ohne OSM-Server |
-| `detourFactor` | 1,3 | nur `beeline`, typisch für Straßen sind 1,2–1,4 |
-| `averageSpeed` | car 50, foot 5, wheelchair 4 | km/h, nur `beeline`, für die Fahrzeiten |
-| `timeFactor` | 1,0 | Faktor auf alle Fahrzeiten, z. B. 1,2 für Lkw |
-| `costPerKm`, `costPerHour` | – | für `matrixMode: costs`: Kosten = km × `costPerKm` + h × `timeFactor` × `costPerHour`; mindestens einer ist nötig |
-| `noCache` | false | `true` lädt die Matrix neu von den OSM-Servern und erneuert den Cache-Eintrag |
+| `matrixMode` | `distances` | `distances` (m), `times` (s) or `costs`; for `vrp` always distances, with `timeWindows`/`maxTime` also times |
+| `travelmode` | `car` | `car`, `foot`, `wheelchair`. The OSM servers of TH Wildau currently only offer `car`. |
+| `matrixSource` | `osm` | `osm`: road network of the OSM servers. `beeline`: straight-line distance × `detourFactor`, without any OSM server |
+| `detourFactor` | 1.3 | only `beeline`, typical for roads is 1.2–1.4 |
+| `averageSpeed` | car 50, foot 5, wheelchair 4 | km/h, only `beeline`, for the travel times |
+| `timeFactor` | 1.0 | factor on all travel times, e.g. 1.2 for trucks |
+| `costPerKm`, `costPerHour` | – | for `matrixMode: costs`: costs = km × `costPerKm` + h × `timeFactor` × `costPerHour`; at least one is required |
+| `noCache` | false | `true` reloads the matrix from the OSM servers and renews the cache entry |
 
-- **Rundung:** Distanzen und Zeiten werden auf ganze Zahlen gerundet, Kosten auf 2 Nachkommastellen. Bei `/v1/matrix` passiert das nur mit `rounded: true`.
-- **Cache:** Die Rohdaten der OSM-Server (Meter und Sekunden) liegen in einer SQLite-Datei. Die Faktoren werden erst danach angewendet. Ein Eintrag gilt also für alle Kostensätze und Zeitfaktoren, und andere Faktoren lösen keine neue OSM-Anfrage aus.
-  - **Datenstand:** Der Schlüssel eines Eintrags enthält den Datenstand der ORS-Server (`graph_build_date` aus `/ors/v2/status`). Ihn fragt jeder Prozess höchstens einmal pro Stunde ab. Nach einem Update der Server werden alte Einträge nicht mehr verwendet und nach und nach verdrängt. Antwortet ein Server nicht, gilt der zuletzt bekannte Stand.
-  - **Gemessen:** Bei 200 Punkten 13,6 s über OSM, aus dem Cache 0,01 s.
-  - **Größe:** Ein Eintrag mit 200 × 200 belegt etwa 0,34 MB.
-  - **Datenschutz:** Der Cache speichert die Koordinaten der Anfragen, als Schlüssel nur in Hash-Form. Eine Matrix bekommt nur, wer genau dieselben Koordinaten schickt.
-- **`matrixInfo`:** steht im Ergebnis, sobald eine Matrix aus Koordinaten berechnet wurde.
-  - `source`: `osm`, `cache` oder `beeline`.
-  - `status`: `exact`, `unexact` oder `beeline`. Bei `unexact` hat der OSM-Server für einige Punktpaare keine Route oder einen unplausiblen Wert geliefert. Diese Werte sind mit Luftlinie × durchschnittlichem Umweg geschätzt, die Faktoren stehen in `fillFactors`.
-  - `matrices`: welche Matrizen berechnet wurden, dazu die verwendeten Faktoren.
-  - `osmDate`: Stand der OSM-Daten, auf dem die Matrix beruht.
+- **Rounding:** Distances and times are rounded to integers, costs to 2 decimal places. For `/v1/matrix` this only happens with `rounded: true`.
+- **Cache:** The raw data of the OSM servers (metres and seconds) are kept in an SQLite file. The factors are applied only afterwards. An entry therefore applies to all cost rates and time factors, and other factors do not trigger a new OSM request.
+  - **Data version:** The key of an entry contains the data version of the ORS servers (`graph_build_date` from `/ors/v2/status`). Each process queries it at most once per hour. After an update of the servers, old entries are no longer used and are gradually displaced. If a server does not answer, the last known version applies.
+  - **Measured:** For 200 points 13.6 s via OSM, 0.01 s from the cache.
+  - **Size:** An entry with 200 × 200 takes about 0.34 MB.
+  - **Privacy:** The cache stores the coordinates of the requests, as key only in hashed form. Only someone sending exactly the same coordinates gets a matrix.
+- **`matrixInfo`:** is part of the result as soon as a matrix has been computed from coordinates.
+  - `source`: `osm`, `cache` or `beeline`.
+  - `status`: `exact`, `unexact` or `beeline`. With `unexact` the OSM server returned no route or an implausible value for some pairs of points. These values are estimated with straight-line distance × average detour, the factors are in `fillFactors`.
+  - `matrices`: which matrices were computed, plus the factors used.
+  - `osmDate`: version of the OSM data the matrix is based on.
 
-Wird die Matrix aus Koordinaten berechnet, steht sie zusätzlich im Ergebnis (`varCosts`, `distances` bzw. bei `vrp` `distances` und `times`). Bei `vrp` werden alle Zahlen gerundet, weil OR-Tools ganze Zahlen verlangt. Aus Koordinaten lädt `vrp` die Fahrzeiten nur, wenn `timeWindows` oder `maxTime` gesetzt sind.
+If the matrix is computed from coordinates, it is also part of the result (`varCosts`, `distances`, or for `vrp` `distances` and `times`). For `vrp` all numbers are rounded, because OR-Tools requires integers. From coordinates, `vrp` loads the travel times only if `timeWindows` or `maxTime` are set.
 
-Wenn `docs: True` gesetzt ist, steht die vollständige Beschreibung aller Felder unter `/docs`.
+If `docs: True` is set, the full description of all fields is available under `/docs`.
 
-### Zugang mit API-Keys
+### Access with API keys
 
-Jede Anfrage braucht den Header `X-API-Key`. Die Keys verwaltet `manageKeys.py` im Serververzeichnis:
+Every request needs the header `X-API-Key`. The keys are managed by `manageKeys.py` in the server directory:
 
 ```bash
 python manageKeys.py add DSS-WS2026 --expires 2027-03-31 --allowed tsp,tpp --maxOpenProblems 3
 python manageKeys.py list
-python manageKeys.py disable DSS-WS2026     # sperren
+python manageKeys.py disable DSS-WS2026     # block
 python manageKeys.py enable DSS-WS2026
 python manageKeys.py remove DSS-WS2026
 ```
 
-- `add` zeigt den Key **nur einmal** an. In `apiKeys.yml` steht nur sein SHA-256-Hash. Die Datei wird mit den Rechten `600` angelegt und ist nicht versioniert.
-- Der Server lädt `apiKeys.yml` automatisch neu, wenn sie sich ändert. Sperren und neue Keys wirken also ohne Neustart.
-- Ein Key gehört zu einem Namen, z. B. Kurs oder Person. Der Name steht im Log, und nur der Key, der ein Problem eingereicht hat, kann dessen Ergebnis abholen.
-- Ohne `--allowed` darf ein Key alle Dienste nutzen: die Problemtypen (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `contpmedian`, `contpcentre`, `scp`, `mcp`, `cpp`, `vrp`, `mincostflow`, `maxflow`, `multicommodity`, `multimodal`, `multistagewlp`) und `matrix`, `routing`, `geocoding`. Keys mit eigener `--allowed`-Liste bekommen neue Dienste nicht automatisch.
-- Mit `authentication: False` ist der Server ohne Key offen. Das ist nur für die lokale Entwicklung gedacht.
+- `add` shows the key **only once**. `apiKeys.yml` contains only its SHA-256 hash. The file is created with permissions `600` and is not versioned.
+- The server reloads `apiKeys.yml` automatically when it changes. Blocking and new keys therefore take effect without a restart.
+- A key belongs to a name, e.g. a course or a person. The name appears in the log, and only the key that submitted a problem can fetch its result.
+- Without `--allowed` a key may use all services: the problem types (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `contpmedian`, `contpcentre`, `scp`, `mcp`, `cpp`, `vrp`, `mincostflow`, `maxflow`, `multicommodity`, `multimodal`, `multistagewlp`) and `matrix`, `routing`, `geocoding`. Keys with their own `--allowed` list do not get new services automatically.
+- With `authentication: False` the server is open without a key. This is only meant for local development.
 
-### Antworten bei Ablehnung
+### Responses on rejection
 
-| Status | Bedeutung |
+| Status | Meaning |
 |---|---|
-| 401 | Key fehlt, ist falsch, abgelaufen oder gesperrt |
-| 403 | Key darf diesen Dienst nicht nutzen |
-| 422 | Anfrage passt nicht zum Schema (Feld fehlt, falscher Typ, unbekanntes Feld) |
-| 429 | Key hat schon `maxOpenProblems` wartende oder laufende Probleme – erst Ergebnisse abholen |
-| 503 | Queue ist voll (`maxQueueSize`) – später erneut versuchen |
-| 400 | Daten passen nicht (z. B. falsche Matrixgröße) oder `id` unbekannt |
-| 404 | Problem wurde gelöst, hat aber keine zulässige Lösung (`noSolution`) |
-| 504 | Problem hat die Zeitgrenze des Watchdogs überschritten und wurde beendet |
+| 401 | key missing, wrong, expired or blocked |
+| 403 | key may not use this service |
+| 422 | request does not match the schema (field missing, wrong type, unknown field) |
+| 429 | key already has `maxOpenProblems` waiting or running problems – fetch results first |
+| 503 | queue is full (`maxQueueSize`) – try again later |
+| 400 | data do not fit (e.g. wrong matrix size) or `id` unknown |
+| 404 | problem was solved but has no feasible solution (`noSolution`) |
+| 504 | problem exceeded the time limit of the watchdog and was terminated |
 
-### Konfiguration (`confs/logisticsLabServer.yml`)
+### Configuration (`confs/logisticsLabServer.yml`)
 
-| Option | Standard | Bedeutung |
+| Option | Default | Meaning |
 |---|---|---|
-| `maxProblems` | 4 | Solver-Prozesse, d. h. gleichzeitig gelöste Probleme |
-| `maxQueueSize` | 50 | wartende und laufende Probleme aller Keys zusammen |
-| `maxOpenProblemsPerKey` | 3 | Standard für Keys ohne eigenes `maxOpenProblems` |
-| `maxInactivityTime` | 3600 | Sekunden, nach denen nicht abgeholte Ergebnisse gelöscht werden |
-| `maxPollingPause` | 600 | Sekunden ohne Statusabfrage, nach denen ein offenes Problem abgebrochen wird (0: aus) |
-| `serviceIntervall` | 30 | Sekunden zwischen zwei Aufräumläufen |
-| `runTimeGrace` | 60 | Puffer in Sekunden auf `maxSolvingTime` für den Watchdog |
-| `defaultMaxRunTime` | 600 | Zeitgrenze des Watchdogs in Sekunden für Probleme ohne `maxSolvingTime` (z. B. TSP), zuzüglich `runTimeGrace` |
-| `authentication` | True | API-Keys erforderlich |
-| `apiKeyFile` | `confs/apiKeys.yml` | Pfad zur Key-Datei |
-| `docs` | False | `/docs`, `/redoc` und `/openapi.json` anbieten |
-| `logging`, `debugging` | True, True | Log-Stufen INFO/WARNING/ERROR bzw. zusätzlich DEBUG |
-| `logPath` | `logs/` (`LOGLAB_LOG_DIR`) | Verzeichnis für alle Logdateien |
-| `logMaxBytes`, `logBackupCount` | 5 MB, 5 | Rotation von `logisticsLabServer.log` |
-| `matrixCache` | True | Cache der OSM-Matrizen |
-| `matrixCacheFile` | `matrixCache.sqlite` in `logPath` | Cache-Datei, von allen Solver-Prozessen gemeinsam genutzt |
-| `matrixCacheMaxAge` | 180 | Tage, Sicherheitsnetz. Nach einem Update der ORS-Server werden die Einträge ohnehin nicht mehr verwendet. |
-| `matrixCacheMaxEntries` | 500 | Höchstzahl der Einträge, die am längsten unbenutzten werden zuerst gelöscht |
-| `<typ>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre/contpmedian/contpcentre 200, scp/mcp/cpp/multimodal/multistagewlp 300, multicommodity 500, mincostflow/maxflow 2000 | maximale Problemgröße: Quellen + Senken, bei den übrigen Typen die Knoten |
-| `<typ>.maxSolvingTime` | 300, vrp 60, mincostflow/maxflow 120 | Obergrenze in Sekunden für die vom Client gewünschte Lösungszeit (bei `vrp` die Suchzeit von OR-Tools) |
-| `<typ>.maxRunTime` | – | feste Zeitgrenze des Watchdogs für diesen Problemtyp (ersetzt die Berechnung oben) |
+| `maxProblems` | 4 | solver processes, i.e. problems solved at the same time |
+| `maxQueueSize` | 50 | waiting and running problems of all keys together |
+| `maxOpenProblemsPerKey` | 3 | default for keys without their own `maxOpenProblems` |
+| `maxInactivityTime` | 3600 | seconds after which unfetched results are deleted |
+| `maxPollingPause` | 600 | seconds without a status request after which an open problem is cancelled (0: off) |
+| `serviceIntervall` | 30 | seconds between two clean-up runs |
+| `runTimeGrace` | 60 | buffer in seconds on `maxSolvingTime` for the watchdog |
+| `defaultMaxRunTime` | 600 | time limit of the watchdog in seconds for problems without `maxSolvingTime` (e.g. TSP), plus `runTimeGrace` |
+| `authentication` | True | API keys required |
+| `apiKeyFile` | `confs/apiKeys.yml` | path to the key file |
+| `docs` | False | offer `/docs`, `/redoc` and `/openapi.json` |
+| `logging`, `debugging` | True, True | log levels INFO/WARNING/ERROR or additionally DEBUG |
+| `logPath` | `logs/` (`LOGLAB_LOG_DIR`) | directory for all log files |
+| `logMaxBytes`, `logBackupCount` | 5 MB, 5 | rotation of `logisticsLabServer.log` |
+| `matrixCache` | True | cache of the OSM matrices |
+| `matrixCacheFile` | `matrixCache.sqlite` in `logPath` | cache file, shared by all solver processes |
+| `matrixCacheMaxAge` | 180 | days, safety net. After an update of the ORS servers the entries are not used anyway. |
+| `matrixCacheMaxEntries` | 500 | maximum number of entries, the longest unused are deleted first |
+| `<type>.maxNodes` | tsp/vrp 100, tpp/wlp/pmedian/pcentre/contpmedian/contpcentre 200, scp/mcp/cpp/multimodal/multistagewlp 300, multicommodity 500, mincostflow/maxflow 2000 | maximum problem size: sources + sinks, for the other types the nodes |
+| `<type>.maxSolvingTime` | 300, vrp 60, mincostflow/maxflow 120 | upper limit in seconds for the solving time requested by the client (for `vrp` the search time of OR-Tools) |
+| `<type>.maxRunTime` | – | fixed time limit of the watchdog for this problem type (replaces the calculation above) |
 
-`port` wird derzeit nicht ausgewertet. Den Port legt der Startbefehl von uvicorn fest.
+`port` is currently not evaluated. The port is set by the uvicorn start command.
 
-### Logdateien
+### Log files
 
-Alle Logdateien landen in `logPath`:
+All log files end up in `logPath`:
 
-- `logisticsLabServer.log`: Anfragen, Ergebnisse (eine Zeile pro Problem mit Größe, Status, Zielwert und Laufzeit), Ablehnungen und Fehler, jeweils mit Key-Namen
-- `logisticsLab.log`: Zugriffe auf die OSM-Server (CSV)
-- `matrixCache.sqlite` (mit `-wal`/`-shm`): Cache der OSM-Matrizen, siehe oben
-- `HiGHS.log`: Ausgabe des Solvers. `logPath` ist zugleich das Arbeitsverzeichnis der Solver-Prozesse, deshalb landen auch alle anderen Dateien von CMPL und den Solvern dort.
+- `logisticsLabServer.log`: requests, results (one line per problem with size, status, objective value and runtime), rejections and errors, each with the key name
+- `logisticsLab.log`: accesses to the OSM servers (CSV)
+- `matrixCache.sqlite` (with `-wal`/`-shm`): cache of the OSM matrices, see above
+- `HiGHS.log`: output of the solver. `logPath` is also the working directory of the solver processes, so all other files of CMPL and the solvers end up there as well.
 
-Für den Betrieb `debugging: False` setzen, sonst wird auch jede Statusabfrage während des Wartens geloggt.
+For production set `debugging: False`, otherwise every status request while waiting is logged as well.
 
-## Lokale Schnittstelle für Desktop-Apps
+## Local interface for desktop apps
 
-Eine Desktop-App (z. B. Flutter unter Windows, macOS oder Linux) kann ohne Server lokal rechnen. Sie startet dafür die lokale Schnittstelle als Kindprozess und spricht über stdin/stdout mit ihr ([JSON-RPC 2.0](https://www.jsonrpc.org/specification), eine Nachricht pro Zeile, UTF-8). Es gibt keinen Port, keine Firewall-Abfrage und keine API-Keys. Der Prozess lebt so lange wie die App.
+A desktop app (e.g. Flutter on Windows, macOS or Linux) can compute locally without a server. To do so it starts the local interface as a child process and talks to it via stdin/stdout ([JSON-RPC 2.0](https://www.jsonrpc.org/specification), one message per line, UTF-8). There is no port, no firewall prompt and no API keys. The process lives as long as the app.
 
 ```bash
 python -m logisticsLabCore.stdio [--logPath DIR] [--osmConfig FILE] [--maxProblems N] [--debug] [--noMatrixCache]
 ```
 
-- **`--logPath`:** Verzeichnis für Logdateien und `HiGHS.log`. Standard ist `logs/` bzw. `LOGLAB_LOG_DIR`. Die App sollte ihr Support-Verzeichnis übergeben.
-- **`--osmConfig`:** OSM-Server. Standard ist `confs/logisticsLab.local.yml`, falls vorhanden, sonst die Server der TH Wildau aus `confs/logisticsLab.yml`.
-- **Matrix-Cache:** Der Cache liegt in `--logPath` (`matrixCache.sqlite`), `--noMatrixCache` schaltet ihn ab. Ohne Netz rechnet die App mit `matrixSource: "beeline"`.
-- **Ende:** Der Prozess endet, wenn stdin geschlossen wird oder nach `shutdown`. Laufende Solver werden dabei mit beendet.
-- **Aufräumen:** Der Watchdog für hängende Solver ist auch lokal aktiv. Nicht abgeholte Ergebnisse werden nach 12 Stunden gelöscht. Verlassene Probleme werden lokal nicht abgebrochen, denn wenn die App endet, endet auch der Prozess.
-- **stdout gehört nur dem Protokoll.** Alle anderen Ausgaben, auch die von CMPL und HiGHS, gehen auf stderr.
+- **`--logPath`:** directory for log files and `HiGHS.log`. Default is `logs/` or `LOGLAB_LOG_DIR`. The app should pass its support directory.
+- **`--osmConfig`:** OSM servers. Default is `confs/logisticsLab.local.yml`, if present, otherwise the servers of TH Wildau from `confs/logisticsLab.yml`.
+- **Matrix cache:** The cache is in `--logPath` (`matrixCache.sqlite`), `--noMatrixCache` turns it off. Without network the app computes with `matrixSource: "beeline"`.
+- **End:** The process ends when stdin is closed or after `shutdown`. Running solvers are terminated with it.
+- **Clean-up:** The watchdog for hanging solvers is also active locally. Unfetched results are deleted after 12 hours. Abandoned problems are not cancelled locally, because when the app ends, the process ends too.
+- **stdout belongs to the protocol only.** All other output, including that of CMPL and HiGHS, goes to stderr.
 
-Datenformate und Ergebnisse sind dieselben wie beim REST-Server. Die Methoden entsprechen den Endpoints:
+Data formats and results are the same as for the REST server. The methods correspond to the endpoints:
 
-| Methode | Parameter | Ergebnis |
+| Method | Parameters | Result |
 |---|---|---|
-| `solve` | Problem mit `type` (alle Typen von `/v1/solve`), wie bei `/v1/solve` | `{id, status, message}` |
+| `solve` | problem with `type` (all types of `/v1/solve`), as for `/v1/solve` | `{id, status, message}` |
 | `status` | `{id}` | `{id, status, message}` |
-| `result` | `{id}` | wie `/v1/results`; ein fertiges Problem wird danach gelöscht |
+| `result` | `{id}` | as `/v1/results`; a finished problem is deleted afterwards |
 | `cancel` | `{id}` | `{id, status, message}` |
-| `matrix`, `routing`, `coordinates`, `search`, `reverse` | wie die REST-Endpoints | `{message, ...}` |
+| `matrix`, `routing`, `coordinates`, `search`, `reverse` | as the REST endpoints | `{message, ...}` |
 | `version` | `{}` | `{version, protocol}` |
 | `shutdown` | `{}` | `{}` |
 
-Der Prozess schickt außerdem von sich aus Nachrichten. Ein Abfragen in Schleife wie beim REST-Server ist nicht nötig.
+The process also sends messages on its own. Polling in a loop as with the REST server is not necessary.
 
-| Benachrichtigung | Parameter | wann |
+| Notification | Parameters | when |
 |---|---|---|
-| `ready` | `{version, protocol}` | nach dem Start, ab dann werden Anfragen angenommen |
-| `jobStatus` | `{id, status, message}` | bei jedem Statuswechsel: `waiting` → `running` → `solution` / `noSolution` / `error` / `cancelled` |
+| `ready` | `{version, protocol}` | after the start, from then on requests are accepted |
+| `jobStatus` | `{id, status, message}` | on every status change: `waiting` → `running` → `solution` / `noSolution` / `error` / `cancelled` |
 
 ```json
 → {"jsonrpc":"2.0","id":1,"method":"solve","params":{"type":"tpp","varCosts":[[3,2],[1,4]],"supplies":[10,10],"demands":[8,8]}}
@@ -338,29 +338,29 @@ Der Prozess schickt außerdem von sich aus Nachrichten. Ein Abfragen in Schleife
 ← {"jsonrpc":"2.0","id":2,"result":{"id":"6f1c…","status":"solution","message":"…","results":{"objVal":24.0,…}}}
 ```
 
-Fehler kommen als JSON-RPC-Fehler. `data.httpStatus` entspricht dem Status, den der REST-Server liefern würde. Die App kann beide Wege also gleich behandeln:
+Errors come as JSON-RPC errors. `data.httpStatus` corresponds to the status the REST server would return. The app can therefore treat both ways the same:
 
-| Code | Bedeutung | `data` |
+| Code | Meaning | `data` |
 |---|---|---|
-| -32700 / -32600 | keine gültige JSON- bzw. JSON-RPC-Nachricht | – |
-| -32601 | unbekannte Methode | – |
-| -32602 | Parameter passen nicht zum Schema | `{httpStatus: 422, errors: [...]}` |
-| -32000 | Fehler bei Problem oder Geo-Dienst, z. B. unbekannte `id` | `{httpStatus: 400, ...}` |
-| -32603 | interner Fehler | – |
+| -32700 / -32600 | not a valid JSON or JSON-RPC message | – |
+| -32601 | unknown method | – |
+| -32602 | parameters do not match the schema | `{httpStatus: 422, errors: [...]}` |
+| -32000 | error of a problem or geo service, e.g. unknown `id` | `{httpStatus: 400, ...}` |
+| -32603 | internal error | – |
 
-### Hinweise für die Flutter-App
+### Notes for the Flutter app
 
-- **Gemeinsame Schnittstelle:** In Dart eine abstrakte Klasse (z. B. `LogisticsLabBackend` mit `submit`, `status`, `result`, `cancel`) mit zwei Implementierungen anlegen. `LocalBackend` startet den Prozess mit `Process.start` aus `dart:io` und liest stdout zeilenweise (`utf8.decoder` + `LineSplitter`). `RemoteBackend` spricht per HTTP mit dem Server und schickt den API-Key mit. Web und Mobil nutzen nur `RemoteBackend`, denn dort lassen sich keine Prozesse starten.
-- **Datenmodelle:** `python -m logisticsLabCore.schema > logisticsLab.schema.json` erzeugt das JSON Schema aller Anfragen und Antworten. Daraus lassen sich die Dart-Modelle generieren, z. B. mit `quicktype --lang dart`. Server und lokale Schnittstelle verwenden dieselben Items.
-  - **Anfragen:** die Problem-Items (`ContPCentreItem` …) und die Geo-Items.
-  - **Antworten:** `ProblemAnswer` (`{id, status, message, results}`) und je Problemtyp ein Ergebnismodell für `results`. Die Zuordnung steht in `RESULT_ITEMS` in `logisticsLabCore/results.py`, z. B. `contpmedian`/`contpcentre` → `ContLocationResults`, `mincostflow`/`maxflow` → `FlowResults`. `checkServer.py` prüft jede echte Antwort gegen diese Modelle, ein neues oder umbenanntes Ergebnisfeld fällt also auf.
-- **Beispiel-Client:** `tests/dartClient` ist ein lauffähiges Dart-Paket ohne externe Abhängigkeiten. Es enthält `LogisticsLabBackend` mit `LocalBackend` (Kindprozess, JSON-RPC) und `RemoteBackend` (REST, Abfrage von `/v1/results`), typisierte Ergebnisse in `lib/src/results.dart` und das Beispiel `bin/cont_pcentre.dart`. Fehler kommen in beiden Fällen als `LogisticsLabException` mit `httpStatus`. Für die Flutter-App lässt sich `lib/` direkt übernehmen.
-- **Python-Client:** `tests/pythonClient` zeigt dasselbe in Python, nur mit der Standardbibliothek. `logisticsLabClient.py` enthält `LocalBackend` und `RemoteBackend` mit `solve`, `submit`/`wait`/`result`, `cancel` und `geo`. `rawProtocol.py` zeigt das Protokoll ohne Hilfsmodul, jede Nachricht wird ausgegeben.
-- **Paketierung:** `python3 dist/buildDist.py` baut eine Distribution, die ohne Installation läuft. Sie enthält ein mitgeliefertes Python, alle Bibliotheken, den CMPL-Kern und HiGHS, siehe `dist/README.md`. Die App startet daraus `bin/python/bin/python3 -I -m logisticsLabCore.stdio --osmConfig confs/logisticsLab.yml` (Windows: `bin\python\python.exe`), oder sie liefert das mit Nuitka kompilierte Programm aus `dist/buildStdio.py` mit. Unter macOS muss jede mitgelieferte ausführbare Datei signiert sein, das übernimmt `--sign`. Für eine App in der Sandbox braucht der Kindprozess außerdem die Entitlements `com.apple.security.inherit` und `com.apple.security.network.client`.
+- **Common interface:** In Dart create an abstract class (e.g. `LogisticsLabBackend` with `submit`, `status`, `result`, `cancel`) with two implementations. `LocalBackend` starts the process with `Process.start` from `dart:io` and reads stdout line by line (`utf8.decoder` + `LineSplitter`). `RemoteBackend` talks to the server via HTTP and sends the API key. Web and mobile use only `RemoteBackend`, because processes cannot be started there.
+- **Data models:** `python -m logisticsLabCore.schema > logisticsLab.schema.json` generates the JSON Schema of all requests and responses. The Dart models can be generated from it, e.g. with `quicktype --lang dart`. Server and local interface use the same items.
+  - **Requests:** the problem items (`ContPCentreItem` …) and the geo items.
+  - **Responses:** `ProblemAnswer` (`{id, status, message, results}`) and per problem type a result model for `results`. The mapping is in `RESULT_ITEMS` in `logisticsLabCore/results.py`, e.g. `contpmedian`/`contpcentre` → `ContLocationResults`, `mincostflow`/`maxflow` → `FlowResults`. `checkServer.py` checks every real response against these models, so a new or renamed result field is noticed.
+- **Example client:** `tests/dartClient` is a runnable Dart package without external dependencies. It contains `LogisticsLabBackend` with `LocalBackend` (child process, JSON-RPC) and `RemoteBackend` (REST, polling of `/v1/results`), typed results in `lib/src/results.dart` and the example `bin/cont_pcentre.dart`. In both cases errors come as `LogisticsLabException` with `httpStatus`. For the Flutter app `lib/` can be taken over directly.
+- **Python client:** `tests/pythonClient` shows the same in Python, using only the standard library. `logisticsLabClient.py` contains `LocalBackend` and `RemoteBackend` with `solve`, `submit`/`wait`/`result`, `cancel` and `geo`. `rawProtocol.py` shows the protocol without a helper module, every message is printed.
+- **Packaging:** `python3 dist/buildDist.py` builds a distribution that runs without installation. It contains a bundled Python, all libraries, the CMPL core and HiGHS, see `dist/README.md`. The app starts `bin/python/bin/python3 -I -m logisticsLabCore.stdio --osmConfig confs/logisticsLab.yml` from it (Windows: `bin\python\python.exe`), or it ships the program compiled with Nuitka from `dist/buildStdio.py`. On macOS every bundled executable has to be signed, `--sign` takes care of that. For an app in the sandbox the child process also needs the entitlements `com.apple.security.inherit` and `com.apple.security.network.client`.
 
-## Szenario-Format und Kommandozeilen-Tool
+## Scenario format and command line tool
 
-Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebig viele Probleme rechnen, z. B. TPP, WLP, VRP und Min-Cost-Flow auf denselben Knoten. Ein Beispiel ist `tests/scenarios/brandenburg.llab`. Die Datenmodelle stehen in `logisticsLabCore/scenario.py`. Sie sind Teil des JSON Schemas (`python -m logisticsLabCore.schema`). Die vollständige Beschreibung beider Formate, `.llab` und `.llsol`, mit allen Feldern und Parametern je Problemtyp steht in [docs/dateiformate.md](docs/dateiformate.md).
+A scenario describes a logistics network once. Any number of problems can be computed on it, e.g. TPP, WLP, VRP and min-cost flow on the same nodes. An example is `tests/scenarios/brandenburg.llab`. The data models are in `logisticsLabCore/scenario.py`. They are part of the JSON Schema (`python -m logisticsLabCore.schema`). The full description of both formats, `.llab` and `.llsol`, with all fields and parameters per problem type is in [docs/dateiformate.md](docs/dateiformate.md) (in German).
 
 ```json
 { "format": "logisticsLab", "version": 1, "id": "brandenburg",
@@ -368,90 +368,90 @@ Ein Szenario beschreibt ein logistisches Netz einmal. Darauf lassen sich beliebi
   "matrix": { "matrixSource": "osm", "travelmode": "car", "costPerKm": 0.5, "costPerHour": 30 },
   "nodes": [ { "id": "W", "coordinates": [52.30, 13.26], "roles": ["supplier"], "supply": 100 }, "..." ],
   "networks": { "supply": { "directed": true, "edges": [ { "from": "W", "to": "D1", "capacity": 100 } ] } },
-  "vehicles": [ { "id": "LKW", "capacity": 60, "count": 2, "depot": "D1" } ],
-  "problems": [ { "name": "Lagerstandorte", "type": "wlp", "parameters": { "isCapacitated": true } } ] }
+  "vehicles": [ { "id": "Truck", "capacity": 60, "count": 2, "depot": "D1" } ],
+  "problems": [ { "name": "Warehouse locations", "type": "wlp", "parameters": { "isCapacitated": true } } ] }
 ```
 
-**Dateien:** Szenarien haben die Endung **`.llab`**, Lösungsdokumente **`.llsol`**. Beide sind innen JSON.
-- **Erkennung am Inhalt:** Das Tool nimmt auch andere Endungen an. Entscheidend ist das Feld `format` (`logisticsLab` bzw. `logisticsLabSolution`).
-- **Eigene Endung:** Mit ihr kann die Desktop-App die Dateien per Doppelklick öffnen und im Dateidialog filtern. `.ll` ist für LLVM vergeben.
-- **VS Code:** In `.vscode/settings.json` (Projekt oder Benutzer) eintragen:
+**Files:** Scenarios have the extension **`.llab`**, solution documents **`.llsol`**. Both are JSON inside.
+- **Detection by content:** The tool also accepts other extensions. What matters is the field `format` (`logisticsLab` or `logisticsLabSolution`).
+- **Own extension:** With it the desktop app can open the files by double-click and filter them in the file dialog. `.ll` is taken by LLVM.
+- **VS Code:** Enter in `.vscode/settings.json` (project or user):
 
 ```json
 "files.associations": { "*.llab": "json", "*.llsol": "json" },
 "json.schemas": [ { "fileMatch": ["*.llab"], "url": "./.vscode/logisticsLab-scenario.schema.json" } ]
 ```
 
-  Die Schema-Datei erzeugt `python -m logisticsLabCore.schema --scenario > .vscode/logisticsLab-scenario.schema.json`. Danach prüft VS Code Szenarien beim Bearbeiten und bietet Vervollständigung an. Ein Szenario darf außerdem ein Feld `"$schema"` haben.
+  The schema file is generated by `python -m logisticsLabCore.schema --scenario > .vscode/logisticsLab-scenario.schema.json`. VS Code then checks scenarios while editing and offers completion. A scenario may also have a field `"$schema"`.
 
-**Regeln:**
-- **Koordinaten:** Jeder Knoten hat geografische Koordinaten `[lat, lon]`. Die Adresse (`address` oder `addressDetails`) ist optional.
-- **Distanzen und Fahrzeiten:** kommen nur von den OSM-Servern, über den Matrix-Cache, oder als Luftlinie (`matrixSource: beeline`). Eigene Matrizen gibt es im Szenario nicht.
-- **Kosten:** werden abgeleitet: km × `costPerKm` + h × `timeFactor` × `costPerHour`, bei Kunden mal `costFactor`. `matrixMode` eines Problems wählt `distances`, `times` oder `costs`.
-- **Einheiten:** `units` legt die Einheiten fest, `distance` m oder km, `time` s, min oder h. `costPerKm` und `costPerHour` beziehen sich immer auf km und h.
-- **Rollen:** bestimmen, was ein Problem liest.
+**Rules:**
+- **Coordinates:** Every node has geographic coordinates `[lat, lon]`. The address (`address` or `addressDetails`) is optional.
+- **Distances and travel times:** come only from the OSM servers, via the matrix cache, or as straight-line distance (`matrixSource: beeline`). There are no own matrices in the scenario.
+- **Costs:** are derived: km × `costPerKm` + h × `timeFactor` × `costPerHour`, for customers times `costFactor`. `matrixMode` of a problem selects `distances`, `times` or `costs`.
+- **Units:** `units` sets the units, `distance` m or km, `time` s, min or h. `costPerKm` and `costPerHour` always refer to km and h.
+- **Roles:** determine what a problem reads.
   - `supplier` → `customer`: TPP.
-  - `candidate` → `customer`: WLP, P-Median, P-Center, SCP, MCP.
-  - `supplier` → `candidate` → … → `customer` über ein Netz: mehrstufiges WLP (`multistagewlp`). Die Lager sind `candidate` mit `capacity` (Durchsatz, sonst `maxCap`), `fixedCost` (Öffnungskosten) und optional `minCap`. Die Kanten haben `capacity`, `minFlow` (nur, wenn genutzt) und `fixedCost`. Mit `isSingleSource: true` bekommt jeder Kunde und jedes Lager einer späteren Stufe die Ware aus genau einem Lager. Die Lager sind Knoten und werden nicht von Hand in Ein- und Ausgang gesplittet. Die Kosten kommen wie bei allen Szenarien aus OSM-Distanz und -Fahrzeit.
-  - `customer` allein: kontinuierliche Standorte (`contpmedian`, `contpcentre`). Die Standorte sind das Ergebnis und keine Knoten. Ihre Anzahl ist der Parameter `p` (Pflicht), ihre Kapazitäten der Parameter `capacities`: ein Wert für alle oder eine Liste mit `p` Werten, nur mit `isCapacitated` (Standard: `true`, wenn `capacities` angegeben ist). In der Lösung heißen sie `F1` … `Fp`. Die frühere Rolle `facility` gibt es nicht mehr, eine Datei damit wird mit einem Hinweis abgelehnt.
+  - `candidate` → `customer`: WLP, p-median, p-centre, SCP, MCP.
+  - `supplier` → `candidate` → … → `customer` via a network: multi-stage WLP (`multistagewlp`). The warehouses are `candidate` with `capacity` (throughput, otherwise `maxCap`), `fixedCost` (opening costs) and optionally `minCap`. The edges have `capacity`, `minFlow` (only if used) and `fixedCost`. With `isSingleSource: true` every customer and every warehouse of a later stage gets the goods from exactly one warehouse. The warehouses are nodes and are not split into input and output by hand. As with all scenarios, the costs come from OSM distance and travel time.
+  - `customer` alone: continuous locations (`contpmedian`, `contpcentre`). The locations are the result and not nodes. Their number is the parameter `p` (mandatory), their capacities the parameter `capacities`: one value for all or a list with `p` values, only with `isCapacitated` (default: `true` if `capacities` is given). In the solution they are called `F1` … `Fp`. The former role `facility` no longer exists, a file using it is rejected with a hint.
   - `depot`: VRP.
-- **Netze** (`networks`): legen die erlaubten Verbindungen fest, mit Kapazität, Mindestfluss, Fixkosten und Richtung je Kante. Ihre Länge und Fahrzeit kommt von OSM.
-  - `networkMode: edges`: nur diese Kanten sind erlaubt. Bei TPP und Standortproblemen sind die übrigen Paare dann gesperrt.
-  - `networkMode: shortestPaths`: Es entsteht eine vollständige Matrix aus den kürzesten Wegen über das Netz. Bei TSP enthält die Lösung den ganzen Weg (`path`).
-  - Flüsse und CPP brauchen ein Netz. `minCap`/`maxCap` eines Knotens begrenzen den Durchfluss, einschließlich eigenem Angebot und eigener Nachfrage. `capacity` ist dagegen die Kapazität eines Standorts bei den Standortproblemen.
-  - Ungleiche Gesamtangebote und -nachfragen werden ausgeglichen (`"balance": "auto"`, Standard). Mit `"balance": "exact"` gibt es stattdessen einen Fehler. Nicht gelieferte Mengen kosten je Senke `shortageCost`, Standard 0.
-- **Weitere Knotenattribute:** `minSupply`/`maxSupply`, `minDemand`/`maxDemand` (wirksam mit `useSupplyRanges`/`useDemandRanges`), `timeWindow`, `serviceTime`, `active: false` (Knoten wird ignoriert), `shortageCost` (bei `balance: auto`).
-- **Güter und Verkehrsträger:** für `multicommodity` und `multimodal`.
-  - `commodities`: Liste der Güter mit `costPerKm`, `costPerHour` und `capacityFactor`. An den Knoten stehen `supplies`/`demands` je Gut, an den Kanten optional abweichende Werte unter `commodities`.
-  - `capacityFactors` an einem Knoten: Kapazität von `minCap`/`maxCap`, die eine Einheit eines Guts belegt, z. B. `{"P1": 2.5, "P2": 2}`. Der Default ist 1, nicht der `capacityFactor` des Guts. Ein Umschlagpunkt mit verschiedenen Faktoren je Gut braucht also keinen Splitt von Hand in Ein- und Ausgang (Bibliothek: `MultiCommodityFlow(nodeCapacityFactors=…)`).
-  - `isInteger: true` als Parameter von `multicommodity`: ganzzahlige Flüsse als MIP, mit `mipGap`. Ohne den Parameter wird das LP gelöst. Dessen Lösung ist beim Mehrgüterfluss im Allgemeinen nicht ganzzahlig, auch bei ganzzahligen Angeboten und Nachfragen: Gemeinsame Kapazitäten mehrerer Güter und Kapazitätsfaktoren ≠ 1 heben die totale Unimodularität des Einguterflusses auf. Beispiel: `logisticslab solve SZENARIO.llab --set isInteger=true`.
-  - `modes`: Liste der Verkehrsträger mit `costPerKm`, `costPerHour`, `fixedCost`, `minFlow` und `capacity`. Eine Kante ohne `modes` erlaubt alle Verkehrsträger. Mit `modes` erlaubt sie nur die genannten, mit eventuell eigenen Werten.
-  - Die Kosten kommen auch hier aus der OSM-Distanz und -Fahrzeit.
-  - `fixed` und `assignedTo` werden bisher nur gespeichert. Die Probleme berücksichtigen sie noch nicht, das Ergebnis enthält dann eine Warnung.
+- **Networks** (`networks`): define the allowed connections, with capacity, minimum flow, fixed costs and direction per edge. Their length and travel time come from OSM.
+  - `networkMode: edges`: only these edges are allowed. For TPP and location problems the other pairs are then blocked.
+  - `networkMode: shortestPaths`: A complete matrix of the shortest paths over the network is created. For TSP the solution contains the whole path (`path`).
+  - Flows and CPP need a network. `minCap`/`maxCap` of a node limit the throughput, including its own supply and demand. `capacity`, on the other hand, is the capacity of a location in the location problems.
+  - Unequal total supplies and demands are balanced (`"balance": "auto"`, default). With `"balance": "exact"` there is an error instead. Undelivered quantities cost `shortageCost` per sink, default 0.
+- **Further node attributes:** `minSupply`/`maxSupply`, `minDemand`/`maxDemand` (effective with `useSupplyRanges`/`useDemandRanges`), `timeWindow`, `serviceTime`, `active: false` (node is ignored), `shortageCost` (with `balance: auto`).
+- **Commodities and modes:** for `multicommodity` and `multimodal`.
+  - `commodities`: list of commodities with `costPerKm`, `costPerHour` and `capacityFactor`. The nodes have `supplies`/`demands` per commodity, the edges optionally different values under `commodities`.
+  - `capacityFactors` at a node: capacity of `minCap`/`maxCap` that one unit of a commodity takes up, e.g. `{"P1": 2.5, "P2": 2}`. The default is 1, not the `capacityFactor` of the commodity. A transshipment point with different factors per commodity therefore does not need to be split into input and output by hand (library: `MultiCommodityFlow(nodeCapacityFactors=…)`).
+  - `isInteger: true` as parameter of `multicommodity`: integer flows as a MIP, with `mipGap`. Without the parameter the LP is solved. For the multi-commodity flow its solution is in general not integer, even with integer supplies and demands: shared capacities of several commodities and capacity factors ≠ 1 break the total unimodularity of the single-commodity flow. Example: `logisticslab solve SCENARIO.llab --set isInteger=true`.
+  - `modes`: list of modes with `costPerKm`, `costPerHour`, `fixedCost`, `minFlow` and `capacity`. An edge without `modes` allows all modes. With `modes` it allows only the ones listed, possibly with their own values.
+  - Here, too, the costs come from OSM distance and travel time.
+  - `fixed` and `assignedTo` are only stored so far. The problems do not take them into account yet, the result then contains a warning.
 
-**Ergebnisse** sind eigene Dokumente (`logisticsLabSolution`). Sie stehen nicht im Szenario.
-- **Bezug:** Jedes Dokument verweist mit `scenario.hash` auf genau einen Datenstand des Szenarios und enthält das Problem mit seinen Parametern.
-- **Inhalt:** `matrixInfo`, `valueUnit` (Einheit der Matrixwerte) und Warnungen. Dazu `results` mit `objVal`, `summary`, `nodes`, `assignments`, `routes` oder `edges`, jeweils über Knoten-IDs, und die bisherigen Felder unter `native`.
-- **VRP-Routen:** Jede Route hat `vehicle`, `nodes`, `load` und `distance`. Dazu kommen je Halt `arrivals`, `waitingTimes`, `times` (Beginn der Bedienung), `serviceTimes` und `travelTimes`. Die Summen stehen in `travelTime`, `waitingTime`, `serviceTime` und `duration`, alles in `units.time`. Die Zeiten berechnet der Server aus der Zeitmatrix, eine App braucht die Matrix dafür nicht.
+**Results** are documents of their own (`logisticsLabSolution`). They are not part of the scenario.
+- **Reference:** Each document refers with `scenario.hash` to exactly one data version of the scenario and contains the problem with its parameters.
+- **Contents:** `matrixInfo`, `valueUnit` (unit of the matrix values) and warnings. Plus `results` with `objVal`, `summary`, `nodes`, `assignments`, `routes` or `edges`, each via node IDs, and the previous fields under `native`.
+- **VRP routes:** Each route has `vehicle`, `nodes`, `load` and `distance`. Per stop there are also `arrivals`, `waitingTimes`, `times` (start of service), `serviceTimes` and `travelTimes`. The totals are in `travelTime`, `waitingTime`, `serviceTime` and `duration`, all in `units.time`. The server computes the times from the time matrix, an app does not need the matrix for this.
 
-**Kommandozeilen-Tool:**
+**Command line tool:**
 
 ```bash
 logisticslab show  tests/scenarios/brandenburg.llab
-logisticslab solve tests/scenarios/brandenburg.llab                        # alle Probleme, Ausgabe am Bildschirm
-logisticslab solve SZENARIO.llab --problem "Touren ab Wildau" --set maxSolvingTime=30
-logisticslab solve SZENARIO.llab --out --quiet                             # nur als Datei SZENARIO.llsol
-logisticslab solve SZENARIO.llab --out loesungen.llsol                     # Datei mit eigenem Namen
-logisticslab solve SZENARIO.llab --json                                    # Lösungsdokumente am Bildschirm
-logisticslab solve SZENARIO.llab --server https://logisticslab.example.org/v1/ --apiKey ...
-logisticslab --help                                                        # ohne Installation: python -m logisticsLabCli ...
+logisticslab solve tests/scenarios/brandenburg.llab                        # all problems, output on screen
+logisticslab solve SCENARIO.llab --problem "Tours from Wildau" --set maxSolvingTime=30
+logisticslab solve SCENARIO.llab --out --quiet                             # only as file SCENARIO.llsol
+logisticslab solve SCENARIO.llab --out solutions.llsol                     # file with its own name
+logisticslab solve SCENARIO.llab --json                                    # solution documents on screen
+logisticslab solve SCENARIO.llab --server https://logisticslab.example.org/v1/ --apiKey ...
+logisticslab --help                                                        # without installation: python -m logisticsLabCli ...
 ```
 
-- **Rechnen:** Ohne `--server` rechnet das Tool lokal mit dem Kern und den OSM-Servern aus `confs/logisticsLab.yml`, mit Logs und Matrix-Cache in `logs/cli` (`--logPath`). Mit `--server` schickt es Matrix- und Problemanfragen an einen LogisticsLab-Server. Am Server selbst muss dafür nichts geändert werden, denn das Tool übersetzt die Szenarien in die bestehenden `/v1`-Anfragen.
-- **Parameter überschreiben:** `--set NAME=WERT` gilt für die Parameter der Probleme, z. B. `p`, `maxSolvingTime`, `matrixMode`.
-- **Exit-Code:** 1, wenn ein Problem mit einem Fehler endet.
+- **Computing:** Without `--server` the tool computes locally with the core and the OSM servers from `confs/logisticsLab.yml`, with logs and matrix cache in `logs/cli` (`--logPath`). With `--server` it sends matrix and problem requests to a LogisticsLab server. Nothing has to be changed on the server for this, because the tool translates the scenarios into the existing `/v1` requests.
+- **Overriding parameters:** `--set NAME=VALUE` applies to the parameters of the problems, e.g. `p`, `maxSolvingTime`, `matrixMode`.
+- **Exit code:** 1 if a problem ends with an error.
 
-### Alte LogisticsLab-Dateien umwandeln
+### Converting old LogisticsLab files
 
 ```bash
-logisticslab convert ALTE_DATEI.TPPX                                     # -> alte_datei.tppx.llab daneben
+logisticslab convert OLD_FILE.TPPX                                       # -> old_file.tppx.llab next to it
 logisticslab convert --dir LogisticsLab-Daten/Modelle-Ors --target LogisticsLab-Daten/Szenarien
 ```
 
-- **Formate:** TPPX → `tpp`, DLPX → `wlp`/`pmedian`/`pcentre`/`mcp`, CLPX → `contpmedian`/`contpcentre`, NWFX → `mincostflow`, TSPX → `tsp`/`cpp`, VRPX → `vrp`. Die Optionen der Datei werden zu den Parametern des Problems.
-- **CLPX:** Die Quellen werden keine Knoten. Ihre Anzahl wird `p`, bei `Capacitated` ihre Kapazitäten `capacities`: ein Wert, wenn alle gleich sind. Feste Quellen und Kunden mit fester Zuordnung zu einer Quelle unterstützen die kontinuierlichen Probleme nicht, sie werden nicht übernommen.
-- **Übersprungen:** Dateien mit eigenen Matrizen (`DistFunc OwnDef`) oder ebenen Koordinaten (`Map SimpleMap`).
-- **Gespeicherte Matrizen** werden nicht übernommen. Ausnahmen: `M` in `COSTS` (gesperrte Verbindung), `CAPACITIES` und `FIXEDCOSTS` werden zu einem Netz `connections`.
-- **Reihenfolge:** In den alten Dateien steht `x` = Länge, `y` = Breite. Die Umwandlung schreibt `[lat, lon]`.
-- **`DistFunc` entscheidet über die Matrix:** `GreatCircle…` ergibt Luftlinie, `OSM/…` Straßennetz, auch bei `TravelMode Bird`. `DistFactor` wird zu `costPerKm` bzw. `costPerHour`.
-- **Bezeichner:** Gleichnamige Quellen und Ziele am selben Ort werden ein Knoten mit beiden Rollen. Gleiche Namen an verschiedenen Orten bekommen `#2`, `#3` …
-- **Nur Dateien schreiben:** `logisticslab convert` (`logisticsLabCore/convertX.py`) erzeugt nur Szenarien (`.llab`) und rechnet nicht. Gelöst wird mit dem Kommandozeilen-Tool.
+- **Formats:** TPPX → `tpp`, DLPX → `wlp`/`pmedian`/`pcentre`/`mcp`, CLPX → `contpmedian`/`contpcentre`, NWFX → `mincostflow`, TSPX → `tsp`/`cpp`, VRPX → `vrp`. The options of the file become the parameters of the problem.
+- **CLPX:** The sources do not become nodes. Their number becomes `p`, with `Capacitated` their capacities become `capacities`: one value if all are equal. The continuous problems do not support fixed sources and customers with a fixed assignment to a source, these are not taken over.
+- **Skipped:** files with own matrices (`DistFunc OwnDef`) or planar coordinates (`Map SimpleMap`).
+- **Stored matrices** are not taken over. Exceptions: `M` in `COSTS` (blocked connection), `CAPACITIES` and `FIXEDCOSTS` become a network `connections`.
+- **Order:** In the old files `x` = longitude, `y` = latitude. The conversion writes `[lat, lon]`.
+- **`DistFunc` decides on the matrix:** `GreatCircle…` results in straight-line distance, `OSM/…` in the road network, also with `TravelMode Bird`. `DistFactor` becomes `costPerKm` or `costPerHour`.
+- **Identifiers:** Sources and destinations with the same name at the same place become one node with both roles. Equal names at different places get `#2`, `#3` …
+- **Writing files only:** `logisticslab convert` (`logisticsLabCore/convertX.py`) only creates scenarios (`.llab`) and does not compute. Solving is done with the command line tool.
 
-## Betrieb unter Linux mit nginx
+## Operation on Linux with nginx
 
-nginx übernimmt TLS, Rate-Limit und die Größenbegrenzung. uvicorn ist nur lokal erreichbar. Die Pfade unten sind Beispiele.
+nginx handles TLS, rate limiting and the size limit. uvicorn is only reachable locally. The paths below are examples.
 
-**Wichtig:** uvicorn mit **genau einem** Worker-Prozess starten. Queue und Ergebnisse liegen im Speicher des Prozesses. Bei mehreren Workern würde `/results` die `id` oft nicht finden. Für Parallelität sorgt `maxProblems`.
+**Important:** Start uvicorn with **exactly one** worker process. Queue and results are kept in the memory of the process. With several workers `/results` would often not find the `id`. `maxProblems` takes care of parallelism.
 
 ### systemd (`/etc/systemd/system/logisticslab.service`)
 
@@ -483,7 +483,7 @@ journalctl -u logisticslab -f
 ### nginx (`/etc/nginx/conf.d/logisticslab.conf`)
 
 ```nginx
-# 10 Anfragen/s pro IP – reicht für die Abfrage des Ergebnisses alle 0,2 s
+# 10 requests/s per IP – enough for polling the result every 0.2 s
 limit_req_zone $binary_remote_addr zone=loglab:10m rate=10r/s;
 
 server {
@@ -500,7 +500,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/logisticslab.example.org/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/logisticslab.example.org/privkey.pem;
 
-    client_max_body_size 2m;       # große Matrizen begrenzen
+    client_max_body_size 2m;       # limit large matrices
 
     location /v1/ {
         limit_req zone=loglab burst=20 nodelay;
@@ -510,7 +510,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 120s;   # Matrix- und Routing-Anfragen laufen synchron
+        proxy_read_timeout 120s;   # matrix and routing requests run synchronously
     }
 
     location / {
@@ -519,91 +519,91 @@ server {
 }
 ```
 
-Das Zertifikat bekommt man z. B. mit `certbot --nginx -d logisticslab.example.org`. Von außen müssen nur die Ports 80/443 (und 22) offen sein. Port 8000 bleibt zu.
+The certificate can be obtained e.g. with `certbot --nginx -d logisticslab.example.org`. From outside only the ports 80/443 (and 22) have to be open. Port 8000 stays closed.
 
 ## Tests
 
-**Bibliothek** (`tests/pyCmpl/`):
-- `find*.py`: Beispiele, die ein Modell direkt aufrufen und das Ergebnis ausgeben.
-- `checkLibrary.py`: Regressionstest aller Modelle. Er vergleicht die Zielfunktionswerte mit erwarteten Werten, prüft typische Fehlerfälle und endet mit Exit-Code 1, wenn etwas fehlschlägt.
+**Library** (`tests/pyCmpl/`):
+- `find*.py`: examples that call a model directly and print the result.
+- `checkLibrary.py`: regression test of all models. It compares the objective values with expected values, checks typical error cases and ends with exit code 1 if something fails.
 
 ```bash
 python tests/pyCmpl/checkLibrary.py
 ```
 
-**Kern** (`tests/coreTests/`): `checkMatrixService.py` prüft den Matrix-Cache ohne OSM-Server. Geprüft werden Laden, Wiederverwendung, Neustart, `noCache`, Ablaufzeit, ein simuliertes Update der ORS-Server und die stündliche Statusabfrage, dazu Kostenformel und Luftlinie. Zum Schluss liest er den Datenstand der konfigurierten Server, falls sie erreichbar sind.
+**Core** (`tests/coreTests/`): `checkMatrixService.py` checks the matrix cache without OSM servers. It checks loading, reuse, restart, `noCache`, expiry, a simulated update of the ORS servers and the hourly status request, plus the cost formula and straight-line distance. Finally it reads the data version of the configured servers, if they are reachable.
 
 ```bash
 python tests/coreTests/checkMatrixService.py
 ```
 
-**Server-Beispiele** (`tests/serverExamples/`): ein eigenständiges Skript je Problemtyp und Geo-Dienst, z. B. `wlpExample.py`, `contPCentreExample.py`, `matrixExample.py`. Adresse, Key, Daten, Einreichen, Abfrage der Ergebnisse und Ausgabe stehen direkt im Code, ohne Hilfsmodul. Die Skripte eignen sich als Vorlage für eigene Clients.
-- **Beispiel-Key:** Die Skripte nutzen den festen Key `loglab-local-example-key`. Im Header `X-API-Key` steht immer der Key selbst, der Server kennt nur dessen Hash.
-- **Registrieren:** `python tests/serverTests/createTestKeys.py` trägt den Hash unter dem Namen `localExample` in die lokale `apiKeys.yml` ein. Mit `--keyFile` für einen anderen Server lehnt das Skript den Beispiel-Key ab, denn er steht öffentlich im Repo.
-- **Starten:**
+**Server examples** (`tests/serverExamples/`): a standalone script per problem type and geo service, e.g. `wlpExample.py`, `contPCentreExample.py`, `matrixExample.py`. Address, key, data, submission, polling of the results and output are directly in the code, without a helper module. The scripts are suitable as templates for own clients.
+- **Example key:** The scripts use the fixed key `loglab-local-example-key`. The header `X-API-Key` always contains the key itself, the server only knows its hash.
+- **Registering:** `python tests/serverTests/createTestKeys.py` enters the hash under the name `localExample` into the local `apiKeys.yml`. With `--keyFile` for another server the script refuses the example key, because it is public in the repo.
+- **Starting:**
 
 ```bash
-python tests/serverTests/createTestKeys.py         # einmal: Beispiel- und Test-Keys anlegen
-cd logisticsLabServer && ./run_server.sh           # lokaler Server auf Port 8000
-python tests/serverExamples/contPCentreExample.py  # in einem zweiten Terminal
+python tests/serverTests/createTestKeys.py         # once: create example and test keys
+cd logisticsLabServer && ./run_server.sh           # local server on port 8000
+python tests/serverExamples/contPCentreExample.py  # in a second terminal
 ```
 
-**Server-Tests** (`tests/serverTests/`):
-- `find<Typ>Server.py`: Beispiel je Problemtyp. Die Daten stehen in `payloads`. Senden, Abholen und die Anzeige der Lösung (`showResults`) übernimmt `logLabClient.py`.
-- `getMatrixServer.py`, `getRouteServer.py`, `getGeoCodingCoords.py`, `getGeoCodingSearch.py`, `getGeoCodingReverse.py`: Beispiele für die Geo-Endpoints `/v1/matrix`, `/v1/routing`, `/v1/coordinates`, `/v1/search` und `/v1/reverse`, ebenfalls mit Key über `logLabClient.py`.
-- `checkServer.py`: Regressionstest über alle Beispiele. Er prüft:
-  - die Zielfunktionswerte und das gleiche Ergebnis über `/v1/solve`,
-  - jede Antwort gegen das Ergebnis-Schema,
-  - Fehlerfälle mit ihrem HTTP-Status,
-  - einen Key ohne die Rechte für `contpcentre` und `matrix`,
-  - die Geo-Endpoints und ein TSP mit Matrix aus Koordinaten. Diese Prüfungen brauchen die OSM-Server aus `logisticsLab.yml`. Sind die nicht erreichbar, werden sie übersprungen.
-- Die Server der TH Wildau bieten derzeit nur das Profil `car` an. `foot` und `wheelchair` liefern dort 400.
-- `runServerTests.sh`: erledigt alles in einem Schritt. Es erzeugt neue Test-Keys, startet einen lokalen Server auf Port 8000, falls keiner läuft, führt die Tests aus und stoppt den Server wieder. Das Log des Testservers steht in `logs/testServer.log`.
+**Server tests** (`tests/serverTests/`):
+- `find<Type>Server.py`: example per problem type. The data are in `payloads`. Sending, fetching and displaying the solution (`showResults`) is done by `logLabClient.py`.
+- `getMatrixServer.py`, `getRouteServer.py`, `getGeoCodingCoords.py`, `getGeoCodingSearch.py`, `getGeoCodingReverse.py`: examples for the geo endpoints `/v1/matrix`, `/v1/routing`, `/v1/coordinates`, `/v1/search` and `/v1/reverse`, also with key via `logLabClient.py`.
+- `checkServer.py`: regression test over all examples. It checks:
+  - the objective values and the same result via `/v1/solve`,
+  - every response against the result schema,
+  - error cases with their HTTP status,
+  - a key without the permissions for `contpcentre` and `matrix`,
+  - the geo endpoints and a TSP with a matrix from coordinates. These checks need the OSM servers from `logisticsLab.yml`. If they are not reachable, they are skipped.
+- The servers of TH Wildau currently only offer the profile `car`. `foot` and `wheelchair` return 400 there.
+- `runServerTests.sh`: does everything in one step. It creates new test keys, starts a local server on port 8000 if none is running, runs the tests and stops the server again. The log of the test server is in `logs/testServer.log`.
 
 ```bash
 PYTHON=/opt/anaconda3/envs/pyLogisticsLab/bin/python tests/serverTests/runServerTests.sh                       # checkServer.py
 PYTHON=/opt/anaconda3/envs/pyLogisticsLab/bin/python tests/serverTests/runServerTests.sh findContPCentreServer.py
 ```
 
-**Test-Keys:** `createTestKeys.py` legt die Keys `serverTests` (alle Dienste) und `serverTestsRestricted` (nur `tsp`) an. Gleichnamige Keys werden bei jedem Lauf ersetzt.
-- **Speicherorte:** In `confs/apiKeys.yml` stehen nur die Hashes. Die Keys selbst stehen in `tests/serverTests/.env` (Rechte `600`). Beide Dateien sind nicht versioniert.
-- **Ohne Export:** `logLabClient.py` und der Dart-Client lesen die `.env` selbst. Variablen aus der Umgebung haben Vorrang. Ist die `.env` einmal angelegt, laufen die Skripte gegen einen laufenden Server also direkt, z. B. `python tests/serverTests/findWlpServer.py`.
-- **Entfernen:** `python tests/serverTests/createTestKeys.py --remove` löscht die Keys und die `.env`.
-- **Entfernter Server:** Das Skript dort mit dessen Key-Datei ausführen und die `.env` auf den Client kopieren:
+**Test keys:** `createTestKeys.py` creates the keys `serverTests` (all services) and `serverTestsRestricted` (only `tsp`). Keys with the same name are replaced on every run.
+- **Locations:** `confs/apiKeys.yml` contains only the hashes. The keys themselves are in `tests/serverTests/.env` (permissions `600`). Neither file is versioned.
+- **Without export:** `logLabClient.py` and the Dart client read the `.env` themselves. Variables from the environment take precedence. Once the `.env` has been created, the scripts therefore run directly against a running server, e.g. `python tests/serverTests/findWlpServer.py`.
+- **Removing:** `python tests/serverTests/createTestKeys.py --remove` deletes the keys and the `.env`.
+- **Remote server:** Run the script there with its key file and copy the `.env` to the client:
 
 ```bash
 python tests/serverTests/createTestKeys.py --keyFile /etc/logisticsLab/apiKeys.yml --url https://logisticslab.example.org/v1/
 ```
 
-Bei den Heuristiken (`vrp`, `contpmedian`, `contpcentre`) gilt ein besserer Wert als erwartet ebenfalls als bestanden.
+For the heuristics (`vrp`, `contpmedian`, `contpcentre`) a better value than expected also counts as passed.
 
-**Dart-Client** (`tests/dartClient/`, Dart SDK ab 3.5):
+**Dart client** (`tests/dartClient/`, Dart SDK 3.5 or later):
 
 ```bash
 cd tests/dartClient
 dart pub get
-LOGLAB_PYTHON=/pfad/zu/python dart run bin/cont_pcentre.dart local    # lokale Schnittstelle als Kindprozess
-dart run bin/cont_pcentre.dart remote                                 # Server, LOGLAB_URL und LOGLAB_API_KEY aus der .env
+LOGLAB_PYTHON=/path/to/python dart run bin/cont_pcentre.dart local    # local interface as child process
+dart run bin/cont_pcentre.dart remote                                 # server, LOGLAB_URL and LOGLAB_API_KEY from the .env
 ```
 
-**Python-Client** (`tests/pythonClient/`): Beispiele für die JSON-RPC-Kommunikation mit der lokalen Schnittstelle, analog zum Dart-Client.
-- **`logisticsLabClient.py`:** `LocalBackend` startet `python -m logisticsLabCore.stdio` als Kindprozess. `RemoteBackend` spricht mit dem REST-Server. Beide haben dieselbe Schnittstelle, Fehler kommen als `LogisticsLabException` mit `httpStatus`.
-- **`contPCentre.py`:** dasselbe Beispiel wie `cont_pcentre.dart`, mit `local` oder `remote`. Für `remote` kommt der Key aus `LOGLAB_API_KEY` oder der `.env`.
-- **`rawProtocol.py`:** das Protokoll ohne Hilfsmodul: `ready`, `solve`, `jobStatus`, `result`, `shutdown`, jede Nachricht wird ausgegeben.
-- **`parallelAndCancel.py`:** mehrere Probleme gleichzeitig mit Statusmeldungen, ein Abbruch, eine Luftlinien-Kostenmatrix und eine abgelehnte Anfrage (422).
+**Python client** (`tests/pythonClient/`): examples for the JSON-RPC communication with the local interface, analogous to the Dart client.
+- **`logisticsLabClient.py`:** `LocalBackend` starts `python -m logisticsLabCore.stdio` as a child process. `RemoteBackend` talks to the REST server. Both have the same interface, errors come as `LogisticsLabException` with `httpStatus`.
+- **`contPCentre.py`:** the same example as `cont_pcentre.dart`, with `local` or `remote`. For `remote` the key comes from `LOGLAB_API_KEY` or the `.env`.
+- **`rawProtocol.py`:** the protocol without a helper module: `ready`, `solve`, `jobStatus`, `result`, `shutdown`, every message is printed.
+- **`parallelAndCancel.py`:** several problems at the same time with status messages, a cancellation, a straight-line cost matrix and a rejected request (422).
 
 ```bash
 python tests/pythonClient/rawProtocol.py
-python tests/pythonClient/contPCentre.py local      # oder remote
+python tests/pythonClient/contPCentre.py local      # or remote
 python tests/pythonClient/parallelAndCancel.py
 ```
 
-**OSM-Server direkt** (`tests/osmTests/`): `get*.py` nutzen die Bibliothek `osm_data`, `ors*.py` fragen einen OpenRouteService-Server direkt per HTTP ab (Koordinaten `[lon, lat]`, kein LogisticsLab-Key). Diese Skripte testen die OSM-Server, nicht den LogisticsLab-Server.
+**OSM servers directly** (`tests/osmTests/`): `get*.py` use the library `osm_data`, `ors*.py` query an OpenRouteService server directly via HTTP (coordinates `[lon, lat]`, no LogisticsLab key). These scripts test the OSM servers, not the LogisticsLab server.
 
-## Lizenz
+## License
 
-© 2026 Mike Steglich, Technische Hochschule Wildau
+© 2026 Mike Steglich, Technical University of Applied Sciences Wildau
 
-pyLogisticsLab ist freie Software unter der [GNU Affero General Public License v3](LICENSE) oder einer späteren Version (AGPL-3.0-or-later). Wer eine geänderte Fassung als Netzdienst anbietet, z. B. den REST-Server, muss den Nutzern auch den Quellcode der Änderungen zugänglich machen.
+pyLogisticsLab is free software under the [GNU Affero General Public License v3](LICENSE) or any later version (AGPL-3.0-or-later). Anyone who offers a modified version as a network service, for example the REST server, must make the source code of the changes available to its users.
 
-Verwendete Software Dritter: pyCmpl und CMPL (GPL v3), HiGHS (MIT), OR-Tools (Apache 2.0) sowie die Python-Pakete aus `pyproject.toml` mit ihren eigenen Lizenzen. Beiträge siehe [CONTRIBUTING.md](CONTRIBUTING.md).
+Third-party software: pyCmpl and CMPL (GPL v3), HiGHS (MIT), OR-Tools (Apache 2.0) and the Python packages from `pyproject.toml` with their own licenses. For contributions see [CONTRIBUTING.md](CONTRIBUTING.md).
