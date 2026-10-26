@@ -334,10 +334,35 @@ STDIO_PDP = {"type": "vrp", "distances": _VRP_D, "demands": [0, 12, 10, -12, -10
              "pickupsDeliveries": [[1, 3], [2, 4]], "maxSolvingTime": 2}
 
 
+def show_logs(cmd, stderrFile):
+    """Bei einem Fehler: die Fehlerausgabe der Schnittstelle und das Ende ihrer Logs (--logPath) - so ist auch im
+    Protokoll einer CI zu sehen, wo es haengt"""
+    cmd = [str(c) for c in cmd]
+    files = [Path(stderrFile)]
+    if "--logPath" in cmd:
+        logs = Path(cmd[cmd.index("--logPath") + 1])
+        if logs.is_dir():
+            # Textprotokolle - nicht der Matrix-Cache (SQLite)
+            files += sorted(f for f in logs.rglob("*") if f.is_file() and f.suffix.lower() in (".log", ".txt", ".out", ".err"))
+    for f in files:
+        if not f.exists():
+            continue
+        try:
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        if lines:
+            print(f"\n    ---- {f} (letzte {min(len(lines), 60)} von {len(lines)} Zeilen)")
+            for line in lines[-60:]:
+                print("    " + line[:400])
+
+
 def stdio_test(cmd, env, cwd, problems):
     """Startet die lokale Schnittstelle, loest die Probleme nacheinander ueber JSON-RPC und beendet sie."""
-    proc = subprocess.Popen([str(c) for c in cmd], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, text=True, encoding="utf-8", env=env, cwd=cwd)
+    stderrFile = Path(cwd) / "stdio-stderr.txt"
+    with open(stderrFile, "w", encoding="utf-8") as err:
+        proc = subprocess.Popen([str(c) for c in cmd], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=err, text=True, encoding="utf-8", env=env, cwd=cwd)
     msgId = 0
     try:
         def send(method, params):
@@ -390,6 +415,11 @@ def stdio_test(cmd, env, cwd, problems):
         send("shutdown", {})
         proc.stdin.close()
         proc.wait(timeout=30)
+    except BaseException:
+        if proc.poll() is None:
+            proc.kill()
+        show_logs(cmd, stderrFile)
+        raise
     finally:
         if proc.poll() is None:
             proc.kill()
