@@ -593,7 +593,11 @@ class ScenarioSolver:
             far = [ d for j, d in enumerate(D) if not any(row[j] != 'M' and row[j] <= par['radius'] for row in M) ]
             if far:
                 names = ', '.join(d.name or d.id for d in far[:5]) + (f' and {len(far) - 5} more' if len(far) > 5 else '')
-                raise ScenarioException(f'problem {self.problem.name}: no candidate within the radius of {names}')
+                # inactive candidates are not used - perhaps one of them is near
+                role = (par.get('roles') or {}).get('sources', 'candidate')
+                inactive = [ n.name or n.id for n in self.s.nodes if role in n.roles and not n.active ]
+                hint = f' (inactive candidates are not used: {", ".join(inactive[:5])})' if inactive else ''
+                raise ScenarioException(f'problem {self.problem.name}: no candidate within the radius of {names}{hint}')
         if type == 'wlp':
             payload = {'type': 'wlp', 'varCosts': M, 'fixedCosts': fixedCosts, 'demands': demands,
                        'isCapacitated': par.get('isCapacitated', False)}
