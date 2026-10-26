@@ -565,7 +565,8 @@ class ScenarioSolver:
     #*********** discrete location and covering ************
     def _discrete(self, type):
         S, D = self._role('sources', 'candidate'), self._role('destinations', 'customer')
-        kind = self._kind()
+        # medians, centres and coverings measure distances - the costs only if chosen (matrixMode)
+        kind = self._kind(None if type == 'wlp' else 'distances')
         M = self._matrix(S, D, kind)
         if type in ('wlp', 'pmedian'):
             M = self._costFactors(M, D, kind)
@@ -577,6 +578,22 @@ class ScenarioSolver:
         demands = [ n.demand if n.demand is not None else 1 for n in D ]
         capacities = [ n.capacity for n in S ]
         fixedCosts = [ n.fixedCost or 0 for n in S ]
+        if type in ('pmedian', 'pcentre'):
+            p = par.get('p')
+            if not isinstance(p, int) or isinstance(p, bool) or p < 1:
+                raise ScenarioException(f'problem {self.problem.name}: parameter p (number of locations) is needed')
+            if p > len(S):
+                raise ScenarioException(f'problem {self.problem.name}: p = {p} locations, but only {len(S)} candidates')
+        if type in ('scp', 'mcp') and par.get('radius') is None:
+            raise ScenarioException(f'problem {self.problem.name}: parameter radius is needed')
+        if type == 'mcp' and par.get('maxSrcCost') is None:
+            raise ScenarioException(f'problem {self.problem.name}: parameter maxSrcCost (budget) is needed')
+        if type == 'scp':
+            # every customer needs a candidate within the radius - else there is no covering
+            far = [ d for j, d in enumerate(D) if not any(row[j] != 'M' and row[j] <= par['radius'] for row in M) ]
+            if far:
+                names = ', '.join(d.name or d.id for d in far[:5]) + (f' and {len(far) - 5} more' if len(far) > 5 else '')
+                raise ScenarioException(f'problem {self.problem.name}: no candidate within the radius of {names}')
         if type == 'wlp':
             payload = {'type': 'wlp', 'varCosts': M, 'fixedCosts': fixedCosts, 'demands': demands,
                        'isCapacitated': par.get('isCapacitated', False)}
@@ -597,16 +614,43 @@ class ScenarioSolver:
                 payload['maxSrcCost'] = par['maxSrcCost']
         payload.update(self._common())
 
+        # costs of an assignment: per unit times the demand (wlp, weighted median and centre), else the value itself
+        weighted = type == 'wlp' or (type in ('pmedian', 'pcentre') and par.get('isDemandWeighted', False))
+        useFixed = type == 'wlp' or (type in ('scp', 'mcp') and par.get('useFixedCosts', type == 'mcp'))
+
         def results(r):
             nodes = { n.id: {'open': int(a)} for n, a in zip(S, r['activeSources']) }
+            for n, a in zip(S, r['activeSources']):
+                if a:
+                    if useFixed:
+                        nodes[n.id]['fixedCost'] = n.fixedCost or 0
+                    if n.capacity is not None and par.get('isCapacitated', False):
+                        nodes[n.id]['capacity'] = n.capacity
             assignments = []
             for j, i in enumerate(r['assignments']):
                 if i >= 0:
-                    assignments.append({'from': S[i].id, 'to': D[j].id, 'flow': demands[j], 'value': M[i][j]})
+                    a = {'from': S[i].id, 'to': D[j].id, 'flow': demands[j], 'value': M[i][j]}
+                    if weighted:
+                        a['costs'] = M[i][j] * demands[j]
+                    assignments.append(a)
                     nodes[S[i].id]['load'] = nodes[S[i].id].get('load', 0) + demands[j]
                     nodes[S[i].id]['nrOfAssigned'] = nodes[S[i].id].get('nrOfAssigned', 0) + 1
-            out = {'nodes': nodes, 'assignments': assignments,
-                   'summary': {'nrOfOpen': sum(r['activeSources']), 'nrOfAssigned': len(assignments)}}
+            for n in nodes.values():
+                if n.get('capacity'):
+                    n['utilization'] = n.get('load', 0) / n['capacity']
+            summary = {'nrOfOpen': sum(r['activeSources']), 'nrOfAssigned': len(assignments)}
+            if useFixed:
+                summary['totalFixedCosts'] = sum(n.get('fixedCost', 0) for n in nodes.values())
+            if type in ('wlp', 'pmedian'):
+                summary['totalVarCosts'] = sum(a.get('costs', a['value']) for a in assignments)
+            if assignments:
+                summary['longestAssignment'] = max(a['value'] for a in assignments)
+            if type in ('scp', 'mcp'):
+                # coverage: customers within the radius of an open location
+                summary['nrOfUncovered'] = len(D) - len(assignments)
+                summary['coveredDemand'] = sum(a['flow'] for a in assignments)
+                summary['coverage'] = summary['coveredDemand'] / sum(demands) if sum(demands) else None
+            out = {'nodes': nodes, 'assignments': assignments, 'summary': summary}
             if 'coveringSources' in r:
                 out['covering'] = { D[j].id: [ S[i].id for i in c ] for j, c in enumerate(r['coveringSources']) }
             return out
