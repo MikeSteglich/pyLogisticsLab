@@ -718,10 +718,20 @@ class ScenarioSolver:
                     assignments.append({'from': ids[k], 'to': D[j].id,
                                         'flow': flows[k][j] if flows else demands[j],
                                         'distance': r['customerDistances'][j] * scale})
-            return {'objVal': r['objVal'] * scale,
-                    'nodes': { ids[k]: {'coordinates': loc, 'load': sum(a['flow'] for a in assignments if a['from'] == ids[k])}
-                               for k, loc in enumerate(r['locations']) },
-                    'assignments': assignments}
+            for a in assignments:
+                a['value'] = a['distance']           # as the discrete location problems: the value of an assignment
+            nodes = { ids[k]: {'coordinates': loc, 'load': sum(a['flow'] for a in assignments if a['from'] == ids[k]),
+                               'nrOfAssigned': sum(1 for a in assignments if a['from'] == ids[k])}
+                      for k, loc in enumerate(r['locations']) }
+            if isCap:
+                capList = caps if isinstance(caps, list) else [caps] * p
+                for k, i in enumerate(ids):
+                    nodes[i]['capacity'] = capList[k]
+                    nodes[i]['utilization'] = nodes[i]['load'] / capList[k] if capList[k] else None
+            summary = {'nrOfOpen': p, 'nrOfAssigned': len(assignments),
+                       'longestAssignment': max((a['distance'] for a in assignments), default=0),
+                       'totalDistance': sum(a['distance'] for a in assignments)}
+            return {'objVal': r['objVal'] * scale, 'nodes': nodes, 'assignments': assignments, 'summary': summary}
         return payload, results
 
     def _contpmedian(self): return self._continuous('contpmedian')
