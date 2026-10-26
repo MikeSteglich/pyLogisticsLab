@@ -364,6 +364,7 @@ def stdio_test(cmd, env, cwd, problems):
         proc = subprocess.Popen([str(c) for c in cmd], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=err, text=True, encoding="utf-8", env=env, cwd=cwd)
     msgId = 0
+    readies = 0                 # more than one: a solver process has started the interface again (spawn)
     try:
         def send(method, params):
             nonlocal msgId
@@ -373,8 +374,11 @@ def stdio_test(cmd, env, cwd, problems):
             return msgId
 
         def receive(pred):
+            nonlocal readies
             for line in proc.stdout:
                 msg = json.loads(line)
+                if msg.get("method") == "ready":
+                    readies += 1
                 if pred(msg):
                     return msg
             raise BuildError("lokale Schnittstelle hat sich beendet")
@@ -418,6 +422,7 @@ def stdio_test(cmd, env, cwd, problems):
     except BaseException:
         if proc.poll() is None:
             proc.kill()
+        print(f"\n    Meldungen 'ready' der Schnittstelle: {readies}")
         show_logs(cmd, stderrFile)
         raise
     finally:

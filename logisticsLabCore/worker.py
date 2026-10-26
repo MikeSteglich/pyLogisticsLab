@@ -95,6 +95,7 @@ def workerMain(conn, conf, tmpDir=None):
         tempfile.tempdir = tmpDir
 
     logger = PipeLogger(conn)
+    logger.info('worker', f'solver process {os.getpid()} started')
     matrixService.configure(conf, logger)       # own connection to the matrix cache of the core
     libLogger = logging.getLogger('pyLogisticsLab')
     libLogger.setLevel(logging.INFO)
