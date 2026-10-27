@@ -179,6 +179,8 @@ class WorkerSlot:
                                    f'{"still running after " + str(self.STARTUP_TIMEOUT) + "s" if alive else "ended with exit code " + str(self.__process.exitcode)}'
                                    f' - try {attempt} of {self.STARTUP_TRIES}, restarted')
             self.__logTrace()
+            if alive and attempt == 1:
+                self.__logNativeStacks()
             self.__restart()
         return False
 
@@ -194,6 +196,28 @@ class WorkerSlot:
         if len(lines) > maxLines:
             lines = lines[:maxLines] + ['...']       # the steps and the first stacks - innermost frame first
         m.logger.error('jobs', f'solver process {self.__index} start trace:\n    ' + '\n    '.join(lines))
+
+    def __logNativeStacks(self, maxLines=250):
+        """ Windows: the native stacks and the loaded modules of a solver process that hangs - with the debugger cdb
+            (Windows SDK), attached without stopping the process; nothing without cdb """
+        if os.name != 'nt':
+            return
+        m = self.__manager
+        cdb = shutil.which('cdb') or next((p for p in (
+            os.path.join(os.environ.get(v, ''), 'Windows Kits', '10', 'Debuggers', 'x64', 'cdb.exe')
+            for v in ('ProgramFiles(x86)', 'ProgramFiles')) if os.path.isfile(p)), None)
+        if not cdb:
+            m.logger.error('jobs', f'solver process {self.__index}: no native stacks - cdb not found')
+            return
+        try:
+            r = subprocess.run([cdb, '-pv', '-p', str(self.__process.pid), '-c', '~*k 40; lm; qd'],
+                               capture_output=True, text=True, errors='replace', timeout=120)
+            lines = [l for l in r.stdout.splitlines() if l.strip()]
+        except Exception as e:
+            lines = [f'cdb failed - {e}']
+        if len(lines) > maxLines:
+            lines = lines[:maxLines] + ['...']
+        m.logger.error('jobs', f'solver process {self.__index} native stacks (cdb):\n    ' + '\n    '.join(lines))
 
     def __run(self):
         m = self.__manager
