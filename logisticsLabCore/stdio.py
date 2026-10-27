@@ -189,6 +189,14 @@ def main():
     out = os.fdopen(os.dup(sys.stdout.fileno()), 'w', encoding='utf-8', buffering=1)
     os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
     sys.stdout = sys.stderr
+    # stdin too: read through a private copy, the standard input of the solver processes and CMPL is NUL - on Windows
+    # a process with the pipe of the protocol as its standard input hangs while starting (fstat of the C runtime of
+    # Python and OpenBLAS -> PeekNamedPipe waits until the thread that reads the requests has got a line)
+    inp = os.fdopen(os.dup(sys.stdin.fileno()), 'r', encoding='utf-8')
+    nul = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(nul, sys.stdin.fileno())
+    os.close(nul)
+    sys.stdin = open(os.devnull, encoding='utf-8')
 
     os.makedirs(args.logPath, exist_ok=True)
     solverLogFile = os.path.join(args.logPath, 'HiGHS.log')
@@ -212,7 +220,7 @@ def main():
     server.notify('ready', {'version': __version__, 'protocol': PROTOCOL_VERSION})
 
     def readStdin():
-        for line in sys.stdin:
+        for line in inp:
             server.handleLine(line)
         server.stopped.set()           # stdin closed - the app has stopped
 

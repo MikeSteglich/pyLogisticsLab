@@ -116,8 +116,7 @@ class WorkerSlot:
         self.__start()
         threading.Thread(target=self.__run, daemon=True).start()
 
-    # seconds a new solver process has to report that it is ready - otherwise it is replaced (Windows: a spawned
-    # process sometimes does not come up)
+    # seconds a new solver process has to report that it is ready - otherwise it is replaced
     STARTUP_TIMEOUT = 60
     STARTUP_TRIES = 3
 
@@ -128,7 +127,7 @@ class WorkerSlot:
         self.__tmpDir = tempfile.mkdtemp(prefix=f'{TMP_PREFIX}{os.getpid()}_')
         self.__process = ctx.Process(target=workerMain, args=(childConn, self.__manager.conf, self.__tmpDir), daemon=True)
         # the process inherits the variables: it writes its steps to the file (startTrace); numpy with one thread -
-        # OpenBLAS starts a thread per core when it is loaded, on Windows the import of numpy then sometimes hangs
+        # a solver process does not need more
         childEnv = {'LOGLAB_WORKER_TRACE': os.path.join(self.__tmpDir, 'start.trace'),
                     **{v: os.environ.get(v, '1') for v in _THREAD_VARS}}
         with _startLock:
