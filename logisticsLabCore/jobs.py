@@ -101,6 +101,7 @@ def isProcessAlive(pid):
 
 
 _startLock = threading.Lock()      # LOGLAB_WORKER_TRACE: one solver process at a time is started
+_THREAD_VARS = ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS')   # 1 unless set
 
 
 class WorkerSlot:
@@ -126,13 +127,21 @@ class WorkerSlot:
         self.__conn, childConn = ctx.Pipe()
         self.__tmpDir = tempfile.mkdtemp(prefix=f'{TMP_PREFIX}{os.getpid()}_')
         self.__process = ctx.Process(target=workerMain, args=(childConn, self.__manager.conf, self.__tmpDir), daemon=True)
-        # the process inherits the variable - it writes its steps to the file (startTrace)
+        # the process inherits the variables: it writes its steps to the file (startTrace); numpy with one thread -
+        # OpenBLAS starts a thread per core when it is loaded, on Windows the import of numpy then sometimes hangs
+        childEnv = {'LOGLAB_WORKER_TRACE': os.path.join(self.__tmpDir, 'start.trace'),
+                    **{v: os.environ.get(v, '1') for v in _THREAD_VARS}}
         with _startLock:
-            os.environ['LOGLAB_WORKER_TRACE'] = os.path.join(self.__tmpDir, 'start.trace')
+            saved = {k: os.environ.get(k) for k in childEnv}
+            os.environ.update(childEnv)
             try:
                 self.__process.start()
             finally:
-                os.environ.pop('LOGLAB_WORKER_TRACE', None)
+                for k, v in saved.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
         childConn.close()
 
     def __kill(self):
@@ -173,7 +182,7 @@ class WorkerSlot:
             self.__restart()
         return False
 
-    def __logTrace(self, maxLines=80):
+    def __logTrace(self, maxLines=120):
         """ the steps and stacks the solver process has written (startTrace) - where it hangs """
         m = self.__manager
         try:
@@ -183,7 +192,7 @@ class WorkerSlot:
             m.logger.error('jobs', f'solver process {self.__index}: no start trace - it has not reached Python code')
             return
         if len(lines) > maxLines:
-            lines = lines[:20] + ['...'] + lines[-(maxLines - 21):]
+            lines = lines[:maxLines] + ['...']       # the steps and the first stacks - innermost frame first
         m.logger.error('jobs', f'solver process {self.__index} start trace:\n    ' + '\n    '.join(lines))
 
     def __run(self):

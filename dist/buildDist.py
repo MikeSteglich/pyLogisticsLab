@@ -352,8 +352,8 @@ def show_logs(cmd, stderrFile):
         except OSError:
             continue
         if lines:
-            print(f"\n    ---- {f} (letzte {min(len(lines), 60)} von {len(lines)} Zeilen)")
-            for line in lines[-60:]:
+            print(f"\n    ---- {f} (letzte {min(len(lines), 300)} von {len(lines)} Zeilen)")
+            for line in lines[-300:]:
                 print("    " + line[:400])
 
 
