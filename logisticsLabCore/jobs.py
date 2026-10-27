@@ -112,7 +112,13 @@ class WorkerSlot:
         self.__start()
         threading.Thread(target=self.__run, daemon=True).start()
 
+    # seconds a new solver process has to report that it is ready - otherwise it is replaced (Windows: a spawned
+    # process sometimes does not come up)
+    STARTUP_TIMEOUT = 60
+    STARTUP_TRIES = 3
+
     def __start(self):
+        self.__started = False
         ctx = multiprocessing.get_context('spawn')
         self.__conn, childConn = ctx.Pipe()
         self.__tmpDir = tempfile.mkdtemp(prefix=f'{TMP_PREFIX}{os.getpid()}_')
@@ -131,11 +137,40 @@ class WorkerSlot:
     def stop(self):
         self.__kill()
 
+    def __waitForStart(self):
+        """ waits until the solver process reports that it is ready - a process that does not report within
+            STARTUP_TIMEOUT seconds or ends is replaced; False if no process starts after STARTUP_TRIES tries """
+        m = self.__manager
+        for attempt in range(1, self.STARTUP_TRIES + 1):
+            deadline = time.time() + self.STARTUP_TIMEOUT
+            while not self.__started and time.time() < deadline and self.__process.is_alive():
+                try:
+                    if self.__conn.poll(0.2):
+                        msg = self.__conn.recv()
+                        if msg[0] == 'started':
+                            self.__started = True
+                        elif msg[0] == 'log':
+                            _, level, module, message = msg
+                            getattr(m.logger, level)(module, message)
+                except (EOFError, OSError):
+                    break
+            if self.__started:
+                return True
+            alive = self.__process.is_alive()
+            m.logger.error('jobs', f'solver process {self.__index} (pid {self.__process.pid}) has not started - '
+                                   f'{"still running after " + str(self.STARTUP_TIMEOUT) + "s" if alive else "ended with exit code " + str(self.__process.exitcode)}'
+                                   f' - try {attempt} of {self.STARTUP_TRIES}, restarted')
+            self.__restart()
+        return False
+
     def __run(self):
         m = self.__manager
         while True:
             job = m.nextJob()
             if job is None:
+                continue
+            if not self.__started and not self.__waitForStart():
+                m.finishJob(job, 'error', 'the solver process does not start', 500)
                 continue
             try:
                 job.startedTime = time.time()

@@ -1,7 +1,8 @@
 """ solver process - every problem is solved in a separate process, so that it can be cancelled
 
     messages from the parent:  (jobId, type, data)  or  None to stop
-    messages to the parent:    ('log', level, module, message)
+    messages to the parent:    ('started', pid)   once, when the process is ready for problems
+                               ('log', level, module, message)
                                ('running', jobId, size)
                                ('done', jobId, {isSolution, objVal, results, size, solvingTime})
                                ('error', jobId, message, httpStatus, size)
@@ -95,11 +96,13 @@ def workerMain(conn, conf, tmpDir=None):
         tempfile.tempdir = tmpDir
 
     logger = PipeLogger(conn)
-    logger.info('worker', f'solver process {os.getpid()} started')
     matrixService.configure(conf, logger)       # own connection to the matrix cache of the core
     libLogger = logging.getLogger('pyLogisticsLab')
     libLogger.setLevel(logging.INFO)
     libLogger.addHandler(PipeLogHandler(logger))
+
+    # ready for problems - the parent sends one only after this message (a process that does not start is replaced)
+    conn.send(('started', os.getpid()))
 
     _serve(conn, conf, logger)
 
