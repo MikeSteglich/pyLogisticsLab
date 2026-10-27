@@ -5,6 +5,9 @@
 
 __version__ = '1.0.0'
 
+from . import startTrace
+startTrace.step('import logisticsLabCore')
+
 from .exception import *
 from .items import *
 from .logger import *

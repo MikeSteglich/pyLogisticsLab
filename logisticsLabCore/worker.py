@@ -16,6 +16,7 @@ from .locationHandlers import *
 from .routingHandlers import *
 from .flowHandlers import *
 from . import matrixService
+from . import startTrace
 
 import logging
 import os
@@ -23,6 +24,8 @@ import sys
 import tempfile
 import time
 import traceback
+
+startTrace.step('imports of the solver process done')
 
 
 # problem type -> handler; the handler gets the section of the same name from the config
@@ -81,6 +84,7 @@ class PipeLogHandler(logging.Handler):
 
 
 def workerMain(conn, conf, tmpDir=None):
+    startTrace.step('workerMain')
     # own process group - the parent can kill the process together with CMPL and the solvers it has started
     if os.name == 'posix':
         os.setsid()
@@ -103,6 +107,7 @@ def workerMain(conn, conf, tmpDir=None):
 
     # ready for problems - the parent sends one only after this message (a process that does not start is replaced)
     conn.send(('started', os.getpid()))
+    startTrace.started()
 
     _serve(conn, conf, logger)
 

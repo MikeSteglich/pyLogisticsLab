@@ -100,6 +100,9 @@ def isProcessAlive(pid):
     return str(pid) in r.stdout
 
 
+_startLock = threading.Lock()      # LOGLAB_WORKER_TRACE: one solver process at a time is started
+
+
 class WorkerSlot:
     """ a solver process and the thread in the parent that feeds it with jobs """
 
@@ -123,7 +126,13 @@ class WorkerSlot:
         self.__conn, childConn = ctx.Pipe()
         self.__tmpDir = tempfile.mkdtemp(prefix=f'{TMP_PREFIX}{os.getpid()}_')
         self.__process = ctx.Process(target=workerMain, args=(childConn, self.__manager.conf, self.__tmpDir), daemon=True)
-        self.__process.start()
+        # the process inherits the variable - it writes its steps to the file (startTrace)
+        with _startLock:
+            os.environ['LOGLAB_WORKER_TRACE'] = os.path.join(self.__tmpDir, 'start.trace')
+            try:
+                self.__process.start()
+            finally:
+                os.environ.pop('LOGLAB_WORKER_TRACE', None)
         childConn.close()
 
     def __kill(self):
@@ -160,8 +169,22 @@ class WorkerSlot:
             m.logger.error('jobs', f'solver process {self.__index} (pid {self.__process.pid}) has not started - '
                                    f'{"still running after " + str(self.STARTUP_TIMEOUT) + "s" if alive else "ended with exit code " + str(self.__process.exitcode)}'
                                    f' - try {attempt} of {self.STARTUP_TRIES}, restarted')
+            self.__logTrace()
             self.__restart()
         return False
+
+    def __logTrace(self, maxLines=80):
+        """ the steps and stacks the solver process has written (startTrace) - where it hangs """
+        m = self.__manager
+        try:
+            with open(os.path.join(self.__tmpDir, 'start.trace'), encoding='utf-8', errors='replace') as f:
+                lines = f.read().splitlines()
+        except OSError:
+            m.logger.error('jobs', f'solver process {self.__index}: no start trace - it has not reached Python code')
+            return
+        if len(lines) > maxLines:
+            lines = lines[:20] + ['...'] + lines[-(maxLines - 21):]
+        m.logger.error('jobs', f'solver process {self.__index} start trace:\n    ' + '\n    '.join(lines))
 
     def __run(self):
         m = self.__manager
