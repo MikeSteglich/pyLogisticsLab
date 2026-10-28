@@ -260,6 +260,7 @@ class ScenarioSolver:
         self.opts = self.s.matrix.model_copy(update=problem.matrix.model_dump(exclude_unset=True)) if problem.matrix \
                     else self.s.matrix
         self.warnings = []
+        self.warningCodes = []
         self.matrixInfo = None
         self.valueUnit = None
         handler = getattr(self, '_' + problem.type)
@@ -295,6 +296,7 @@ class ScenarioSolver:
                 solution.update(status='error', message=str(e))
         if self.warnings:
             solution['warnings'] = self.warnings
+            solution['warningCodes'] = self.warningCodes
         return solution
 
     def _role(self, role, default):
@@ -447,10 +449,17 @@ class ScenarioSolver:
 
     DEFAULTS = {'fixed': False, 'assignedTo': None, 'costFactor': 1.0}
 
+    def _warn(self, code, text, **params):
+        """ a warning of the solution document - its text and, for the translation in an app, its code with the
+            values of the text (warningCodes) """
+        self.warnings.append(text)
+        self.warningCodes.append({'code': code, **params})
+
     def _warnIgnored(self, nodes, attributes):
         for a in attributes:
             if any(getattr(n, a) != self.DEFAULTS[a] for n in nodes):
-                self.warnings.append(f'{a} is not supported by {self.problem.type} and is ignored')
+                self._warn('ignored', f'{a} is not supported by {self.problem.type} and is ignored',
+                           attribute=a, type=self.problem.type)
 
     #*********** transportation problem ************
     def _tpp(self):
@@ -478,7 +487,7 @@ class ScenarioSolver:
             minBlock = maxBlock = None
             sense = 'max'
             if par.get('useFixedCosts'):
-                self.warnings.append('objSense maxflow: the fixed costs are ignored')
+                self._warn('maxflowFixedCosts', 'objSense maxflow: the fixed costs are ignored')
         net = self.s.networks.get(self.problem.network) if self.problem.network else None
 
         def pairMatrix(attr, default):
@@ -547,12 +556,12 @@ class ScenarioSolver:
             transport costs (matrix with costPerKm/costPerHour; without them no transport costs) """
         priced = any(n.price is not None for n in D) or any(n.unitCost is not None for n in S)
         if not priced:
-            self.warnings.append('objSense max without price (customers) and unitCost (suppliers) - '
-                                 'the contribution is only the negative transport costs')
+            self._warn('maxWithoutPrices', 'objSense max without price (customers) and unitCost (suppliers) - '
+                                           'the contribution is only the negative transport costs')
         if self.opts.costPerKm or self.opts.costPerHour:
             T = self._costFactors(self._matrix(S, D, 'costs'), D, 'costs')
         else:
-            self.warnings.append('objSense max without costPerKm and costPerHour - no transport costs')
+            self._warn('maxWithoutCostRates', 'objSense max without costPerKm and costPerHour - no transport costs')
             T = [ [ 0 for _ in D ] for _ in S ]
             if self.problem.network:
                 # the network restricts the connections - its blocked pairs stay blocked
@@ -697,7 +706,7 @@ class ScenarioSolver:
                                         f'one value for all facilities or a list of {p} values')
             payload['capacities'] = caps
         if caps is not None and not isCap:
-            self.warnings.append('capacities are ignored with isCapacitated false')
+            self._warn('capacitiesIgnored', 'capacities are ignored with isCapacitated false')
         factors = [ n.costFactor if n.costFactor is not None else 1 for n in D ]
         if type == 'contpcentre':
             self._warnIgnored(D, ['costFactor'])
@@ -705,7 +714,7 @@ class ScenarioSolver:
         elif any(f != 1 for f in factors):
             payload['costFactors'] = factors
         if self.opts.matrixSource != 'beeline':
-            self.warnings.append('continuous location problems use great-circle distances, not the road network')
+            self._warn('greatCircle', 'continuous location problems use great-circle distances, not the road network')
         scale = 1000 / TO_M[self.s.units.distance]                  # results in km
         self.valueUnit = self.s.units.distance
         ids = [ f'F{k+1}' for k in range(p) ]
@@ -933,14 +942,15 @@ class ScenarioSolver:
             served = { p.deliveryTo for p in pickups }
             idle = [ n.name or n.id for n in self.nodes.values() if deliveryRole in n.roles and n.id not in served ]
             if idle:
-                self.warnings.append(f'delivery nodes without a pickup: {", ".join(idle)}')
+                self._warn('deliveriesWithoutPickup', f'delivery nodes without a pickup: {", ".join(idle)}',
+                           nodes=', '.join(idle))
         else:
             customers = [ n for n in self._role('destinations', 'customer') if n.id != depot.id ]
             self._required(customers, 'demand', 'demand')
             demands = [0] + [ n.demand or 0 for n in customers ]
         nodes = [depot] + customers
         if self.problem.network:
-            self.warnings.append('vrp uses the complete matrix of the OSM servers, the network is ignored')
+            self._warn('networkIgnored', 'vrp uses the complete matrix of the OSM servers, the network is ignored')
         D, T = self._rawMatrix(nodes, nodes)
         ts = TO_S[self.s.units.time]
         par = self.par
@@ -1189,9 +1199,10 @@ class ScenarioSolver:
             # all suppliers -> all customers: an artificial source before the suppliers and an artificial sink after
             # the customers, their edges are limited by supply and demand (empty: unlimited)
             S, D = self._role('sources', 'supplier'), self._role('destinations', 'customer')
-            outside = [ n.id for n in S + D if n.id not in pos ]
+            outside = [ n.name or n.id for n in S + D if n.id not in pos ]
             if outside:
-                self.warnings.append(f'maxflow: not in the network, ignored: {", ".join(outside)}')
+                self._warn('notInNetwork', f'maxflow: not in the network, ignored: {", ".join(outside)}',
+                           nodes=', '.join(outside))
             S, D = [ n for n in S if n.id in pos ], [ n for n in D if n.id in pos ]
             if not S or not D:
                 raise ScenarioException(f'problem {self.problem.name}: maxflow needs suppliers and customers in the network')

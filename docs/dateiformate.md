@@ -238,6 +238,7 @@ Eine `.llsol`-Datei ist eine JSON-Liste mit einem Lösungsdokument je gelöstem 
 | `valueUnit` | Einheit von `objVal` und der Verbindungswerte: `km`, `m`, `h`, `min`, `s` oder `costs` |
 | `matrixInfo` | Herkunft der Matrix: `source` (`osm`, `cache`, `beeline`), `status`, `travelmode`, `matrices`, `osmDate` |
 | `warnings` | Hinweise, z. B. ignorierte Attribute oder ein ignoriertes Netz |
+| `warningCodes` | je Hinweis in `warnings` (gleiche Reihenfolge) sein Code und die Werte im Text, z. B. `{"code": "ignored", "attribute": "costFactor", "type": "contpcentre"}` – für die Übersetzung in einer App. Codes: `ignored`, `maxflowFixedCosts`, `maxWithoutPrices`, `maxWithoutCostRates`, `capacitiesIgnored`, `greatCircle`, `deliveriesWithoutPickup` (`nodes`), `networkIgnored`, `notInNetwork` (`nodes`) |
 | `results` | nur bei `status: solution`, siehe unten |
 
 **Bezug zum Szenario:** `hash` ist SHA-256 über die Daten des Szenarios ohne `name`, `description`, `source`, `$schema` und `problems`. Eine Lösung bleibt also gültig, wenn Probleme hinzukommen oder Texte geändert werden; ändern sich Knoten, Netze, Fahrzeuge, Güter, Verkehrsträger, Einheiten oder Matrixoptionen, passt sie nicht mehr.
