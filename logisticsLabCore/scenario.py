@@ -636,6 +636,8 @@ class ScenarioSolver:
                     a = {'from': S[i].id, 'to': D[j].id, 'flow': demands[j], 'value': M[i][j]}
                     if weighted:
                         a['costs'] = M[i][j] * demands[j]
+                    elif type in ('pmedian', 'pcentre'):
+                        a['costs'] = M[i][j]          # its part of the objective
                     assignments.append(a)
                     nodes[S[i].id]['load'] = nodes[S[i].id].get('load', 0) + demands[j]
                     nodes[S[i].id]['nrOfAssigned'] = nodes[S[i].id].get('nrOfAssigned', 0) + 1
@@ -683,32 +685,31 @@ class ScenarioSolver:
             raise ScenarioException(f'problem {self.problem.name}: parameter p (number of facilities) is needed')
         caps = par.get('capacities')
         isCap = par.get('isCapacitated', caps is not None)
-        weighted = par.get('isDemandWeighted', True)
+        # the distances multiplied by the demands - by default only for the p-median
+        weighted = par.get('isDemandWeighted', type == 'contpmedian')
         demands = [ n.demand if n.demand is not None else 1 for n in D ]
         payload = {'type': type, 'p': p, 'coordinates': [ n.coordinates for n in D ],
                    'isSingleSource': par.get('isSingleSource', True), 'nrOfStarts': par.get('nrOfStarts'),
-                   **self._common()}
+                   'isDemandWeighted': weighted, 'demands': demands, **self._common()}
         if isCap:
             if caps is None or (isinstance(caps, list) and len(caps) != p):
                 raise ScenarioException(f'problem {self.problem.name}: capacitated - parameter capacities needed, '
                                         f'one value for all facilities or a list of {p} values')
             payload['capacities'] = caps
-            payload['demands'] = demands
-            if not weighted:
-                self.warnings.append('isDemandWeighted false with capacities: the costs are weighted with the demands')
-        elif weighted or type == 'contpcentre':
-            payload['demands'] = demands
         if caps is not None and not isCap:
             self.warnings.append('capacities are ignored with isCapacitated false')
-        if type == 'contpmedian' and any(n.costFactor != 1 for n in D):
-            payload['costFactors'] = [ n.costFactor for n in D ]
-        elif type == 'contpcentre':
+        factors = [ n.costFactor if n.costFactor is not None else 1 for n in D ]
+        if type == 'contpcentre':
             self._warnIgnored(D, ['costFactor'])
+            factors = [1] * len(D)
+        elif any(f != 1 for f in factors):
+            payload['costFactors'] = factors
         if self.opts.matrixSource != 'beeline':
             self.warnings.append('continuous location problems use great-circle distances, not the road network')
         scale = 1000 / TO_M[self.s.units.distance]                  # results in km
         self.valueUnit = self.s.units.distance
         ids = [ f'F{k+1}' for k in range(p) ]
+        idx = { n.id: j for j, n in enumerate(D) }
 
         def results(r):
             flows = r.get('flows')
@@ -719,7 +720,13 @@ class ScenarioSolver:
                                         'flow': flows[k][j] if flows else demands[j],
                                         'distance': r['customerDistances'][j] * scale})
             for a in assignments:
+                j = idx[a['to']]
                 a['value'] = a['distance']           # as the discrete location problems: the value of an assignment
+                # its part of the objective: p-median (share of the demand x) demand x cost factor x distance,
+                # p-centre (demand x) distance
+                weight = factors[j] * (demands[j] if weighted else 1)
+                share = a['flow'] / demands[j] if isCap and demands[j] else 1
+                a['costs'] = (share if type == 'contpmedian' else 1) * weight * a['distance']
             nodes = { ids[k]: {'coordinates': loc, 'load': sum(a['flow'] for a in assignments if a['from'] == ids[k]),
                                'nrOfAssigned': sum(1 for a in assignments if a['from'] == ids[k])}
                       for k, loc in enumerate(r['locations']) }

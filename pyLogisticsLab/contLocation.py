@@ -1,12 +1,14 @@
 """ continuous location problems - the facilities can be placed anywhere on the earth
 
-    ContPMedian    minimizes the sum of the demand weighted great-circle distances      (multi-source Weber problem)
+    ContPMedian    minimizes the sum of the great-circle distances                       (multi-source Weber problem)
     ContPCentre    minimizes the maximal great-circle distance of a customer to its facility
+    isDemandWeighted: the distances multiplied by the demands (default: p-median yes, p-centre no)
 
     Both problems are solved with a hybrid heuristic:
         1. start solution: discrete PMedian / PCentre (pMedian.cmpl, pCentre.cmpl) with the customers as candidates
         2. alternating location-allocation (Cooper) until no improvement
-             location     ContPMedian: spherical Weiszfeld algorithm, ContPCentre: smallest enclosing spherical cap (Welzl)
+             location     ContPMedian: spherical Weiszfeld algorithm, ContPCentre: smallest enclosing spherical cap (Welzl),
+                          weighted: point with the smallest maximal weighted distance (Nelder-Mead in the tangent plane)
              allocation   without capacities: nearest facility
                           with capacities:    the nearest facility if the capacities are not exceeded, otherwise
                                               transportation problem (Tpp.cmpl) - min or minimax, single or multi-source;
@@ -144,6 +146,50 @@ def enclosingCap(A):
                 if not inCap(c, r, P[k]):
                     c, r = _capOf([P[i], P[j], P[k]])
     return c, r
+
+def minimaxPoint(A, w, x0=None, tol=1e-10):
+    """ point with the smallest maximal weighted central angle max w[j] * angle(x, A[j]) - Nelder-Mead in the tangent
+        plane, restarted until no improvement; without different weights the smallest enclosing cap """
+    w = np.asarray(w, dtype=float)
+    c, r = enclosingCap(A)
+    if len(A) == 1 or np.allclose(w, w[0]):
+        return c
+    x = c if x0 is None else _normalize(np.asarray(x0, dtype=float))
+    f = lambda y: float(np.max(w * _angles(y, A)[0]))
+    for _ in range(10):
+        # orthonormal base of the tangent plane at x
+        e1 = _normalize(np.cross(x, [1.0, 0, 0] if abs(x[0]) < 0.9 else [0, 1.0, 0]))
+        e2 = np.cross(x, e1)
+        point = lambda u: _expMap(x, u[0] * e1 + u[1] * e2)
+        size = max(r, 1e-6) / 2
+        S = [ np.zeros(2), np.array([size, 0.0]), np.array([0.0, size]) ]
+        F = [ f(point(u)) for u in S ]
+        for _ in range(2000):
+            order = np.argsort(F)
+            S, F = [ S[i] for i in order ], [ F[i] for i in order ]
+            if max(np.linalg.norm(S[1] - S[0]), np.linalg.norm(S[2] - S[0])) < tol:
+                break
+            m = (S[0] + S[1]) / 2
+            xr = m + (m - S[2]); fr = f(point(xr))
+            if fr < F[0]:
+                xe = m + 2 * (m - S[2]); fe = f(point(xe))
+                S[2], F[2] = (xe, fe) if fe < fr else (xr, fr)
+            elif fr < F[1]:
+                S[2], F[2] = xr, fr
+            else:
+                xc = m + 0.5 * (S[2] - m); fc = f(point(xc))
+                if fc < F[2]:
+                    S[2], F[2] = xc, fc
+                else:
+                    S = [ S[0] + 0.5 * (u - S[0]) for u in S ]
+                    F = [ f(point(u)) for u in S ]
+        best = S[int(np.argmin(F))]
+        xn = point(best)
+        improved = f(xn) < f(x) - 1e-14
+        x = xn
+        if not improved:
+            break
+    return x
 #*************** end spherical geometry ************************************************
 
 
@@ -154,7 +200,7 @@ class _ContLocation(object):
     _isMinimax = False
 
     def __init__(self, p, coordinates, demands=None, capacities=None, isSingleSource=True,
-                 nrOfStarts=20, mipGap=0.001, maxSolvingTime=60, costFactors=None):
+                 nrOfStarts=20, mipGap=0.001, maxSolvingTime=60, costFactors=None, isDemandWeighted=None):
 
         if not isinstance(coordinates, (list, tuple)) or not coordinates:
             raise LogLabException('LogisticsLab error: Wrong coordinates - list of [lat, lon] expected')
@@ -172,13 +218,12 @@ class _ContLocation(object):
         self._p = p
 
         self._isCapacitated = capacities is not None
+        self._isWeighted = (not self._isMinimax) if isDemandWeighted is None else bool(isDemandWeighted)
         if demands is None:
             if self._isCapacitated:
                 raise LogLabException('LogisticsLab error: Demands are required for capacitated problems')
-            demands = [1] * self._n
+            demands = [1] * self._n                     # weighted with 1: the same as not weighted
         self._demands = np.asarray(self._vector(demands, self._n, 'demands'), dtype=float)
-        if self._isMinimax and not self._isCapacitated:
-            self._demands = np.ones(self._n)            # every customer is covered, the demands do not matter
 
         # cost factor of every customer - costs = demand x cost factor x distance (only p-median)
         self._costFactors = np.ones(self._n)
@@ -197,6 +242,12 @@ class _ContLocation(object):
             if isSingleSource and max(self._capacities) < self._demands.max() - 1e-9:
                 raise LogLabException('LogisticsLab error: A demand exceeds every capacity - no single-source solution')
         self._isSingleSource = bool(isSingleSource) or not self._isCapacitated
+
+        # weight of a customer in the objective: (demand x) cost factor - without capacities every customer is
+        # supplied completely by one facility, its demand only matters as its weight
+        self._weights = self._costFactors * (self._demands if self._isWeighted else 1)
+        if not self._isCapacitated:
+            self._demands = np.ones(self._n)
 
         if not isinstance(nrOfStarts, int) or nrOfStarts < 1:
             raise LogLabException(f'LogisticsLab error: Wrong nrOfStarts <{nrOfStarts}>')
@@ -255,12 +306,14 @@ class _ContLocation(object):
     def __discreteStart(self):
         """ discrete problem with the customers as candidates - None if it cannot be solved """
         D = (_angles(self._A, self._A) * EARTH_RADIUS * self._costFactors).tolist()
+        # the discrete models weight with their demands - the weights then as demands
+        dem = self._demands if self._isCapacitated else (self._weights / self._costFactors.clip(_EPS))
         # different capacities cannot be assigned to candidates - the start solution is then uncapacitated
         isCap = self._isCapacitated and len(set(self._capacities)) == 1
         supplies = [self._capacities[0]] * self._n if isCap else [0] * self._n
         try:
-            model = (PCentre if self._isMinimax else PMedian)(self._p, D, supplies, self._demands.tolist(), isCap,
-                                                              not self._isMinimax, mipGap=self._mipGap,
+            model = (PCentre if self._isMinimax else PMedian)(self._p, D, supplies, dem.tolist(), isCap,
+                                                              self._isWeighted, mipGap=self._mipGap,
                                                               maxSolvingTime=max(1, self.__remaining() // 2))
             model.solve()
             if not model.isSolution():
@@ -276,7 +329,7 @@ class _ContLocation(object):
 
     def __randomStart(self):
         """ k-means++ - the next start location is a customer chosen with a probability of demand x distance^2 """
-        w = self._demands * self._costFactors + 1e-12
+        w = self._weights + 1e-12
         idx = [ self._random.choices(range(self._n), weights=w)[0] ]
         for _ in range(1, self._p):
             d = _angles(self._A, self._A[idx]).min(axis=1)
@@ -311,7 +364,8 @@ class _ContLocation(object):
         # the nearest facility is optimal for both objectives - also with capacities if they are not exceeded
         if not self._isCapacitated or (flows.sum(axis=1) <= np.asarray(self._capacities) + 1e-9).all():
             return flows
-        costs = dist * self._costFactors
+        # p-median: costs per unit of the flow, p-centre: weighted distance of an assignment
+        costs = dist * (self._weights if self._isMinimax else self._unitWeights())
         flows = self.__tpp(costs.tolist(), 'minimax' if self._isMinimax else 'min')
         if flows is None or not self._isMinimax:
             return flows
@@ -322,6 +376,16 @@ class _ContLocation(object):
         restricted = [ [ c if c <= z + tol else 'M' for c in row ] for row in costs.tolist() ]
         second = self.__tpp(restricted, 'min', quiet=True)
         return flows if second is None else second
+
+    def _unitWeights(self):
+        """ weight of a unit of the flow to every customer - its weight divided by its demand """
+        with np.errstate(invalid='ignore', divide='ignore'):
+            return np.where(self._demands > _EPS, self._weights / self._demands, 0.0)
+
+    def _served(self, flows):
+        """ fraction of the demand of every customer supplied by a facility [p x n] """
+        with np.errstate(invalid='ignore', divide='ignore'):
+            return np.where(self._demands > _EPS, flows / self._demands, 0.0)
 
     def __tpp(self, costs, objSense, quiet=False):
         """ flows of the transportation problem with the capacities - None if there is no solution """
@@ -345,11 +409,12 @@ class _ContLocation(object):
         used = flows > 1e-9
         for k in range(self._p):
             if used[k].any():
-                X[k] = self._location(self._A[used[k]], flows[k][used[k]] * self._costFactors[used[k]], X[k])
+                w = self._weights if self._isMinimax else self._served(flows)[k] * self._weights
+                X[k] = self._location(self._A[used[k]], w[used[k]], X[k])
         unused = [ k for k in range(self._p) if not used[k].any() ]
         if unused:
             served = (_angles(X, self._A) * used).max(axis=0)
-            weight = served if self._isMinimax else served * self._demands * self._costFactors
+            weight = served * self._weights
             for k, j in zip(unused, np.argsort(-weight)):
                 X[k] = self._A[j]
         return X
@@ -406,18 +471,19 @@ class ContPMedian(_ContLocation):
 
         p                number of facilities
         coordinates      [[lat, lon], ...] of the customers
-        demands          demand of every customer (default 1) - required with capacities
+        demands          demand of every customer (default 1) - required with capacities or isDemandWeighted
         capacities       None: uncapacitated, a number or a list of p capacities: capacitated
         isSingleSource   True (default): every customer is supplied by one facility, False: demands can be split
         costFactors      optional factor of every customer on its costs (default 1)
-        objective value: sum of demand x cost factor x distance (km)
+        isDemandWeighted True (default): the distances multiplied by the demands
+        objective value: sum of (demand x) cost factor x distance (km) - split demands by their shares
     """
 
     def _location(self, A, w, x0):
         return weberPoint(A, w, x0)
 
     def _objective(self, X, flows):
-        return float(np.sum(flows * self._costFactors * _angles(X, self._A)) * EARTH_RADIUS)
+        return float(np.sum(self._served(flows) * self._weights * _angles(X, self._A)) * EARTH_RADIUS)
 #*************** end ContPMedian ************************************************
 
 
@@ -425,15 +491,16 @@ class ContPMedian(_ContLocation):
 class ContPCentre(_ContLocation):
     """ continuous p-centre problem on the sphere
 
-        parameters as ContPMedian, the demands only matter for the capacities
-        objective value: maximal distance (km) of a customer to a facility that supplies it
+        parameters as ContPMedian, without cost factors
+        isDemandWeighted False (default): the demands only matter for the capacities, True: distances x demands
+        objective value: maximal (demand x) distance (km) of a customer to a facility that supplies it
     """
 
     _isMinimax = True
 
     def _location(self, A, w, x0):
-        return enclosingCap(A)[0]
+        return minimaxPoint(A, w, x0)
 
     def _objective(self, X, flows):
-        return float((_angles(X, self._A) * (flows > 1e-9)).max() * EARTH_RADIUS)
+        return float((_angles(X, self._A) * (flows > 1e-9) * self._weights).max() * EARTH_RADIUS)
 #*************** end ContPCentre ************************************************
