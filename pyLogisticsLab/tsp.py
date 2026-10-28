@@ -74,14 +74,20 @@ class TspMaster():
     def __setDistances(self, distances):
         """ defines the distance matrix for the differend TSP variants"""
         
-        distance_matrix=setDistMatrix(distances)
+        # a copy - the variants below change the rows
+        distance_matrix=[ list(row) for row in setDistMatrix(distances) ]
 
         if self.__edges:
-            bigM = max(max(row) for row in distances) * 100
-            for i in range(len(distances)):
-                for j in range(len(distances)):
-                    if (i,j) not in self.__edges:
-                        distances[i][j] = bigM 
+            # the edges as tuples - they come as lists from JSON ([a, b] != (a, b)); a connection that is no edge gets
+            # a value longer than any tour over the edges
+            arcs = { (int(e[0]), int(e[1])) for e in self.__edges }
+            n = len(distance_matrix)
+            longest = max((v for row in distance_matrix for v in row), default=0)
+            bigM = max(1, longest) * (n + 1)
+            for i in range(n):
+                for j in range(n):
+                    if i != j and (i,j) not in arcs:
+                        distance_matrix[i][j] = bigM
            
         if self.__routeMode == OPEN_FIXED_OPEN:
             for row in distance_matrix:
@@ -166,6 +172,12 @@ class TspMaster():
             search_parameters.first_solution_strategy = (
                 routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
             )
+            # guided local search: the default search stops at the first local optimum (Europe, 27 capitals: 18307
+            # instead of 16129 km) - it runs until the time limit, 1 s per 20 nodes (at least 1 s, at most 30 s)
+            search_parameters.local_search_metaheuristic = (
+                routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+            )
+            search_parameters.time_limit.seconds = max(1, min(30, len(self.__distance_matrix) // 20))
             self.__solution = self.__routing.SolveWithParameters(search_parameters)
         except:
             raise LogLabException('LogisticsLab: Something went wrong while solving TSP: '+ str(sys.exc_info())  )
