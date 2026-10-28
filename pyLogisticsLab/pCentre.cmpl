@@ -6,12 +6,14 @@ par:
 	M := len(destinations);
 	
 var:
-	{ isRelaxed=1 : 
+	{ isRelaxed=1 || isSingleSource=0 : 
 			x[edges] : real[0..1]; |
 	  default : 
 	  		x[edges] : binary;
 	}
 	y[sources]   : binary;
+	# multi-source: u - the edge supplies a part, its distance counts for the bottleneck
+	{ isSingleSource=0 && isRelaxed=0 : u[edges] : binary; }
 
 	R : real;
 	
@@ -19,10 +21,19 @@ obj:
 	R -> min;
 	  
 con:
-	{ isDemandWeighted = 0 :
-		{ [i,j] in edges: c[i,j] *  x[i,j] <= R ; } 
-	  | isDemandWeighted = 1: 	
-	  	{ [i,j] in edges: c[i,j] * d[j] * x[i,j] <= R ; } 
+	{ isSingleSource=0 && isRelaxed=0 :
+		{ [i,j] in edges: x[i,j] <= u[i,j] ; }
+		{ isDemandWeighted = 0 :
+			{ [i,j] in edges: c[i,j] *  u[i,j] <= R ; }
+		  | isDemandWeighted = 1:
+			{ [i,j] in edges: c[i,j] * d[j] * u[i,j] <= R ; }
+		}
+	  | default :
+		{ isDemandWeighted = 0 :
+			{ [i,j] in edges: c[i,j] *  x[i,j] <= R ; } 
+		  | isDemandWeighted = 1: 	
+		  	{ [i,j] in edges: c[i,j] * d[j] * x[i,j] <= R ; } 
+		}
 	}
 
 	{ isRelaxed=0 : 

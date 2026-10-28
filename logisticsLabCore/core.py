@@ -108,6 +108,23 @@ class LogisticsLabCore:
             self.__scenarioSolvers[id] = solver
         return id
 
+    def coveringRadius(self, request):
+        """ set and maximal covering of a scenario: the smallest radius that covers every customer
+
+            request: {scenario, problem (name), parameters?} - returns {radius, unit, customer}
+        """
+        try:
+            scenario = Scenario.model_validate(request['scenario'])
+        except (ValueError, KeyError, TypeError) as e:
+            raise LogLabCoreException(f'invalid scenario: {e}', 422)
+        problems = [ p for p in scenario.problems if p.name == request.get('problem') ]
+        if not problems or problems[0].type not in ('scp', 'mcp'):
+            raise LogLabCoreException(f'covering problem {request.get("problem")} not found in the scenario', 400)
+        try:
+            return ScenarioSolver(scenario, _CoreBackend(self)).coveringRadius(problems[0], request.get('parameters'))
+        except ScenarioException as e:
+            raise LogLabCoreException(str(e), 400)
+
     def convert(self, request):
         """ scenario (llab) of an old LogisticsLab file (TPPX, TSPX, CLPX, DLPX, NWFX, VRPX) - see convertX.py
 

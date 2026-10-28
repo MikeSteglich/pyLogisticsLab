@@ -250,6 +250,20 @@ async def convertApi(request: Request, apiKey: ApiKey = Security(requireService(
     return JSONResponse(content={'status': 'ok', **content}, status_code=200)
 
 
+@app.post(f'/{version}/coveringRadius')
+async def coveringRadiusApi(request: Request, apiKey: ApiKey = Security(requireService())):
+    """ set and maximal covering of a scenario: {scenario, problem, parameters?} -> {radius, unit, customer} """
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse(content={'status': 'error', 'message': 'invalid JSON'}, status_code=400)
+    try:
+        content = core.coveringRadius(body)
+    except LogLabCoreException as e:
+        return JSONResponse(content={'status': 'error', 'message': str(e)}, status_code=e.httpStatus)
+    return JSONResponse(content={'status': 'ok', **content}, status_code=200)
+
+
 @app.post(f'/{version}/results')
 async def resultsApi(resultItem: ResultItem, apiKey: ApiKey = Security(requireService())):
     """ status of a problem and its results if it is finished - finished problems are deleted afterwards """

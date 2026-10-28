@@ -11,6 +11,8 @@
                                                                   mincostflow, maxflow, multicommodity, multimodal,
                                                                   multistagewlp
       convert    {fileName, content}   {scenario, fileName}   old LogisticsLab file (TPPX, ...) -> scenario (llab)
+      coveringRadius {scenario, problem, parameters?}   {radius, unit, customer}   set/maximal covering: the smallest
+                                                                  radius that covers every customer
       solveScenario {scenario, problem?, parameters?}   {id, status, message}   problem of a scenario (llab) -
                                                                   result has the solution document (llsol) as solution
       status     {id}                  {id, status, message}
@@ -136,6 +138,9 @@ class StdioServer:
 
         if method == 'convert':
             return self.core.convert(params)
+
+        if method == 'coveringRadius':
+            return self.core.coveringRadius(params)
 
         if method == 'solveScenario':
             id = self.core.submitScenario(params)

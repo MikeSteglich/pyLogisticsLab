@@ -249,12 +249,24 @@ class ScenarioSolver:
         payload = self.prepare(problem, parameters)
         return self.finish(self.backend.solve(payload))
 
-    def prepare(self, problem, parameters=None):
-        """ item of the problem for /v1/solve (as dict) - needs only backend.matrix
+    def coveringRadius(self, problem, parameters=None):
+        """ set and maximal covering: the smallest radius with every customer within the radius of an active
+            candidate - {radius, unit, customer}, radius None if a customer cannot be reached; the measure of the
+            problem (matrixMode, network) as when it is solved """
+        self._setup(problem, parameters)
+        S, D = self._role('sources', 'candidate'), self._role('destinations', 'customer')
+        kind = self._kind('distances')
+        M = self._matrix(S, D, kind)
+        radius, farthest = 0, None
+        for j, d in enumerate(D):
+            values = [ M[i][j] for i in range(len(S)) if M[i][j] != 'M' ]
+            if not values:
+                return {'radius': None, 'unit': self.valueUnit, 'customer': d.name or d.id}
+            if min(values) > radius or farthest is None:
+                radius, farthest = max(radius, min(values)), d
+        return {'radius': radius, 'unit': self.valueUnit, 'customer': farthest.name or farthest.id if farthest else None}
 
-            The answer of the solver goes to finish. prepare and finish allow to solve the item as a job of the core
-            (status, cancel), see LogisticsLabCore.submitScenario.
-        """
+    def _setup(self, problem, parameters):
         self.problem = problem
         self.par = {**problem.parameters, **(parameters or {})}
         self.opts = self.s.matrix.model_copy(update=problem.matrix.model_dump(exclude_unset=True)) if problem.matrix \
@@ -263,6 +275,14 @@ class ScenarioSolver:
         self.warningCodes = []
         self.matrixInfo = None
         self.valueUnit = None
+
+    def prepare(self, problem, parameters=None):
+        """ item of the problem for /v1/solve (as dict) - needs only backend.matrix
+
+            The answer of the solver goes to finish. prepare and finish allow to solve the item as a job of the core
+            (status, cancel), see LogisticsLabCore.submitScenario.
+        """
+        self._setup(problem, parameters)
         handler = getattr(self, '_' + problem.type)
         payload, self._mapResults = handler()
         # None means a default of the core - except an open start or end of a tsp (default 0: the first node)
@@ -612,12 +632,14 @@ class ScenarioSolver:
                        'isCapacitated': par.get('isCapacitated', False)}
             if payload['isCapacitated']:
                 payload['supplies'] = capacities
+                payload['isSingleSource'] = par.get('isSingleSource', True)
         elif type in ('pmedian', 'pcentre'):
             payload = {'type': type, 'p': self._count(par['p']), 'varCosts': M, 'demands': demands,
                        'isCapacitated': par.get('isCapacitated', False),
                        'isDemandWeighted': par.get('isDemandWeighted', False)}
             if payload['isCapacitated']:
                 payload['supplies'] = capacities
+                payload['isSingleSource'] = par.get('isSingleSource', True)
         else:
             payload = {'type': type, 'distances': M, 'radius': par['radius']}
             if par.get('useFixedCosts', type == 'mcp'):
@@ -629,7 +651,13 @@ class ScenarioSolver:
 
         # costs of an assignment: per unit times the demand (wlp, weighted median and centre), else the value itself
         weighted = type == 'wlp' or (type in ('pmedian', 'pcentre') and par.get('isDemandWeighted', False))
+        # multi-source: the demand of a customer split among locations - an assignment per share
+        multi = payload.get('isSingleSource') is False
         useFixed = type == 'wlp' or (type in ('scp', 'mcp') and par.get('useFixedCosts', type == 'mcp'))
+        # coverings with opening costs in the objective: without any the objective (or the budget) means nothing
+        if type in ('scp', 'mcp') and useFixed and S and all(not c for c in fixedCosts):
+            raise ScenarioException(f'problem {self.problem.name}: useFixedCosts, but all candidates have the fixed '
+                                    f'costs 0 - fixedCost of the candidates or useFixedCosts false')
 
         def results(r):
             nodes = { n.id: {'open': int(a)} for n, a in zip(S, r['activeSources']) }
@@ -640,20 +668,31 @@ class ScenarioSolver:
                     if n.capacity is not None and par.get('isCapacitated', False):
                         nodes[n.id]['capacity'] = n.capacity
             assignments = []
-            for j, i in enumerate(r['assignments']):
-                if i >= 0:
-                    a = {'from': S[i].id, 'to': D[j].id, 'flow': demands[j], 'value': M[i][j]}
+            shares = r.get('shares') if multi else None
+            for j, single in enumerate(r['assignments']):
+                if shares:
+                    parts = sorted(((i, shares[i][j]) for i in range(len(S)) if shares[i][j] > 1e-6), key=lambda x: -x[1])
+                else:
+                    parts = [ (single, 1.0) ] if single >= 0 else []
+                for i, share in parts:
+                    flow = demands[j] * share
+                    a = {'from': S[i].id, 'to': D[j].id, 'flow': flow, 'value': M[i][j]}
+                    if multi:
+                        a['share'] = share
+                    # its part of the objective - a p-centre: the distance of every edge used, not its share
                     if weighted:
-                        a['costs'] = M[i][j] * demands[j]
-                    elif type in ('pmedian', 'pcentre'):
-                        a['costs'] = M[i][j]          # its part of the objective
+                        a['costs'] = M[i][j] * (demands[j] if type == 'pcentre' else flow)
+                    elif type == 'pmedian':
+                        a['costs'] = M[i][j] * share
+                    elif type == 'pcentre':
+                        a['costs'] = M[i][j]
                     assignments.append(a)
-                    nodes[S[i].id]['load'] = nodes[S[i].id].get('load', 0) + demands[j]
+                    nodes[S[i].id]['load'] = nodes[S[i].id].get('load', 0) + flow
                     nodes[S[i].id]['nrOfAssigned'] = nodes[S[i].id].get('nrOfAssigned', 0) + 1
             for n in nodes.values():
                 if n.get('capacity'):
                     n['utilization'] = n.get('load', 0) / n['capacity']
-            summary = {'nrOfOpen': sum(r['activeSources']), 'nrOfAssigned': len(assignments)}
+            summary = {'nrOfOpen': sum(r['activeSources']), 'nrOfAssigned': len({ a['to'] for a in assignments })}
             if useFixed:
                 summary['totalFixedCosts'] = sum(n.get('fixedCost', 0) for n in nodes.values())
             if type in ('wlp', 'pmedian'):

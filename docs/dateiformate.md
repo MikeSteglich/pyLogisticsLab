@@ -196,13 +196,15 @@ Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Au
 | `type` | Problem | liest | eigene Parameter |
 | --- | --- | --- | --- |
 | `tpp` | Transportproblem | `supplier` → `customer`, optional Netz | `objSense` (`min`, `max`, `maxflow`, `minimax`), `isSingleSource`, `useFixedCosts`, `useCapacities`, `useSupplyRanges`, `useDemandRanges`, `minBlock`, `maxBlock` |
-| `wlp` | Warehouse Location | `candidate` → `customer` | `isCapacitated` |
-| `pmedian` | p-Median | `candidate` → `customer` | `p` (Pflicht), `isCapacitated`, `isDemandWeighted` |
+| `wlp` | Warehouse Location | `candidate` → `customer` | `isCapacitated`, `isSingleSource` (mit Kapazitäten, Standard `true`) |
+| `pmedian` | p-Median | `candidate` → `customer` | `p` (Pflicht), `isCapacitated`, `isSingleSource` (mit Kapazitäten, Standard `true`), `isDemandWeighted` |
 | `pcentre` | p-Center | `candidate` → `customer` | wie `pmedian` |
 | `scp` | Set Covering | `candidate` → `customer` | `radius` (Pflicht), `useFixedCosts` (Standard `false`: wenigste Standorte) |
 | `mcp` | Maximal Covering | `candidate` → `customer` | `radius`, `maxSrcCost` (Budget, Pflicht), `useFixedCosts` (Standard `true`) |
 | `contpmedian` | kontinuierlicher p-Median | `customer` | `p` (Pflicht), `capacities` (ein Wert oder `p` Werte), `isCapacitated`, `isDemandWeighted`, `isSingleSource`, `nrOfStarts` |
 | `contpcentre` | kontinuierliches p-Center | `customer` | wie `contpmedian` |
+
+Covering: Mit `useFixedCosts` braucht mindestens ein Kandidat Betriebskosten (`fixedCost` > 0), sonst wird das Problem abgelehnt. Den kleinsten Radius, der jeden Kunden abdeckt, liefert die lokale Schnittstelle mit `coveringRadius` (`{scenario, problem}` → `{radius, unit, customer}`), der REST-Server unter `/v1/coveringRadius` – im Maß des Problems (`matrixMode`, Netz) wie beim Lösen.
 
 `isDemandWeighted`: die Entfernungen mal den Bedarf. Voreinstellung: `contpmedian` ja, alle anderen nein. Ohne Gewichtung zählt bei Kapazitäten und aufgeteiltem Bedarf jeder Kunde mit seinen Anteilen.
 | `tsp` | Rundreise oder Durchfahrt | alle Knoten, optional Netz | `tourType`: `round` (zurück zum Start), `path` (Durchfahrt von `startNode` nach `endNode`), `open` (offenes Ende), `openStart` (offener Anfang, nur `endNode`), `free` (komplett offen); ohne `tourType` `startNode`, `endNode` (Knoten-ID; `null` = offener Start bzw. offenes Ende); `matrixMode` |
@@ -249,7 +251,7 @@ Eine `.llsol`-Datei ist eine JSON-Liste mit einem Lösungsdokument je gelöstem 
 | --- | --- | --- |
 | `objVal` | Zielfunktionswert in `valueUnit` | alle |
 | `summary` | Kennzahlen, z. B. `nrOfOpen`, `totalVarCosts`, `totalFixedCosts`, `totalOpeningCosts`, `nrOfRoutes` | je nach Typ |
-| `summary` der Standortprobleme | `nrOfOpen`, `nrOfAssigned`, `longestAssignment` (längste Zuordnung in `valueUnit`); `wlp`: `totalFixedCosts`, `totalVarCosts`; `pmedian`: `totalVarCosts`; `scp`, `mcp`: `nrOfUncovered`, `coveredDemand`, `coverage` (Anteil der Nachfrage), mit Öffnungskosten `totalFixedCosts`. Je Standort in `nodes` `open`, `load`, `nrOfAssigned` und – wenn genutzt – `fixedCost`, `capacity`, `utilization`; je Zuordnung `value` und `costs`, ihr Beitrag zur Zielfunktion (`wlp`: Kosten je Einheit mal Bedarf; `pmedian`, `pcentre`: `value`, gewichtet mal Bedarf; `contpmedian`, `contpcentre` ebenso, mit Kostenfaktor und Anteil am Bedarf) | `wlp`, `pmedian`, `pcentre`, `scp`, `mcp` |
+| `summary` der Standortprobleme | `nrOfOpen`, `nrOfAssigned`, `longestAssignment` (längste Zuordnung in `valueUnit`); `wlp`: `totalFixedCosts`, `totalVarCosts`; `pmedian`: `totalVarCosts`; `scp`, `mcp`: `nrOfUncovered`, `coveredDemand`, `coverage` (Anteil der Nachfrage), mit Öffnungskosten `totalFixedCosts`. Je Standort in `nodes` `open`, `load`, `nrOfAssigned` und – wenn genutzt – `fixedCost`, `capacity`, `utilization`; je Zuordnung `value`, mit `isSingleSource` `false` `share` (Anteil am Bedarf des Kunden – ein Kunde kann mehrere Zuordnungen haben), und `costs`, ihr Beitrag zur Zielfunktion (`wlp`: Kosten je Einheit mal Bedarf; `pmedian`, `pcentre`: `value`, gewichtet mal Bedarf; `contpmedian`, `contpcentre` ebenso, mit Kostenfaktor und Anteil am Bedarf) | `wlp`, `pmedian`, `pcentre`, `scp`, `mcp` |
 | `nodes` | Objekt Knoten-ID → Werte: `open`, `load`, `flow`, `unusedSupply`, `unmetDemand`, bei Knotenkapazität (`maxCap`, Lager: `capacity`) `capacity` und `utilization` (Durchsatz / Kapazität), bei kontinuierlichen Standorten `F1 … Fp` mit `coordinates` | Standortprobleme, Netzflüsse, `multistagewlp` |
 | `assignments` | Liste `{from, to, flow, …}`, bei Transport mit `rate` und mit Kapazitäten (`useCapacities`) `capacity`/`utilization`, bei Standorten mit `value` bzw. `distance` | `tpp`, Standort- und Covering-Probleme |
 | `routes` | je Fahrzeug `vehicle`, `nodes`, `load`, `distance`; beim TSP die Abschnitte `legs` (`from`, `to`, `value` in `valueUnit`) und `summary` mit `tourLength`, `nrOfNodes`, `longestLeg`; beim VRP je Route die Abschnitte `legs` (mit `arrival`, `waiting`), `summary` mit `totalDistance`, `nrOfRoutes`, `nrOfVehicles`, `totalLoad`, `longestRoute`, `longestDuration` und der Zeitplan `arrivals`, `waitingTimes`, `times`, `serviceTimes`, `travelTimes` und die Summen `travelTime`, `waitingTime`, `serviceTime`, `duration` | `tsp`, `shortestpath`, `vrp`, `pdp`, `cpp` |

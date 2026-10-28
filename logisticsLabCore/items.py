@@ -75,6 +75,7 @@ class WlpItem(BipartiteGeoInput, SolverOptions):
     demands: list
     supplies: Optional[list] = None             # capacities of the sources - needed if isCapacitated
     isCapacitated: Optional[bool] = False
+    isSingleSource: Optional[bool] = True       # with capacities False: the demand of a destination can be split
 
 class PLocationFields(BipartiteGeoInput, SolverOptions):
     """ fields of the p-median and the p-centre problem """
@@ -84,6 +85,7 @@ class PLocationFields(BipartiteGeoInput, SolverOptions):
     supplies: Optional[list] = None             # capacities of the sources - needed if isCapacitated
     isCapacitated: Optional[bool] = False
     isDemandWeighted: Optional[bool] = False
+    isSingleSource: Optional[bool] = True       # with capacities False: the demand of a destination can be split
 
 class PMedianItem(PLocationFields):
     type: Literal["pmedian"] = "pmedian"

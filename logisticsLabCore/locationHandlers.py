@@ -2,7 +2,8 @@
 
     All results use 0-based indices:
         activeSources   0/1 for every source
-        assignments     index of the source that supplies a destination, -1 if none
+        assignments     index of the source that supplies a destination, -1 if none - multi-source: the largest share
+        shares          (wlp, pmedian, pcentre) [sources x destinations] share of the demand of a destination (0..1)
         coveringSources (scp, mcp) indices of all open sources that cover a destination
 """
 
@@ -72,6 +73,7 @@ class LocationHandler(ProblemHandler):
     def _assignmentResults(self, p):
         self._results['activeSources'] = list(p.getActiveSources())
         self._results['assignments'] = [ self._zeroBased(i) for i in p.getDestSourceMapping() ]
+        self._results['shares'] = [ [ round(v, 9) for v in row ] for row in p.getShares() ]
 
     def _coveringResults(self, p):
         self._results['activeSources'] = list(p.getActiveSources())
@@ -85,7 +87,8 @@ class WlpHandler(LocationHandler):
         demands = self._checkLength(d.demands, self._nrOfDestinations, 'demands')
         supplies = self._checkLength(d.supplies, self._nrOfSources, 'supplies', default=None if d.isCapacitated else 0)
         return ll.Wlp(self._matrix, fixedCosts, supplies, demands, d.isCapacitated,
-                      mipGap=d.mipGap, maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+                      mipGap=d.mipGap, maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime),
+                      isSingleSource=d.isSingleSource is not False)
 
     def _setResults(self, p):
         self._assignmentResults(p)
@@ -101,7 +104,8 @@ class PMedianHandler(LocationHandler):
         demands = self._checkLength(d.demands, self._nrOfDestinations, 'demands', default=None if needsDemands else 1)
         supplies = self._checkLength(d.supplies, self._nrOfSources, 'supplies', default=None if d.isCapacitated else 0)
         return self.model(d.p, self._matrix, supplies, demands, d.isCapacitated, d.isDemandWeighted,
-                          mipGap=d.mipGap, maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime))
+                          mipGap=d.mipGap, maxSolvingTime=self._maxSolvingTime(d.maxSolvingTime),
+                          isSingleSource=d.isSingleSource is not False)
 
     def _setResults(self, p):
         self._assignmentResults(p)

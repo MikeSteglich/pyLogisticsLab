@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class PMedian(object):
 
     #*********** constructor **********
-    def __init__(self, p, varCosts, supplies, demands, isCap, isDemandWeighted, mipGap=0.001, maxSolvingTime=10):
+    def __init__(self, p, varCosts, supplies, demands, isCap, isDemandWeighted, mipGap=0.001, maxSolvingTime=10, isSingleSource=True):
         
         
         self.__model = None
@@ -76,6 +76,9 @@ class PMedian(object):
         self.__totalCosts = 0
         self.__activeSources = [ 0  for a in range(self.__nrOfSources)  ]
         self.__destSourceMapping =  [ -1  for a in range(self.__nrOfDestinations)  ]
+        # with capacities True: every customer is supplied by one location, False: its demand can be split
+        self.__isSingleSource = 1 if isSingleSource else 0
+        self.__shares = [ [ 0 ] * self.__nrOfDestinations for _ in range(self.__nrOfSources) ]
 
         self.solutionStatus = False
         self.__modelName=str(pathlib.Path(__file__).parent.absolute())+os.sep+'pMedian.cmpl'
@@ -91,6 +94,10 @@ class PMedian(object):
 
     def getDestSourceMapping(self):
         return self.__destSourceMapping
+
+    def getShares(self):
+        """ [sources x destinations] share of the demand of a destination supplied by a source (0..1) """
+        return self.__shares
 
     def isSolution(self):
         return self.solutionStatus
@@ -185,6 +192,8 @@ class PMedian(object):
 
         isCap = CmplParameter('isCap')
         isCap.setValues(self.__isCap)
+        isSingleSource = CmplParameter('isSingleSource')
+        isSingleSource.setValues(self.__isSingleSource)
 
         isDemandWeighted = CmplParameter("isDemandWeighted")
         isDemandWeighted.setValues(self.__isDemandWeighted)
@@ -218,7 +227,7 @@ class PMedian(object):
                     self.__model = Cmpl(modelName)
 
                     self.__model.setSets(fEdges, edges,w,c)
-                    self.__model.setParameters(costs, p, cap, dem, isCap, isDemandWeighted, isRelaxed)
+                    self.__model.setParameters(costs, p, cap, dem, isCap, isDemandWeighted, isRelaxed, isSingleSource)
             
                     self.__model.debug(self.__debug )
                     #self.__model.setOutput(False)
@@ -235,6 +244,7 @@ class PMedian(object):
                     if self.__model.solverStatus == SOLVER_OK:
             
                         self.__totalCosts = self.__model.solution.value
+                        self.__shares = [ [ 0 ] * self.__nrOfDestinations for _ in range(self.__nrOfSources) ]
                         self.solutionStatus = True
 
                         for i in w.values:
@@ -244,8 +254,11 @@ class PMedian(object):
                         
                                 for j in c.values:
                                     try:
-                                        if self.__model.x[(i,j)].activity > 0:
-                                            self.__destSourceMapping[j-1] = i
+                                        a = self.__model.x[(i,j)].activity
+                                        if a > 1e-6:
+                                            self.__shares[i-1][j-1] = a
+                                            if a >= max(row[j-1] for row in self.__shares):
+                                                self.__destSourceMapping[j-1] = i
                                     except:
                                         pass
                             except:
@@ -296,7 +309,7 @@ class PMedian(object):
             #self.__model.setOption(f'-opt scip limits/time={self.__maxSolvingTime}')   
             
             self.__model.setSets(fEdges, edges,w,c)
-            self.__model.setParameters(costs, p, cap, dem, isCap, isDemandWeighted, isRelaxed)
+            self.__model.setParameters(costs, p, cap, dem, isCap, isDemandWeighted, isRelaxed, isSingleSource)
 
             self.__model.debug(self.__debug )
             self.__model.solve()  
@@ -304,6 +317,7 @@ class PMedian(object):
             if self.__model.solverStatus == SOLVER_OK:
             
                 self.__totalCosts = self.__model.solution.value
+                self.__shares = [ [ 0 ] * self.__nrOfDestinations for _ in range(self.__nrOfSources) ]
                 self.solutionStatus = True
 
                 for i in w.values:
@@ -313,8 +327,11 @@ class PMedian(object):
                         
                         for j in c.values:
                             try:
-                                if self.__model.x[(i,j)].activity > 0:
-                                    self.__destSourceMapping[j-1] = i
+                                a = self.__model.x[(i,j)].activity
+                                if a > 1e-6:
+                                    self.__shares[i-1][j-1] = a
+                                    if a >= max(row[j-1] for row in self.__shares):
+                                        self.__destSourceMapping[j-1] = i
                             except:
                                 pass
                     except:

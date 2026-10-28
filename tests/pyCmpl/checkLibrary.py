@@ -65,6 +65,13 @@ print('== location and covering')
 check('wlp', ll.Wlp(costs, [5000, 4000, 6000], [800, 700, 600], [600, 400, 200, 150], True), 14100)
 check('pmedian', ll.PMedian(2, costs, [0, 0, 0], [6, 4, 2, 1], False, True), 33)
 check('pcentre', ll.PCentre(2, costs, [0, 0, 0], [1, 1, 1, 1], False, False), 3)
+# multi-source: the capacities 15 force a split of the third customer - single-source has no solution
+msCosts, msCaps, msDemands = [[1, 5, 2], [5, 1, 2]], [15, 15], [10, 10, 10]
+check('pmedian multi-source', ll.PMedian(2, msCosts, msCaps, msDemands, True, True, isSingleSource=False), 40)
+check('pcentre multi-source', ll.PCentre(2, msCosts, msCaps, msDemands, True, False, isSingleSource=False), 2)
+check('wlp multi-source', ll.Wlp(msCosts, [0, 0], msCaps, msDemands, True, isSingleSource=False), 40)
+check('pmedian multi-source: the shares', ll.PMedian(2, msCosts, msCaps, msDemands, True, True, isSingleSource=False), 40,
+      isSolved=lambda m: m.isSolution() and [[round(v, 6) for v in r] for r in m.getShares()] == [[1, 0, 0.5], [0, 1, 0.5]])
 check('scp', ll.Scp(costs, 3), 2)
 check('mcp', ll.Mcp(costs, 3, 1, [6, 4, 2, 1]), 10)
 

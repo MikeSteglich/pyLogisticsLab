@@ -5,7 +5,7 @@ par:
 	M := len(destinations);
 	
 var:
-	{ isRelaxed=1 : 
+	{ isRelaxed=1 || isSingleSource=0 : 
 			x[edges] : real[0..1]; |
 	  default : 
 	  		x[edges] : binary;

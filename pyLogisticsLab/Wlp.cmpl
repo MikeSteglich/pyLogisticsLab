@@ -5,7 +5,7 @@ par:
 	nrOfWarehouses := len(sources);
 	
 var:
-	{ isCap=0 || isRelaxed=1 : x[edges] : real[0..1]; |
+	{ isCap=0 || isRelaxed=1 || isSingleSource=0 : x[edges] : real[0..1]; |
 	  default : x[edges] : binary;
 	}
 	y[sources]   : binary;
