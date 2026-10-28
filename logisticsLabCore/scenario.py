@@ -1408,7 +1408,10 @@ class ScenarioSolver:
             for k, ((e, a, b, _, _), f) in enumerate(zip(arcs, r['flows'])):
                 if sum(f) > 1e-9:
                     cap = payload['maxCaps'][k]
+                    # cost rate per commodity and the costs of the edge (sum over the commodities)
                     entry = {'from': a, 'to': b, 'flow': sum(f), 'flows': perCommodity(f),
+                             'rates': { i: c for i, x, c in zip(ids, f, costs[k]) if x > 1e-9 },
+                             'costs': sum(x * c for x, c in zip(f, costs[k])),
                              **_utilization(sum(x * c for x, c in zip(f, factors[k])), cap)}
                     if 'utilization' in entry:
                         # share of the capacity used by each commodity
@@ -1467,6 +1470,9 @@ class ScenarioSolver:
                     shares = [ x / c for x, c in zip(f, maxCaps[k]) if c is not None and c > 0 ]
                     edges.append({'from': a, 'to': b, 'flow': sum(f),
                                   'modes': { m.id: x for m, x in zip(modes, f) if x > 1e-9 },
+                                  # cost rate per mode used and the variable costs of the edge
+                                  'rates': { m.id: c for m, x, c in zip(modes, f, costs[k]) if x > 1e-9 },
+                                  'costs': sum(x * c for x, c in zip(f, costs[k]) if x > 1e-9),
                                   **({'utilization': max(shares)} if shares else {}),
                                   # utilization of the capacity of each mode
                                   **({'utilizations': { m.id: x / c for m, x, c in zip(modes, f, maxCaps[k])
