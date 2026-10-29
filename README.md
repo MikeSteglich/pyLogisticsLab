@@ -203,7 +203,7 @@ All problems with coordinates (`tsp`, `tpp`, `wlp`, `pmedian`, `pcentre`, `scp`,
 | `matrixMode` | `distances` | `distances` (m), `times` (s) or `costs`; for `vrp` always distances, with `timeWindows`/`maxTime` also times |
 | `travelmode` | `car` | `car`, `foot`, `wheelchair`. The OSM servers of TH Wildau currently only offer `car`. |
 | `matrixSource` | `osm` | `osm`: road network of the OSM servers. `beeline`: straight-line distance × `detourFactor`, without any OSM server |
-| `detourFactor` | 1.3 | only `beeline`, typical for roads is 1.2–1.4 |
+| `detourFactor` | 1.0 | only `beeline`: 1 is the distance as the crow flies; roads are typically 1.2–1.4 |
 | `averageSpeed` | car 50, foot 5, wheelchair 4 | km/h, only `beeline`, for the travel times |
 | `timeFactor` | 1.0 | factor on all travel times, e.g. 1.2 for trucks |
 | `costPerKm`, `costPerHour` | – | for `matrixMode: costs`: costs = km × `costPerKm` + h × `timeFactor` × `costPerHour`; at least one is required |

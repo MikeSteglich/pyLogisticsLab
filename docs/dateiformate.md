@@ -164,7 +164,7 @@ Alle Zeitangaben im Szenario (`timeWindow`, `serviceTime`, Parameter wie `maxTim
 | --- | --- | --- | --- |
 | `matrixSource` | `osm`, `beeline` | `osm` | Straßennetz der OSM-Server oder Luftlinie (Großkreis) |
 | `travelmode` | `car`, `foot`, `wheelchair` | `car` | Profil für OSM |
-| `detourFactor` | Zahl > 0 | `1.3` | nur Luftlinie: Faktor auf die Distanz |
+| `detourFactor` | Zahl > 0 | `1.0` | nur Luftlinie: Faktor auf die Distanz (1: reine Luftlinie), z. B. `1.3` für ungefähre Straßenlängen |
 | `averageSpeed` | km/h | je `travelmode` | nur Luftlinie: Geschwindigkeit für die Zeiten |
 | `timeFactor` | Zahl > 0 | `1.0` | Faktor auf alle Fahrzeiten, z. B. 1.2 für Lkw |
 | `costPerKm`, `costPerHour` | Zahl ≥ 0 | – | Kostensätze für `matrixMode: costs` |

@@ -13,7 +13,7 @@ class MatrixOptions(LogLabItem):
     """ options for calculating a matrix from coordinates [lat, lon] - see matrixService.py """
     travelmode:  Optional[Literal["car", "foot", "wheelchair"] ] = "car"
     matrixSource: Optional[Literal["osm", "beeline"]] = "osm"     # beeline: great-circle distance x detourFactor
-    detourFactor: Optional[float] = Field(1.3, gt=0)              # only beeline
+    detourFactor: Optional[float] = Field(1.0, gt=0)              # only beeline: 1 the distance as the crow flies
     averageSpeed: Optional[float] = Field(None, gt=0)             # km/h for beeline times - default by travelmode
     timeFactor: Optional[float] = Field(1.0, gt=0)                # factor on the travel times, e.g. 1.2 for trucks
     noCache: Optional[bool] = False                               # True: new matrix from the OSM servers

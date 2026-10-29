@@ -35,7 +35,7 @@ EARTH_RADIUS = 6371008.8                                        # m
 ORS_PROFILES = {'car': 'driving-car', 'foot': 'foot-walking', 'wheelchair': 'wheelchair'}
 VERSION_CHECK_INTERVAL = 3600                                   # s - the data state of the ORS servers is checked hourly
 
-DEFAULTS = {'travelmode': 'car', 'matrixSource': 'osm', 'detourFactor': 1.3, 'averageSpeed': None, 'timeFactor': 1.0,
+DEFAULTS = {'travelmode': 'car', 'matrixSource': 'osm', 'detourFactor': 1.0, 'averageSpeed': None, 'timeFactor': 1.0,
             'noCache': False, 'costPerKm': None, 'costPerHour': None}
 
 
