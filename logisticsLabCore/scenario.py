@@ -1399,8 +1399,10 @@ class ScenarioSolver:
                    'isInteger': bool(self.par.get('isInteger', False))}
         if self.par.get('mipGap') is not None:
             payload['mipGap'] = self.par['mipGap']
-        if any(n.capacityFactors for n in nodes):
-            payload['nodeCapacityFactors'] = [ [ (n.capacityFactors or {}).get(k, 1) for k in ids ] for n in nodes ]
+        # the capacity of a node used by one unit: its own factor, else that of the commodity (as for the edges)
+        if any(n.capacityFactors for n in nodes) or any(c.capacityFactor != 1 for c in commodities):
+            payload['nodeCapacityFactors'] = [ [ (n.capacityFactors or {}).get(c.id, c.capacityFactor) for c in commodities ]
+                                               for n in nodes ]
         perCommodity = lambda v: { k: x for k, x in zip(ids, v) if x > 1e-9 }
 
         def results(r):

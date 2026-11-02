@@ -83,7 +83,7 @@ Ein Knoten kann mehrere Rollen haben, z. B. `["candidate", "depot", "transit"]`.
 | `minCap`, `maxCap` | Zahl | `0`, unbegrenzt | Mindest- und Höchstdurchsatz in Netzflüssen, einschließlich eigenem Angebot und eigener Nachfrage |
 | `shortageCost` | Zahl | `0` | Kosten je nicht gelieferter Einheit bei `balance: auto` |
 | `supplies`, `demands` | Objekt Gut → Zahl | – | Angebot und Nachfrage je Gut für `multicommodity` |
-| `capacityFactors` | Objekt Gut → Zahl | 1 je Gut | Kapazität von `minCap`/`maxCap`, die eine Einheit eines Guts belegt (`multicommodity`) |
+| `capacityFactors` | Objekt Gut → Zahl | `capacityFactor` des Guts | Kapazität von `minCap`/`maxCap`, die eine Einheit eines Guts belegt (`multicommodity`) |
 
 **Unbegrenzt:** Mengen und Kapazitäten dürfen statt einer Zahl `"M"` oder `null` sein. Die frühere Rolle `facility` gibt es nicht mehr; kontinuierliche Standorte sind Parameter des Problems (`p`, `capacities`).
 
