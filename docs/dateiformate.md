@@ -112,8 +112,8 @@ Ein Netz legt die erlaubten Verbindungen zwischen Knoten fest; Länge und Fahrze
 
 **Wie ein Problem das Netz nutzt** (`networkMode` am Problem):
 
-- `edges` (Standard): nur diese Kanten sind erlaubt. Bei TPP und den Standortproblemen sind alle übrigen Paare gesperrt; die Kantenwerte (`capacity`, `fixedCost`) gelten für das jeweilige Paar.
-- `shortestPaths`: aus dem Netz entsteht eine vollständige Matrix der kürzesten Wege. Beim TSP enthält die Lösung dann den ganzen Weg (`path`).
+- `edges` (Standard außer beim TSP): nur diese Kanten sind erlaubt. Bei TPP und den Standortproblemen sind alle übrigen Paare gesperrt; die Kantenwerte (`capacity`, `fixedCost`) gelten für das jeweilige Paar.
+- `shortestPaths` (Standard beim TSP): aus dem Netz entsteht eine vollständige Matrix der kürzesten Wege. Die Tour darf Knoten dann auf dem Weg zu anderen mehrfach durchfahren, die Lösung enthält den ganzen Weg (`path`). Mit `edges` besucht eine TSP-Tour jeden Knoten genau einmal und fährt nur direkt über die Kanten – ein Knoten mit nur einer Kante macht eine Rundreise dann unmöglich.
 - **Pflicht** ist ein Netz für `mincostflow`, `maxflow`, `multicommodity`, `multimodal`, `multistagewlp` und `cpp`; `vrp` ignoriert ein Netz mit Warnung.
 - **Knotenkapazitäten** (`minCap`, `maxCap`, bei `multistagewlp` `capacity`) splittet LogisticsLab beim Lösen selbst in Ein- und Ausgang. Ein Knoten muss dafür nicht von Hand als zwei Knoten mit einer Kante dazwischen angelegt werden.
 

@@ -3,7 +3,7 @@
     used by the REST server (logisticsLabServer) and by the local stdio interface (python -m logisticsLabCore.stdio)
 """
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 from . import startTrace
 startTrace.step('import logisticsLabCore')

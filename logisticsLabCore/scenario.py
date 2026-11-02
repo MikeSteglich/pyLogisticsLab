@@ -163,7 +163,9 @@ class Problem(Item):
     type: Literal[PROBLEM_TYPES]
     parameters: dict = {}
     network: Optional[str] = None
-    networkMode: Literal['edges', 'shortestPaths'] = 'edges'
+    # edges: only the edges of the network (each node once), shortestPaths: the shortest way through the network
+    # between two nodes - empty: shortestPaths for a tsp, edges for the others
+    networkMode: Optional[Literal['edges', 'shortestPaths']] = None
     matrix: Optional[MatrixSettings] = None      # overrides the matrix options of the scenario for this problem
 
 class Scenario(Item):
@@ -295,7 +297,8 @@ class ScenarioSolver:
             'format': SOLUTION_FORMAT, 'version': VERSION,
             'created': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
             'scenario': {'id': self.s.id, 'hash': self.s.dataHash()},
-            'problem': {**self.problem.model_dump(exclude_none=True), 'parameters': self.par},
+            'problem': {**self.problem.model_dump(exclude_none=True), 'parameters': self.par,
+                        **({'networkMode': self._networkMode()} if self.problem.network else {})},
             'status': answer.get('status'), 'message': answer.get('message'),
             'units': self.s.units.model_dump(),
         }
@@ -394,6 +397,11 @@ class ScenarioSolver:
             return t / TO_S[self.s.units.time]
         return d / 1000 * (self.opts.costPerKm or 0) + t / 3600 * (self.opts.costPerHour or 0)
 
+    def _networkMode(self):
+        if self.problem.networkMode:
+            return self.problem.networkMode
+        return 'shortestPaths' if self.problem.type == 'tsp' else 'edges'
+
     def _matrix(self, rows, cols, kind):
         """ matrix of the kind [rows x cols] - restricted to the network of the problem or as shortest paths """
         if self.problem.network is None:
@@ -401,7 +409,7 @@ class ScenarioSolver:
             return [ [ self._value(kind, D[i][j], T[i][j]) for j in range(len(cols)) ] for i in range(len(rows)) ]
 
         net = self.s.networks[self.problem.network]
-        if self.problem.networkMode == 'edges':
+        if self._networkMode() == 'edges':
             D, T = self._rawMatrix(rows, cols)
             allowed = set()
             for e in net.edges:
@@ -827,7 +835,7 @@ class ScenarioSolver:
                    'startNode': None if start is None else pos[self._node(start, 'startNode').id],
                    'endNode': None if end is None else pos[self._node(end, 'endNode').id],
                    'openRoute': start is None or end is None or end != start}
-        if self.problem.network and self.problem.networkMode == 'edges':
+        if self.problem.network and self._networkMode() == 'edges':
             net = self.s.networks[self.problem.network]
             edges = set()
             for e in net.edges:
@@ -842,15 +850,17 @@ class ScenarioSolver:
             impossible = [ (nodes[a].name or nodes[a].id, nodes[b].name or nodes[b].id)
                            for a, b in zip(r['route'], r['route'][1:]) if values[a][b] == 'M' ]
             if impossible:
+                hint = ' - the tour visits every node once over the edges; use the shortest ways through the network ' \
+                       '(networkMode shortestPaths)' if self._networkMode() == 'edges' else ''
                 raise ScenarioException(f'problem {self.problem.name}: no tour through all nodes in the network - '
-                                        f'no way from {impossible[0][0]} to {impossible[0][1]}')
+                                        f'no way from {impossible[0][0]} to {impossible[0][1]}{hint}')
             # the sections of the tour with their length (distance, time or costs as the objective)
             legs = [ {'from': nodes[a].id, 'to': nodes[b].id, 'value': values[a][b]}
                      for a, b in zip(r['route'], r['route'][1:]) ]
             out = {'objVal': r['objVal'] / scale, 'routes': [ {'nodes': route, 'legs': legs} ],
                    'summary': {'tourLength': r['objVal'] / scale, 'nrOfNodes': len(set(route)),
                                'longestLeg': max((l['value'] for l in legs if l['value'] != 'M'), default=0)}}
-            if self.problem.network and self.problem.networkMode == 'shortestPaths':
+            if self.problem.network and self._networkMode() == 'shortestPaths':
                 path = [route[0]]
                 for leg, (a, b) in zip(legs, zip(route, route[1:])):
                     # the way of the section through the network
@@ -881,6 +891,15 @@ class ScenarioSolver:
             if needsIn and not into:
                 raise ScenarioException(f'problem {self.problem.name}: no way to {name(node)} from another node '
                                         f'in the network - check the direction of its edges')
+            # only the edges of the network: the tour visits every node once - it cannot leave a node with only one
+            # neighbour on the way it came
+            if needsIn and needsOut and n > 2 and self.problem.network and self._networkMode() == 'edges':
+                neighbours = { j for j in range(n) if j != k and (values[k][j] != 'M' or values[j][k] != 'M') }
+                if len(neighbours) < 2:
+                    raise ScenarioException(f'problem {self.problem.name}: {name(node)} has only one neighbour in the '
+                                            f'network - a tour over the edges visits every node once and cannot leave '
+                                            f'it on the way it came; use the shortest ways through the network '
+                                            f'(networkMode shortestPaths)')
 
     def _cpp(self):
         if not self.problem.network:
