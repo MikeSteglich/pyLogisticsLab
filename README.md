@@ -480,6 +480,18 @@ sudo systemctl enable --now logisticslab
 journalctl -u logisticslab -f
 ```
 
+**Stopping and starting the service:**
+
+```bash
+sudo systemctl stop logisticslab      # stop
+sudo systemctl start logisticslab     # start again
+sudo systemctl restart logisticslab   # restart, e.g. after an update
+sudo systemctl status logisticslab    # is it running?
+sudo systemctl disable --now logisticslab   # stop and do not start it again on boot
+```
+
+With `enable` the service starts again when the machine boots, `stop` alone lasts only until then. Ctrl+C in `journalctl -u logisticslab -f` only ends the log view, the server keeps running. A restart clears the queue and the results kept in memory, problems still being solved are lost.
+
 ### nginx (`/etc/nginx/conf.d/logisticslab.conf`)
 
 ```nginx
