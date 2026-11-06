@@ -1,6 +1,6 @@
 # LogisticsLab-Dateiformate: Szenario (.llab) und Lösung (.llsol)
 
-Stand: 21.10.2026 · Online-Fassung: [Claude Doc](https://claude.ai/artifact/HeaoXfv48BUs6MAHYMKRCV)
+Stand: 06.11.2026 · Online-Fassung: [Claude Doc](https://claude.ai/artifact/HeaoXfv48BUs6MAHYMKRCV)
 
 ## Überblick
 
@@ -38,6 +38,7 @@ Pflicht sind nur `id` und `nodes`; alles andere hat einen Standard.
 | `vehicles` | Liste | `[]` | Fahrzeugtypen für VRP |
 | `commodities` | Liste | `[]` | Güter für `multicommodity` |
 | `modes` | Liste | `[]` | Verkehrsträger für `multimodal` |
+| `variants` | Liste | `[]` | Datenvarianten: andere Werte an Knoten und Kanten (Abschnitt Datenvarianten) |
 | `problems` | Liste | `[]` | Probleme, die auf diesen Daten gerechnet werden |
 
 Beim Einlesen wird geprüft: Knoten-IDs sind eindeutig; Kanten, `assignedTo`, `deliveryTo`, `depot` und `network` verweisen nur auf vorhandene Knoten bzw. Netze; Güter und Verkehrsträger an Knoten und Kanten sind im Szenario definiert. Ein Fehler nennt die Stelle.
@@ -149,6 +150,30 @@ Fahrzeuge brauchen nur `vrp` und `pdp`, Güter nur `multicommodity`, Verkehrstr�
 | `minFlow` | Zahl | – | Mindestmenge, wenn genutzt |
 | `capacity` | Zahl | unbegrenzt | Höchstmenge je Kante |
 
+## Datenvarianten
+
+Eine Datenvariante enthält andere Mengen, Kapazitäten und Kosten an Knoten und Kanten in derselben Datei, z. B. eine Hochsaison oder die Kapazitäten eines Mehrgüterproblems. Jedes Problem wählt seine Variante mit `"variant": "<id>"`; ohne Angabe gelten die Werte der Basis, also die Felder von Knoten und Kanten selbst.
+
+```json
+"variants": [ { "id": "V1", "name": "Mehrgüter" } ],
+"nodes": [ { "id": "U", "coordinates": [52.4, 13.5], "roles": ["transit"], "maxCap": 800,
+             "variants": { "V1": { "maxCap": 1600 } } } ],
+"networks": { "netz": { "edges": [ { "from": "A", "to": "U", "capacity": 50,
+                                      "variants": { "V1": { "capacity": null } } } ] } },
+"problems": [ { "name": "Fluss", "type": "mincostflow", "network": "netz" },
+              { "name": "Mehrgüter", "type": "multicommodity", "network": "netz", "variant": "V1" } ]
+```
+
+| Feld | Typ | Bedeutung |
+| --- | --- | --- |
+| `variants` (Szenario) | Liste von `{id, name}` | die Varianten; `id` eindeutig, `name` für die Anzeige |
+| `variants` (Knoten, Kante) | Objekt Variante → Werte | die Werte, die in der Variante abweichen |
+| `variant` (Problem) | Variante | die Werte, mit denen das Problem rechnet |
+
+- **Was abweichen darf:** an Knoten alle Mengen-, Kapazitäts-, Kosten- und Zeitwerte (`supply`, `demand`, `minCap`, `maxCap`, `capacity`, `fixedCost`, `costFactor`, `shortageCost`, `supplies`, `demands`, `capacityFactors`, `timeWindow`, `serviceTime` …), an Kanten `capacity`, `minFlow`, `fixedCost`, `modes`, `commodities`. Name, Koordinaten, Rollen, `active` und die Enden einer Kante gelten für alle Varianten – sonst lehnt das Einlesen die Datei ab.
+- **Leerer Wert** (`null`) in einer Variante: der Standard des Feldes, z. B. unbegrenzt bei `capacity` und `maxCap`, `0` bei `minCap`.
+- **Beim Lösen** setzt LogisticsLab die Werte der Variante über die der Basis; das Lösungsdokument nennt die Variante unter `problem.variant`. `scenario.hash` bezieht sich auf die ganze Datei mit allen Varianten.
+
 ## Einheiten, Matrix und Kosten
 
 Distanzen und Fahrzeiten berechnet LogisticsLab aus den Koordinaten; `matrix` legt fest wie, `units` in welchen Einheiten sie im Szenario und in den Lösungen stehen.
@@ -183,7 +208,7 @@ c_{ij} = d_{ij}\,[\mathrm{km}] \cdot \mathrm{costPerKm} + t_{ij}\,[\mathrm{h}] \
 
 ## Probleme
 
-Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Auswählen mit `--problem`), `type` (Pflicht) und optional `parameters`, `network`, `networkMode` und `matrix`. Mehrere Probleme verschiedener Typen auf denselben Daten sind der Normalfall.
+Jedes Problem in `problems` ist ein Objekt mit `name` (Pflicht, eindeutig zum Auswählen mit `--problem`), `type` (Pflicht) und optional `parameters`, `network`, `networkMode`, `variant` und `matrix`. Mehrere Probleme verschiedener Typen auf denselben Daten sind der Normalfall.
 
 ```json
 "problems": [

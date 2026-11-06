@@ -16,7 +16,7 @@
 from .items import MatrixOptions, CostOptions
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from typing import Optional, Literal, Union
+from typing import Any, Optional, Literal, Union
 
 import datetime
 import hashlib
@@ -87,6 +87,7 @@ class Node(Item):
     demands: Optional[dict[str, float]] = None   # multicommodity: demand per commodity
     capacityFactors: Optional[dict[str, float]] = None   # multicommodity: capacity of the node (minCap, maxCap)
                                                  # used by one unit of a commodity - default 1
+    variants: Optional[dict[str, dict[str, Any]]] = None  # data variant -> its values of the node (VARIANT_NODE_FIELDS)
 
     @field_validator('roles', mode='before')
     @classmethod
@@ -139,6 +140,7 @@ class Edge(Item):
     fixedCost: Optional[float] = None
     modes: Optional[dict[str, Mode]] = None      # multimodal: available modes, default all modes of the scenario
     commodities: Optional[dict[str, EdgeCommodity]] = None   # multicommodity: values per commodity
+    variants: Optional[dict[str, dict[str, Any]]] = None  # data variant -> its values of the edge (VARIANT_EDGE_FIELDS)
 
 class Network(Item):
     directed: bool = False
@@ -150,6 +152,12 @@ class Vehicle(Item):
     capacity: float
     count: Optional[int] = None                  # None: automatic - as many as needed, as few routes as possible
     depot: Optional[str] = None
+
+class Variant(Item):
+    """ data variant - other quantities and costs of nodes and edges, e.g. a peak season; the values without a
+        variant are the base """
+    id: str
+    name: Optional[str] = None
 
 class Units(Item):
     distance: Literal['m', 'km'] = 'km'
@@ -166,6 +174,7 @@ class Problem(Item):
     # edges: only the edges of the network (each node once), shortestPaths: the shortest way through the network
     # between two nodes - empty: shortestPaths for a tsp, edges for the others
     networkMode: Optional[Literal['edges', 'shortestPaths']] = None
+    variant: Optional[str] = None                # data variant of the nodes and edges - empty: the base values
     matrix: Optional[MatrixSettings] = None      # overrides the matrix options of the scenario for this problem
 
 class Scenario(Item):
@@ -183,6 +192,7 @@ class Scenario(Item):
     vehicles: list[Vehicle] = []
     commodities: list[Commodity] = []
     modes: list[ModeDefinition] = []
+    variants: list[Variant] = []
     problems: list[Problem] = []
 
     @model_validator(mode='after')
@@ -216,7 +226,44 @@ class Scenario(Item):
         for p in self.problems:
             if p.network and p.network not in self.networks:
                 raise ValueError(f'problem {p.name}: unknown network {p.network}')
+        variants = [ v.id for v in self.variants ]
+        if len(set(variants)) != len(variants):
+            raise ValueError('variant ids must be unique')
+        def checkVariants(what, values, allowed):
+            for v, fields in (values or {}).items():
+                if v not in variants:
+                    raise ValueError(f'{what}: unknown variant {v}')
+                wrong = sorted(set(fields) - allowed)
+                if wrong:
+                    raise ValueError(f'{what}: {", ".join(wrong)} cannot differ in variant {v}')
+        for n in self.nodes:
+            checkVariants(f'node {n.id}', n.variants, VARIANT_NODE_FIELDS)
+        for name, net in self.networks.items():
+            for e in net.edges:
+                checkVariants(f'network {name}: edge {e.from_}-{e.to}', e.variants, VARIANT_EDGE_FIELDS)
+        for p in self.problems:
+            if p.variant and p.variant not in variants:
+                raise ValueError(f'problem {p.name}: unknown variant {p.variant}')
         return self
+
+    def withVariant(self, variant):
+        """ the scenario with the values of the data variant at its nodes and edges - without variant itself """
+        if not variant:
+            return self
+        data = self.model_dump(by_alias=True, exclude_unset=True)
+        # an empty value of the variant: the default of the field (unlimited, 0 or none)
+        def merge(item, model):
+            for k, v in ((item.pop('variants', None) or {}).get(variant) or {}).items():
+                item[k] = model.model_fields[k].default if v is None else v
+        for n in data['nodes']:
+            merge(n, Node)
+        for net in data.get('networks', {}).values():
+            for e in net['edges']:
+                merge(e, Edge)
+        try:
+            return Scenario.model_validate(data)
+        except ValueError as e:
+            raise ScenarioException(f'variant {variant}: {e}')
 
     def dataHash(self):
         """ hash of the data (without names, descriptions and problems) - a solution refers to it """
@@ -226,6 +273,13 @@ class Scenario(Item):
 
 def unlimited(v):
     return v is None or v == 'M'
+
+
+# the values of a data variant: quantities, capacities and costs - not the identity, place and roles of a node or
+# the ends of an edge
+VARIANT_NODE_FIELDS = set(Node.model_fields) - {'id', 'name', 'coordinates', 'address', 'addressDetails', 'roles',
+                                                'active', 'fixed', 'assignedTo', 'deliveryTo', 'variants'}
+VARIANT_EDGE_FIELDS = {'capacity', 'minFlow', 'fixedCost', 'modes', 'commodities'}
 
 
 #*************** solver ************************************************
@@ -241,6 +295,7 @@ class ScenarioSolver:
     """ translates the problems of a scenario into items of the REST server and maps the results to node ids """
 
     def __init__(self, scenario, backend):
+        self.scenario = scenario                 # with all data variants - self.s: with those of the problem
         self.s = scenario
         self.backend = backend
         self.nodes = { n.id: n for n in scenario.nodes if n.active }
@@ -270,6 +325,8 @@ class ScenarioSolver:
 
     def _setup(self, problem, parameters):
         self.problem = problem
+        self.s = self.scenario.withVariant(problem.variant)
+        self.nodes = { n.id: n for n in self.s.nodes if n.active }
         self.par = {**problem.parameters, **(parameters or {})}
         self.opts = self.s.matrix.model_copy(update=problem.matrix.model_dump(exclude_unset=True)) if problem.matrix \
                     else self.s.matrix
@@ -296,7 +353,7 @@ class ScenarioSolver:
         solution = {
             'format': SOLUTION_FORMAT, 'version': VERSION,
             'created': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
-            'scenario': {'id': self.s.id, 'hash': self.s.dataHash()},
+            'scenario': {'id': self.scenario.id, 'hash': self.scenario.dataHash()},
             'problem': {**self.problem.model_dump(exclude_none=True), 'parameters': self.par,
                         **({'networkMode': self._networkMode()} if self.problem.network else {})},
             'status': answer.get('status'), 'message': answer.get('message'),
