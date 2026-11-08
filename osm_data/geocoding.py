@@ -28,7 +28,45 @@ from .logging import *
 from .scheduler import *
 from .tools import *
 
+import difflib
+import re
 import sys
+
+
+#*************** order of the hits ************************************************
+
+def _words(text):
+    """ words of an address in lower case - ß as ss, an abbreviated street (Hauptstr.) written out """
+    words = re.split(r'[^0-9a-zäöüéèàçñ]+', str(text or '').lower().replace('ß', 'ss'))
+    return [ w + 'asse' if w.endswith('str') else w for w in words if w ]
+
+
+def _similar(a, b):
+    """ similarity of two words 0..1 - numbers and short words (de, an, der) only if equal, below 0.75 none """
+    if a == b:
+        return 1.0
+    if a.isdigit() or b.isdigit() or min(len(a), len(b)) < 4:
+        return 0.0
+    r = difflib.SequenceMatcher(None, a, b).ratio()
+    return r if r >= 0.75 else 0.0
+
+
+def addressScore(query, hit):
+    """ how well a hit fits the address searched: the part of the words of the address found in the hit (0..1) - a
+        typing error (Haupstraße) still fits Hauptstraße, but not Triftweg; words of the hit that are not in the
+        address do not count, they would only prefer hits in places with short names over those near the others
+    """
+    q = _words(query)
+    h = _words(' '.join(str(hit.get(k) or '') for k in ('name', 'street', 'postcode', 'city', '_district', 'country', 'countrycode')))
+    if not q or not h:
+        return 0.0
+    return sum(max(_similar(w, x) for x in h) for w in q) / len(q)
+
+
+def orderHits(query, hits):
+    """ the hits that fit the address best first - equal ones in the order of the server (relevance, location) """
+    scores = [ round(addressScore(query, h), 3) for h in hits ]
+    return [ h for _, h in sorted(enumerate(hits), key=lambda e: -scores[e[0]]) ]
 
 
 class Geocoding:
@@ -99,8 +137,9 @@ class Geocoding:
         if near is not None:
             checkSingleCoordinates(near)
         countrycodes = [ c.lower() for c in countrycodes ] if countrycodes else None
-        # more hits than needed if they are filtered afterwards
-        fetch = min(10, limit * 3) if countrycodes else limit
+        # more hits than needed: they are filtered (country) and ordered by how well they fit the address - the first
+        # hit of the server can be another house of the place if the street has a typing error
+        fetch = min(10, max(limit * 3, 5))
 
         try:
             self.__log.logging('getCoordinates',f'number of requests:  {len(adrList)}','start')
@@ -128,7 +167,9 @@ class Geocoding:
                     # photon has no country filter - it is done here
                     if countrycodes:
                         hits = [ h for h in hits if h['countrycode'].lower() in countrycodes ]
-                    hits = hits[:limit]
+                    hits = orderHits(adr, hits)[:limit]
+                    for h in hits:
+                        h.pop('_district', None)
                     self.__hits.append(hits)
                     # no hit: None - (0, 0) would be a valid location in the Atlantic
                     self.__coordinates.append(tuple(hits[0]['coordinates']) if hits else None)
@@ -156,6 +197,10 @@ class Geocoding:
         result['server'] = ''
         return result
     
+
+    def __dropDistrict(self):
+        for r in self.__results:
+            r.pop('_district', None)
 
     def __parseResults(self,serverTyp, data):
         if serverTyp=='photon':
@@ -197,6 +242,8 @@ class Geocoding:
 
                         result['country']=e['properties'].get('country', '')
                         result['countrycode'] = e['properties'].get('countrycode', '')
+                        # the part of the town (Wensickendorf in Oranienburg) - only for the order of the hits
+                        result['_district'] = ' '.join(e['properties'].get(k, '') for k in ('district', 'locality'))
 
                         self.__results.append(result)
 
@@ -268,6 +315,8 @@ class Geocoding:
                 raise OsmException(msg) 
             else:
                self.__parseResults(serverTyp,data)
+               self.__results = orderHits(address, self.__results)
+               self.__dropDistrict()
                                           
             self.__log.logging('search',f' for address:  {address}','done')
 
@@ -304,6 +353,7 @@ class Geocoding:
                 raise OsmException(msg) 
             else:
                self.__parseResults(serverTyp,data)
+               self.__dropDistrict()
                                           
             self.__log.logging('reverse',f' for coordinates:  {coordinates}','done')
 
