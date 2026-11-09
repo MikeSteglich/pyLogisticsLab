@@ -63,10 +63,21 @@ def addressScore(query, hit):
     return sum(max(_similar(w, x) for x in h) for w in q) / len(q)
 
 
+def extraWords(query, hit):
+    """ words of the name and the street of a hit that are not in the address searched - for "Amberg, 92224" the
+        place Amberg (none) before the JVA Amberg in the Georg-Hilbenz-Straße (4)
+    """
+    q = _words(query)
+    h = _words(' '.join(str(hit.get(k) or '') for k in ('name', 'street')))
+    return sum(1 for x in h if not any(_similar(w, x) for w in q))
+
+
 def orderHits(query, hits):
-    """ the hits that fit the address best first - equal ones in the order of the server (relevance, location) """
-    scores = [ round(addressScore(query, h), 3) for h in hits ]
-    return [ h for _, h in sorted(enumerate(hits), key=lambda e: -scores[e[0]]) ]
+    """ the hits that fit the address best first, of equal ones those with the fewest other words in the name and the
+        street (the place itself before the buildings in it) - then in the order of the server (relevance, location)
+    """
+    keys = [ (-round(addressScore(query, h), 3), extraWords(query, h)) for h in hits ]
+    return [ h for _, h in sorted(enumerate(hits), key=lambda e: keys[e[0]]) ]
 
 
 class Geocoding:

@@ -44,6 +44,18 @@ hits = [{'name': 'Lützen', 'postcode': '06686'}, {'name': 'An der Lützen', 'po
 first = orderHits('Lützen, DE', hits)[0]
 check('short words', first['name'] == 'Lützen', first['name'])
 
+# all hits contain the place and the postcode: the place itself before the buildings in it (photon: JVA first)
+hits = [{'name': 'JVA Amberg', 'street': 'Georg-Hilbenz-Straße', 'postcode': '92224', 'city': 'Amberg'},
+        {'name': 'Amberg', 'street': 'An den Gleisen', 'postcode': '92224', 'city': 'Amberg'},
+        {'name': 'Amberg', 'street': '', 'postcode': '92224', 'city': ''}]
+first = orderHits('Amberg, 92224', hits)[0]
+check('the place before the buildings in it', first['street'] == '', first)
+
+# the address itself before a shop at the address
+hits = [hit('Hauptstraße 9', name='Bäckerei Schulz'), hit('Hauptstraße 9')]
+first = orderHits('Hauptstraße 9, Wensickendorf', hits)[0]
+check('the address before a shop there', first['name'] == '', first['name'])
+
 check('score of the exact address', addressScore('Hauptstraße 9, Wensickendorf', hit('Hauptstraße 9')) == 1.0)
 check('no words', addressScore('', hit('Hauptstraße 9')) == 0.0)
 
