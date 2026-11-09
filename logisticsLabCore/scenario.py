@@ -671,6 +671,15 @@ class ScenarioSolver:
         par = self.par
         demands = [ n.demand if n.demand is not None else 1 for n in D ]
         capacities = [ n.capacity for n in S ]
+        if type in ('wlp', 'pmedian', 'pcentre') and par.get('isCapacitated', False):
+            # the solver needs a number of every candidate - without a capacity (or unlimited) it gets the sum of
+            # the demands, which can never be exceeded
+            open_ = [ n for n, c in zip(S, capacities) if c is None or unlimited(c) ]
+            if open_:
+                total = sum(demands)
+                capacities = [ total if c is None or unlimited(c) else c for c in capacities ]
+                names = ', '.join(n.name or n.id for n in open_[:5]) + (f' and {len(open_) - 5} more' if len(open_) > 5 else '')
+                self._warn('unlimitedCapacity', f'without capacity, so unlimited: {names}', nodes=names)
         fixedCosts = [ n.fixedCost or 0 for n in S ]
         if type in ('pmedian', 'pcentre'):
             p = self._count(par.get('p'))
@@ -730,7 +739,7 @@ class ScenarioSolver:
                 if a:
                     if useFixed:
                         nodes[n.id]['fixedCost'] = n.fixedCost or 0
-                    if n.capacity is not None and par.get('isCapacitated', False):
+                    if n.capacity is not None and not unlimited(n.capacity) and par.get('isCapacitated', False):
                         nodes[n.id]['capacity'] = n.capacity
             assignments = []
             shares = r.get('shares') if multi else None
